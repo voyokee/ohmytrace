@@ -9,7 +9,7 @@ const DEFAULT_CSV = `日期,行程,地点,类型,备注,坐标
 2015-09~2021-06,,四川成都,曾居地,,"30.5728,104.0668"
 2022-10-01~2022-10-06,川西秋色,四川稻城亚丁,旅行,雪山与彩林,"28.4300,100.3500"
 2023-05-20~2023-05-27,冰岛自驾,冰岛维克,旅行,黑沙滩,"63.4186,-19.0060"
-2024-08-10~2024-08-18,独库公路,新疆那拉提,旅行,空中草原,"43.2500,84.0000"
+2024-08-10~2024-08-18,独库公路,新疆那拉提,旅行,空中草原,"43.2290,84.4190"
 2024-08-10~2024-08-18,独库公路,新疆赛里木湖,旅行,大西洋最后一滴眼泪,"44.6000,81.1700"
 2025-04,京都赏樱,日本京都,旅行,,"35.0116,135.7681"`;
 
@@ -45,30 +45,73 @@ const ICON = {
 };
 const DAY = 86400000;
 const MAX_LIGHTS = 64;
+const MAX_CLOUDS = 12;
 const NIGHT_DARKNESS = 0.64; // 0 = daylight everywhere, 1 = black; unlit land keeps ~30% of its colour
-const lightName = i => 'fpL' + String(i).padStart(2, '0'); // fixed width so no name prefixes another
+const EXAGGERATION = 1.2;    // a touch of extra relief so mountains read from afar
+// Fixed-width names so no uniform name is a prefix of another (Cesium renames them by token).
+const lightName = i => 'fpL' + String(i).padStart(2, '0');
+const cloudName = i => 'fpC' + String(i).padStart(2, '0');
 
-// Night globe: a globe material laid over the imagery dims everything except soft pools of
-// daylight around visited places, with a faint warm rim where the light fades out.
+// One globe material does all the "look" work on top of the imagery:
+//  - night: everything is dimmed except soft pools of daylight around visited places
+//  - relief: per-pixel slope lighting (the free terrain has no vertex normals, so normals
+//    come from screen-space derivatives of the surface position)
+//  - warm light inside the lit pools, wind gusts sweeping the place in focus, cloud shadows
 function makeNightMaterial() {
-  const uniforms = { fpRadius: 60000, fpDark: NIGHT_DARKNESS };
-  let lines = '';
+  const uniforms = {
+    fpRadius: 60000, fpDark: NIGHT_DARKNESS, fpRelief: 0.55, fpTime: 0,
+    fpLight: new Cesium.Cartesian3(0, 0, 1), fpWind: new Cesium.Cartesian3(1, 0, 0),
+    fpFocus: new Cesium.Cartesian4(0, 0, 0, 0),
+  };
+  let lights = '', clouds = '';
   for (let i = 0; i < MAX_LIGHTS; i++) {
     uniforms[lightName(i)] = new Cesium.Cartesian4(0, 0, 0, 0);
-    lines += `  lit = max(lit, fpGlow(pos, ${lightName(i)}));\n`;
+    lights += `  lit = max(lit, fpGlow(pos, ${lightName(i)}));\n`;
+  }
+  for (let i = 0; i < MAX_CLOUDS; i++) {
+    uniforms[cloudName(i)] = new Cesium.Cartesian4(0, 0, 0, 0);
+    clouds += `  shadow = max(shadow, fpShadow(pos, ${cloudName(i)}));\n`;
   }
   const source = `
 float fpGlow(vec3 pos, vec4 l) {
   return (1.0 - smoothstep(fpRadius * 0.28, fpRadius, distance(pos, l.xyz))) * l.w;
 }
+float fpShadow(vec3 pos, vec4 c) {
+  return c.w > 0.0 ? 1.0 - smoothstep(c.w * 0.35, c.w, distance(pos, c.xyz)) : 0.0;
+}
 czm_material czm_getMaterial(czm_materialInput materialInput) {
   czm_material m = czm_getDefaultMaterial(materialInput);
-  vec3 pos = (czm_inverseView * vec4(-materialInput.positionToEyeEC, 1.0)).xyz;
+  vec3 pEC = -materialInput.positionToEyeEC;
+  vec3 pos = (czm_inverseView * vec4(pEC, 1.0)).xyz;
+
   float lit = 0.0;
-${lines}
+${lights}
+  float shadow = 0.0;
+${clouds}
+  vec3 n = normalize(cross(dFdx(pEC), dFdy(pEC)));
+  if (dot(n, materialInput.positionToEyeEC) < 0.0) n = -n;
+  float shade = clamp(0.5 + 0.5 * dot(n, fpLight), 0.0, 1.0);
+  float reliefA = (1.0 - shade) * fpRelief;
+
+  float gust = 0.0;
+  if (fpFocus.w > 0.0) {
+    vec3 d = pos - fpFocus.xyz;
+    float inFocus = 1.0 - smoothstep(fpFocus.w * 0.6, fpFocus.w, length(d));
+    float across = dot(d, normalize(cross(fpWind, fpFocus.xyz)));
+    float wave = sin(dot(d, fpWind) / 700.0 - fpTime * 0.6 + sin(across / 1500.0) * 1.5);
+    gust = smoothstep(0.55, 1.0, wave) * inFocus;
+  }
+
+  float nightA = fpDark * (1.0 - lit);
   float rim = lit * (1.0 - lit) * 4.0;
-  m.diffuse = mix(vec3(0.015, 0.026, 0.06), vec3(1.0, 0.72, 0.4), rim * 0.4);
-  m.alpha = fpDark * (1.0 - lit) + rim * 0.08;
+  // Composite as premultiplied layers over the imagery: shadow, night tint, warm light.
+  float keep = (1.0 - reliefA) * (1.0 - shadow * 0.32) * (1.0 - nightA);
+  vec3 acc = vec3(0.015, 0.026, 0.06) * nightA;
+  float w = rim * 0.1 + lit * 0.05 + gust * 0.07;
+  acc = acc * (1.0 - w) + vec3(1.0, 0.86, 0.6) * w;
+  keep *= 1.0 - w;
+  m.alpha = 1.0 - keep;
+  m.diffuse = acc / max(m.alpha, 0.0001);
   return m;
 }`;
   return new Cesium.Material({ translucent: false, fabric: { type: 'FootprintNight', uniforms, source } });
@@ -446,7 +489,8 @@ function initGlobe() {
   g.enableLighting = false;
   g.showGroundAtmosphere = false; // it washes the night tint out to pale grey
   g.depthTestAgainstTerrain = true;
-  g.maximumScreenSpaceError = mobile ? 2 : 1.5;
+  g.maximumScreenSpaceError = mobile ? 2 : 1.25; // finer terrain also softens the per-triangle relief shading
+  scene.verticalExaggeration = EXAGGERATION;
   g.tileCacheSize = 400;
   g.baseColor = Cesium.Color.fromCssColorString('#cfdbe6'); // imagery stops near ±85°, so the poles show this icy tone
   scene.backgroundColor = Cesium.Color.BLACK;
@@ -493,6 +537,8 @@ function initGlobe() {
   nightMaterial = makeNightMaterial();
   g.material = nightMaterial;
   scene.skyAtmosphere.brightnessShift = -0.15;
+  scene.sun.show = false;  // our light is camera-relative; a real sun in the sky would contradict it
+  scene.moon.show = false;
 
   // Idle motion: slow spin from space, gentle orbit around a selected place.
   let lastT = performance.now();
@@ -547,7 +593,7 @@ function centroid() {
 
 function posOf(name, lift = 0) {
   const p = state.places[name];
-  return p && p.lat != null ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.h || 0) + lift) : null;
+  return p && p.lat != null ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.h || 0) * EXAGGERATION + lift) : null;
 }
 
 function homeView(duration = 2.4) {
@@ -564,13 +610,14 @@ function homeView(duration = 2.4) {
   });
 }
 
-function flyToPoints(positions, { duration = 3.2, heading = 12 } = {}) {
+// close: drop low over a single place so its trees, flowers and clouds are in view
+function flyToPoints(positions, { duration = 3.2, heading = 12, close = false } = {}) {
   if (!viewer || !positions.length) return Promise.resolve(false);
   orbit = null;
   const sphere = Cesium.BoundingSphere.fromPoints(positions);
   const r = sphere.radius;
-  const range = Math.max(30000, r * 3.4);
-  const pitch = Cesium.Math.toRadians(r > 800000 ? -75 : r > 40000 ? -50 : -26);
+  const range = close ? 4200 : Math.max(30000, r * 3.4);
+  const pitch = Cesium.Math.toRadians(close ? -17 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
   flying = true;
   return new Promise(res => {
     viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(sphere.center, 0), {
@@ -634,8 +681,30 @@ function lightTarget(name) {
   return 1;
 }
 
+const scratchGround = new Cesium.Cartesian3(), scratchENU = new Cesium.Matrix4(), scratchLight = new Cesium.Cartesian3();
+
+// Light comes from the camera's left and slightly behind, low in the sky, so the faces we look
+// at are side-lit; it turns with the camera, which keeps every view well modelled.
+function updateSun() {
+  const cam = viewer.camera;
+  const ground = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(cam.positionWC, scratchGround);
+  if (!ground) return;
+  Cesium.Transforms.eastNorthUpToFixedFrame(ground, undefined, scratchENU);
+  const az = cam.heading - Cesium.Math.toRadians(110), el = Cesium.Math.toRadians(38);
+  scratchLight.x = Math.sin(az) * Math.cos(el);
+  scratchLight.y = Math.cos(az) * Math.cos(el);
+  scratchLight.z = Math.sin(el);
+  Cesium.Matrix4.multiplyByPointAsVector(scratchENU, scratchLight, scratchLight);
+  const u = nightMaterial.uniforms;
+  Cesium.Matrix4.multiplyByPointAsVector(cam.viewMatrix, scratchLight, u.fpLight);
+  Cesium.Cartesian3.normalize(u.fpLight, u.fpLight);
+}
+
 function updateLights(now, dt) {
   const u = nightMaterial.uniforms;
+  u.fpTime = (now / 1000) % 10000;
+  updateSun();
+  updateScenery(now, dt);
   // Lit pools keep a sensible size on screen: tens of km up close, a few hundred km from space.
   u.fpRadius = Math.max(55000, viewer.camera.positionCartographic.height * 0.036);
   let n = 0;
@@ -647,6 +716,297 @@ function updateLights(now, dt) {
     v.x = L.pos.x; v.y = L.pos.y; v.z = L.pos.z; v.w = L.cur;
   }
   for (; n < MAX_LIGHTS; n++) u[lightName(n)].w = 0;
+}
+
+/* ---------- scenery: clouds, wind and vegetation around the place in focus ---------- */
+
+const SCENERY_RADIUS = 16000;  // m: clouds, their shadows and wind gusts
+const VEG_TILE_ZOOM = 14;      // satellite tiles read to decide where forest and meadow are
+const VEG_TILES = 5;           // 5×5 tiles ≈ 6–9 km square, depending on latitude
+const VEG_RADIUS = 3000;       // m around the place that gets trees and flowers
+const MAX_TREES = 12000, MAX_FLOWERS = 1500;
+const WIND_SPEED = 22;         // m/s; faster than real so the drift reads on screen
+
+const scenery = { name: null, token: 0, lastCheck: 0, center: null, east: null, north: null, up: null,
+  clouds: [], trees: null, flowers: null, plants: [], parity: 0 };
+
+function mulberry32(seed) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const hashStr = s => [...s].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261);
+
+// Painted sprites, generated once. Light comes from the left to match the relief shading.
+let spriteCache = null;
+function sprites() {
+  if (spriteCache) return spriteCache;
+  const rnd = mulberry32(7);
+  // Spruce spire of ragged, drooping tiers, painted in greys (sunlit left, shaded right). Each tree is
+  // tinted with the satellite colour under it, so stands look like the real forest rising out of the image.
+  // Sprites are small (they show at ~10–30 px) and padded so the atlas never bleeds between them.
+  const conifer = [];
+  for (let v = 0; v < 6; v++) {
+    const P = 3, W = 30 + P * 2, H = 88 + P * 2, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.translate(P, P);
+    const tiers = 8 + (rnd() * 4 | 0), cx = (W - P * 2) / 2, IH = H - P * 2;
+    for (let i = 0; i < tiers; i++) {
+      const t = i / (tiers - 1), y = 2 + t * (IH - 12), w = 2 + t * (cx - 2) * (0.85 + rnd() * 0.3);
+      const h = (IH - 10) / tiers * 2.2;
+      const g = x.createLinearGradient(cx - w, 0, cx + w, 0);
+      g.addColorStop(0, 'rgb(235,235,225)');
+      g.addColorStop(0.4, 'rgb(165,165,160)');
+      g.addColorStop(1, 'rgb(85,88,90)');
+      x.fillStyle = g;
+      x.beginPath();
+      x.moveTo(cx, y);
+      // ragged lower edge: a few drooping points instead of a smooth curve
+      const points = 5;
+      x.lineTo(cx - w, y + h);
+      for (let k = 1; k <= points; k++) {
+        const px = cx - w + (2 * w) * k / points;
+        x.lineTo(px - w / points, y + h * (0.78 + rnd() * 0.12));
+        x.lineTo(px, y + h * (0.95 + rnd() * 0.08));
+      }
+      x.closePath();
+      x.fill();
+    }
+    x.fillStyle = 'rgb(60,50,44)';
+    x.fillRect(cx - 1, IH - 9, 2, 9);
+    conifer.push(c.toDataURL());
+  }
+  const flowers = [];
+  const petals = ['#f4f1e8', '#f7d65a', '#c9a0ff', '#ff9fb8', '#ffffff'];
+  for (let v = 0; v < 4; v++) {
+    const P = 3, W = 48 + P * 2, H = 28 + P * 2, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.translate(P, P);
+    const IW = W - P * 2, IH = H - P * 2;
+    for (let i = 0; i < 9; i++) {
+      const bx = 6 + rnd() * (IW - 12);
+      x.strokeStyle = `hsl(${85 + rnd() * 30},45%,${30 + rnd() * 15}%)`;
+      x.lineWidth = 2;
+      x.beginPath(); x.moveTo(bx, IH); x.quadraticCurveTo(bx + (rnd() - .5) * 8, IH * .5, bx + (rnd() - .5) * 10, 4 + rnd() * 8); x.stroke();
+    }
+    x.fillStyle = petals[v];
+    for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(6 + rnd() * (IW - 12), 4 + rnd() * 10, 2.4, 0, Math.PI * 2); x.fill(); }
+    flowers.push(c.toDataURL());
+  }
+  return (spriteCache = { conifer, flowers });
+}
+
+function focusPlace() {
+  const cam = viewer.camera;
+  if (cam.positionCartographic.height > 70000) return null;
+  const ray = cam.getPickRay(new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2));
+  const hit = ray && scene.globe.pick(ray, scene);
+  if (!hit) return null;
+  let best = null, bestD = 30000;
+  for (const [name, L] of lights) {
+    if (L.cur < 0.5) continue;
+    const d = Cesium.Cartesian3.distance(hit, L.pos);
+    if (d < bestD) { bestD = d; best = name; }
+  }
+  return best;
+}
+
+function clearScenery() {
+  scenery.token++;
+  for (const c of [scenery.trees, scenery.flowers]) if (c) scene.primitives.remove(c);
+  scenery.trees = scenery.flowers = null;
+  scenery.clouds = [];
+  scenery.plants = [];
+  scenery.name = null;
+  const u = nightMaterial.uniforms;
+  u.fpFocus.w = 0;
+  for (let i = 0; i < MAX_CLOUDS; i++) u[cloudName(i)].w = 0;
+}
+
+function setScenery(name) {
+  clearScenery();
+  if (!name) return;
+  const center = posOf(name);
+  if (!center) return;
+  scenery.name = name;
+  scenery.center = center;
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+  scenery.east = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(enu, 0, new Cesium.Cartesian4()));
+  scenery.north = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(enu, 1, new Cesium.Cartesian4()));
+  scenery.up = Cesium.Cartesian3.fromCartesian4(Cesium.Matrix4.getColumn(enu, 2, new Cesium.Cartesian4()));
+  const u = nightMaterial.uniforms;
+  Cesium.Cartesian3.clone(center, u.fpFocus);
+  u.fpFocus.w = SCENERY_RADIUS;
+  Cesium.Cartesian3.clone(scenery.east, u.fpWind);
+
+  // Fair-weather clouds drifting east. Only their shadows are drawn: sweeping across the slopes they
+  // read as real weather, while billboard clouds in the sky looked like cotton balls.
+  const rnd = mulberry32(hashStr(name));
+  for (let i = 0; i < MAX_CLOUDS; i++) {
+    scenery.clouds.push({
+      e: (rnd() * 2 - 1) * SCENERY_RADIUS, n: (rnd() * 2 - 1) * SCENERY_RADIUS * 0.8,
+      alt: 1300 + rnd() * 1300, w: 2000 + rnd() * 2400,
+    });
+  }
+  buildVegetation(name, scenery.token);
+}
+
+const scratchOff = new Cesium.Cartesian3();
+function offsetFrom(center, e, n, h, result) {
+  Cesium.Cartesian3.multiplyByScalar(scenery.east, e, scratchOff);
+  Cesium.Cartesian3.add(center, scratchOff, result);
+  Cesium.Cartesian3.multiplyByScalar(scenery.north, n, scratchOff);
+  Cesium.Cartesian3.add(result, scratchOff, result);
+  Cesium.Cartesian3.multiplyByScalar(scenery.up, h, scratchOff);
+  return Cesium.Cartesian3.add(result, scratchOff, result);
+}
+
+// Same travelling wave as the shader's gusts, so trees bow exactly where the light ripples.
+const gustAt = (along, across, t) => {
+  const wave = Math.sin(along / 700 - t * 0.6 + Math.sin(across / 1500) * 1.5);
+  const x = Math.min(1, Math.max(0, (wave - 0.55) / 0.45));
+  return x * x * (3 - 2 * x);
+};
+
+function updateScenery(now, dt) {
+  if (now - scenery.lastCheck > 600 && !flying) {
+    scenery.lastCheck = now;
+    const f = focusPlace();
+    if (f !== scenery.name) setScenery(f);
+  }
+  // Close to the ground the trip arcs would shoot through the sky like lasers; hide them there.
+  const close = !!scenery.name && viewer.camera.positionCartographic.height -
+    (scenery.name ? (state.places[scenery.name].h || 0) * EXAGGERATION : 0) < 20000;
+  if (arcSource) arcSource.show = !close;
+  if (!scenery.name) return;
+  const u = nightMaterial.uniforms, t = u.fpTime;
+  // Shadow falls away from the light: shift each cloud's footprint along the horizontal light direction.
+  const L = scratchLight, Lup = Math.max(0.2, Cesium.Cartesian3.dot(L, scenery.up));
+  const Le = Cesium.Cartesian3.dot(L, scenery.east), Ln = Cesium.Cartesian3.dot(L, scenery.north);
+  scenery.clouds.forEach((c, i) => {
+    c.e += WIND_SPEED * dt;
+    if (c.e > SCENERY_RADIUS) c.e -= SCENERY_RADIUS * 2;
+    const k = c.alt / Lup, s = u[cloudName(i)];
+    offsetFrom(scenery.center, c.e - Le * k, c.n - Ln * k, 0, s);
+    s.w = c.w * 0.55;
+  });
+  // Sway a third of the plants each frame; the motion is slow enough to read smoothly at ~20 Hz.
+  scenery.parity = (scenery.parity + 1) % 3;
+  const plants = scenery.plants;
+  for (let i = scenery.parity; i < plants.length; i += 3) {
+    const p = plants[i];
+    p.b.rotation = p.amp * Math.sin(t * p.freq + p.phase) + p.gustAmp * gustAt(p.along, p.across, t);
+  }
+}
+
+async function buildVegetation(name, token) {
+  const p = state.places[name];
+  const z = VEG_TILE_ZOOM, n = 2 ** z, T = VEG_TILES, half = (T - 1) / 2;
+  const latR = p.lat * Math.PI / 180;
+  const fx = (p.lon + 180) / 360 * n;
+  const fy = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+  const x0 = Math.floor(fx) - half, y0 = Math.floor(fy) - half;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256 * T;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  try {
+    const jobs = [];
+    for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+      const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y0 + j}/${x0 + i}`;
+      jobs.push(fetch(url).then(r => r.blob()).then(createImageBitmap).then(img => ctx.drawImage(img, i * 256, j * 256)));
+    }
+    await Promise.all(jobs);
+  } catch (e) { return; }
+  if (token !== scenery.token) return;
+
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const rnd = mulberry32(hashStr(name) ^ 99);
+  const mPerPx = 40075016 * Math.cos(latR) / (n * 256);
+  // Classify every pixel: 1 = forest (dark green), 2 = meadow (brighter green), 0 = other.
+  const W = canvas.width, cls = new Uint8Array(W * W);
+  for (let i = 0, k = 0; i < cls.length; i++, k += 4) {
+    const r = data[k], g = data[k + 1], b = data[k + 2];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), v = max / 255, s = max ? (max - min) / max : 0;
+    if (g < r * 0.95 || g < b * 0.9 || s < 0.12) continue;
+    cls[i] = v < 0.25 ? 1 : v >= 0.3 ? 2 : 0;
+  }
+  // Only plant where a whole block is mostly forest / meadow, so trees grow in stands, not as noise.
+  const B = 8, NB = W / B, forestFrac = new Float32Array(NB * NB), meadowFrac = new Float32Array(NB * NB);
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+    let f = 0, m = 0;
+    for (let y = by * B; y < by * B + B; y++) for (let x = bx * B; x < bx * B + B; x++) {
+      const c = cls[y * W + x];
+      if (c === 1) f++; else if (c === 2) m++;
+    }
+    forestFrac[by * NB + bx] = f / (B * B);
+    meadowFrac[by * NB + bx] = m / (B * B);
+  }
+  // Candidates on every forest / meadow pixel inside dense blocks. Density falls off with distance from
+  // the place, like a level of detail: thick stands where the camera looks, thinner towards the edges.
+  const cpx = (fx - x0) * 256, cpy = (fy - y0) * 256;
+  const trees = [], flowers = [];
+  for (let py = 0; py < W; py++) for (let px = 0; px < W; px++) {
+    const c = cls[py * W + px];
+    if (!c) continue;
+    const bi = (py / B | 0) * NB + (px / B | 0);
+    const dm = Math.hypot(px - cpx, py - cpy) * mPerPx;
+    if (dm > VEG_RADIUS) continue;
+    const keep = Math.exp(-((dm / 1500) ** 2));
+    if (c === 1 ? forestFrac[bi] <= 0.45 || rnd() > 0.7 * keep : meadowFrac[bi] <= 0.6 || rnd() > 0.03 * keep) continue;
+    // average a 3×3 patch so a tree takes the forest's colour, not one noisy pixel
+    let r = 0, g = 0, b = 0, cnt = 0;
+    for (let yy = Math.max(0, py - 1); yy <= Math.min(W - 1, py + 1); yy++) for (let xx = Math.max(0, px - 1); xx <= Math.min(W - 1, px + 1); xx++) {
+      const k = (yy * W + xx) * 4; r += data[k]; g += data[k + 1]; b += data[k + 2]; cnt++;
+    }
+    const X = x0 + (px + rnd()) / 256, Y = y0 + (py + rnd()) / 256;
+    (c === 1 ? trees : flowers).push({
+      lon: X / n * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y / n))) * 180 / Math.PI,
+      rgb: [r / cnt / 255, g / cnt / 255, b / cnt / 255],
+    });
+  }
+  const pick = (arr, cap) => { for (let i = arr.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr.slice(0, cap); };
+  const plants = [...pick(trees, MAX_TREES).map(s => ({ ...s, kind: 'tree' })), ...pick(flowers, MAX_FLOWERS).map(s => ({ ...s, kind: 'flower' }))];
+  if (!plants.length) return;
+
+  const cartos = plants.map(s => Cesium.Cartographic.fromDegrees(s.lon, s.lat));
+  try { await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartos); }
+  catch (e) { try { await Cesium.sampleTerrain(viewer.terrainProvider, 13, cartos); } catch (e2) { return; } }
+  if (token !== scenery.token) return;
+
+  // Separate collections, so tree and flower sprites never share a texture atlas.
+  const sp = sprites();
+  const treeSet = new Cesium.BillboardCollection({ scene }), flowerSet = new Cesium.BillboardCollection({ scene });
+  const fadeTree = new Cesium.NearFarScalar(4500, 1, 12000, 0), fadeFlower = new Cesium.NearFarScalar(1800, 1, 5500, 0);
+  const showTree = new Cesium.DistanceDisplayCondition(0, 12500), showFlower = new Cesium.DistanceDisplayCondition(0, 6000);
+  const center = scenery.center;
+  plants.forEach((s, i) => {
+    const pos = Cesium.Cartesian3.fromRadians(cartos[i].longitude, cartos[i].latitude, (cartos[i].height || 0) * EXAGGERATION + 1.5);
+    const d = Cesium.Cartesian3.subtract(pos, center, new Cesium.Cartesian3());
+    const isTree = s.kind === 'tree';
+    const h = isTree ? 30 + rnd() * 26 : 9 + rnd() * 5; // 雪岭云杉 really grow 40–60 m
+    // Grey sprite × satellite colour: boost so the sprite's mid-grey lands near the ground's own tone.
+    const k = 1.5 + rnd() * 0.35;
+    const b = (isTree ? treeSet : flowerSet).add({
+      color: isTree ? new Cesium.Color(Math.min(1, s.rgb[0] * k), Math.min(1, s.rgb[1] * k), Math.min(1, s.rgb[2] * k), 1) : Cesium.Color.WHITE,
+      position: pos,
+      image: isTree ? sp.conifer[i % sp.conifer.length] : sp.flowers[i % sp.flowers.length],
+      width: isTree ? h * 0.36 : h * 1.7, height: h, sizeInMeters: true,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      alignedAxis: Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(pos, new Cesium.Cartesian3()),
+      translucencyByDistance: isTree ? fadeTree : fadeFlower,
+      distanceDisplayCondition: isTree ? showTree : showFlower,
+    });
+    scenery.plants.push({ b, phase: rnd() * Math.PI * 2, freq: 1.1 + rnd() * 0.9, amp: isTree ? 0.02 : 0.07, gustAmp: isTree ? 0.06 : 0.12,
+      // across matches the shader's cross(wind, up), which points south
+      along: Cesium.Cartesian3.dot(d, scenery.east), across: -Cesium.Cartesian3.dot(d, scenery.north) });
+  });
+  scenery.trees = scene.primitives.add(treeSet);
+  scenery.flowers = scene.primitives.add(flowerSet);
 }
 
 /* ---------- HTML markers ---------- */
@@ -691,7 +1051,7 @@ function renderMarkers() {
 function onMarkerClick(name, info) {
   const sel = byId(state.sel);
   if (sel && (sel.kind === 'trip' ? sel.stops.some(s => s.place === name) : sel.place === name)) {
-    flyToPoints([posOf(name)]);
+    flyToPoints([posOf(name)], { close: true });
     return;
   }
   const candidates = info.trips.filter(inYear);
@@ -1211,7 +1571,7 @@ function bindEvents() {
     if (t.dataset.year) { setYear(+t.dataset.year); return; }
     if (t.dataset.place && t.closest('#card')) {
       const pos = posOf(t.dataset.place);
-      if (pos) flyToPoints([pos]); else openModal('places');
+      if (pos) flyToPoints([pos], { close: true }); else openModal('places');
       return;
     }
     if (t.dataset.id) select(t.dataset.id);
