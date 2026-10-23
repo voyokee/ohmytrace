@@ -59,7 +59,7 @@ const cloudName = i => 'fpC' + String(i).padStart(2, '0');
 //  - warm light inside the lit pools, wind gusts sweeping the place in focus, cloud shadows
 function makeNightMaterial() {
   const uniforms = {
-    fpRadius: 60000, fpDark: NIGHT_DARKNESS, fpRelief: 0.55, fpTime: 0,
+    fpRadius: 60000, fpDark: NIGHT_DARKNESS, fpRelief: 0.55, fpTime: 0, fpHaze: 0, fpAutumn: 0,
     fpLight: new Cesium.Cartesian3(0, 0, 1), fpWind: new Cesium.Cartesian3(1, 0, 0),
     fpFocus: new Cesium.Cartesian4(0, 0, 0, 0),
   };
@@ -72,6 +72,8 @@ function makeNightMaterial() {
     uniforms[cloudName(i)] = new Cesium.Cartesian4(0, 0, 0, 0);
     clouds += `  shadow = max(shadow, fpShadow(pos, ${cloudName(i)}));\n`;
   }
+  // Keep the words "slope" and "normalEC" out of this source, comments included: Cesium greps for them,
+  // then demands terrain vertex normals and refuses (or crashes) to apply the material.
   const source = `
 float fpGlow(vec3 pos, vec4 l) {
   return (1.0 - smoothstep(fpRadius * 0.28, fpRadius, distance(pos, l.xyz))) * l.w;
@@ -91,12 +93,17 @@ ${clouds}
   vec3 n = normalize(cross(dFdx(pEC), dFdy(pEC)));
   if (dot(n, materialInput.positionToEyeEC) < 0.0) n = -n;
   float shade = clamp(0.5 + 0.5 * dot(n, fpLight), 0.0, 1.0);
-  float reliefA = (1.0 - shade) * fpRelief;
+  // Near the ground, far terrain is coarse (big flat triangles), so its relief lighting fades with
+  // distance while blue aerial haze takes over, as real mountain ranges do.
+  float dist = length(pEC);
+  float far = smoothstep(6000.0, 70000.0, dist) * fpHaze;
+  float reliefA = (1.0 - shade) * fpRelief * (1.0 - 0.75 * far);
+  float hazeA = far * 0.55;
 
-  float gust = 0.0;
+  float gust = 0.0, inFocus = 0.0;
   if (fpFocus.w > 0.0) {
     vec3 d = pos - fpFocus.xyz;
-    float inFocus = 1.0 - smoothstep(fpFocus.w * 0.6, fpFocus.w, length(d));
+    inFocus = 1.0 - smoothstep(fpFocus.w * 0.6, fpFocus.w, length(d));
     float across = dot(d, normalize(cross(fpWind, fpFocus.xyz)));
     float wave = sin(dot(d, fpWind) / 700.0 - fpTime * 0.6 + sin(across / 1500.0) * 1.5);
     gust = smoothstep(0.55, 1.0, wave) * inFocus;
@@ -104,12 +111,16 @@ ${clouds}
 
   float nightA = fpDark * (1.0 - lit);
   float rim = lit * (1.0 - lit) * 4.0;
-  // Composite as premultiplied layers over the imagery: shadow, night tint, warm light.
-  float keep = (1.0 - reliefA) * (1.0 - shadow * 0.32) * (1.0 - nightA);
-  vec3 acc = vec3(0.015, 0.026, 0.06) * nightA;
   float w = rim * 0.1 + lit * 0.05 + gust * 0.07;
-  acc = acc * (1.0 - w) + vec3(1.0, 0.86, 0.6) * w;
-  keep *= 1.0 - w;
+  float autumnA = fpAutumn * inFocus * 0.2;
+  // Composite as premultiplied layers over the imagery, in order:
+  // relief shadow, cloud shadow, autumn wash, haze, night tint, warm light.
+  float keep = (1.0 - reliefA) * (1.0 - shadow * 0.32);
+  vec3 acc = vec3(0.0);
+  acc = acc * (1.0 - autumnA) + vec3(0.86, 0.62, 0.22) * autumnA; keep *= 1.0 - autumnA;
+  acc = acc * (1.0 - hazeA) + vec3(0.6, 0.7, 0.82) * hazeA;      keep *= 1.0 - hazeA;
+  acc = acc * (1.0 - nightA) + vec3(0.015, 0.026, 0.06) * nightA; keep *= 1.0 - nightA;
+  acc = acc * (1.0 - w) + vec3(1.0, 0.86, 0.6) * w;              keep *= 1.0 - w;
   m.alpha = 1.0 - keep;
   m.diffuse = acc / max(m.alpha, 0.0001);
   return m;
@@ -703,10 +714,14 @@ function updateSun() {
 function updateLights(now, dt) {
   const u = nightMaterial.uniforms;
   u.fpTime = (now / 1000) % 10000;
+  // aerial haze only matters when the camera is down among the mountains
+  const camH = viewer.camera.positionCartographic.height;
+  u.fpHaze = 1 - Math.min(1, Math.max(0, (camH - 25000) / 95000));
   updateSun();
   updateScenery(now, dt);
-  // Lit pools keep a sensible size on screen: tens of km up close, a few hundred km from space.
-  u.fpRadius = Math.max(55000, viewer.camera.positionCartographic.height * 0.036);
+  // Lit pools keep a sensible size on screen: a few hundred km from space; down among the mountains
+  // they widen so the whole visible landscape stays in daylight instead of a dark horizon.
+  u.fpRadius = Math.max(55000, camH * 0.036, camH < 120000 ? 140000 * Math.min(1, (120000 - camH) / 90000) : 0);
   let n = 0;
   for (const [name, L] of lights) {
     if (n >= MAX_LIGHTS) break;
@@ -740,34 +755,124 @@ function mulberry32(seed) {
 }
 const hashStr = s => [...s].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261);
 
-// Painted sprites, generated once. Light comes from the left to match the relief shading.
+/* Vegetation species. Trees are painted in greys, lit from the left to match the relief shading, and
+ * tinted per tree when planted: evergreens take the satellite colour under them (so stands look like
+ * the real forest rising out of the image); deciduous trees and cherries take a seasonal colour from
+ * the trip date. Heights are roughly real; small trees are drawn a bit larger so they read from the air.
+ * autumn: golden/red palettes; blossom: spring colour (cherry only). */
+const SPECIES = {
+  spruce:    { h: [30, 56], wr: 0.36 },
+  larch:     { h: [24, 38], wr: 0.32, autumn: [[0.95, 0.72, 0.22], [0.88, 0.58, 0.16]] },
+  pine:      { h: [20, 34], wr: 0.8 },
+  broadleaf: { h: [18, 30], wr: 0.95, autumn: [[0.93, 0.58, 0.18], [0.82, 0.3, 0.12], [0.92, 0.76, 0.25]] },
+  birch:     { h: [20, 32], wr: 0.42, autumn: [[0.99, 0.84, 0.3], [0.96, 0.74, 0.22]] },
+  bamboo:    { h: [14, 24], wr: 0.6 },
+  palm:      { h: [16, 28], wr: 0.85 },
+  cherry:    { h: [14, 20], wr: 1.1, blossom: [[1, 0.8, 0.86], [0.99, 0.87, 0.91], [1, 0.93, 0.96]], autumn: [[0.9, 0.42, 0.2]] },
+};
+
+// Rough vegetation regions: enough to pick the iconic plants of a place. The satellite image still
+// decides where trees stand; elevation chooses between the low and high mix, and nothing grows above
+// the treeline. darkV: brightness below which green pixels count as forest (broadleaf canopies are lighter).
+function biomeAt(lat, lon) {
+  const a = Math.abs(lat);
+  if (lon > 124 && lon < 146 && lat > 30 && lat < 46) // Japan, Korea
+    return { low: { broadleaf: 5, pine: 2, spruce: 2, cherry: 1 }, high: { spruce: 3, birch: 1 }, highAbove: 1400, treeline: 2600, darkV: 0.3 };
+  if (lat >= 44 && lon >= 105 && lon <= 145) // NE China, Inner Mongolia: birch and larch
+    return { low: { birch: 5, larch: 4, pine: 1 }, treeline: 1900, darkV: 0.3 };
+  if (lat >= 36 && lat < 50 && lon >= 70 && lon < 105) // Central Asia: poplar oases below, Tianshan spruce in the mountains
+    return { low: { broadleaf: 6, birch: 1 }, high: { spruce: 8, birch: 1, larch: 1 }, highAbove: 1500, treeline: 3200, darkV: 0.25 };
+  if (lon >= -140 && lon <= -100 && lat >= 35 && lat < 62) // western North America: Rockies and Cascades
+    return { low: { pine: 5, spruce: 4, birch: 1 }, high: { spruce: 5, pine: 3, larch: 1 }, highAbove: 1600, treeline: 3300, darkV: 0.27 };
+  if (lon > -100 && lon <= -50 && lat >= 35 && lat < 55) // eastern North America: maple and birch, famous autumn colour
+    return { low: { broadleaf: 6, birch: 2, pine: 2 }, high: { spruce: 4, birch: 2 }, highAbove: 1000, treeline: 1700, darkV: 0.3 };
+  if (lon >= -12 && lon <= 45 && lat >= 42 && lat < 62) // Europe: beech and oak below, spruce and larch in the mountains
+    return { low: { broadleaf: 5, pine: 2, spruce: 3 }, high: { spruce: 6, larch: 2, pine: 2 }, highAbove: 900, treeline: 2100, darkV: 0.28 };
+  if (lat <= -32) // southern temperate: evergreen beech and plantation pine
+    return { low: { broadleaf: 6, pine: 3, spruce: 1 }, treeline: 1600, darkV: 0.28, evergreen: true };
+  if (lat >= 26 && lat < 36 && lon >= 78 && lon < 104) // Hengduan, Himalaya
+    return { low: { broadleaf: 3, pine: 3 }, high: { spruce: 5, larch: 3, birch: 1 }, highAbove: 3000, treeline: 4400, darkV: 0.28 };
+  if (a < 23.5) // tropics
+    return { low: { palm: 3, broadleaf: 6, bamboo: 1 }, high: { broadleaf: 3, pine: 1 }, highAbove: 1800, treeline: 3600, darkV: 0.33, evergreen: true };
+  if (lat >= 23.5 && lat < 32 && lon >= 100 && lon <= 123) // south China: evergreen broadleaf and bamboo
+    return { low: { broadleaf: 5, bamboo: 3, pine: 2 }, high: { pine: 3, broadleaf: 2, spruce: 1 }, highAbove: 1500, treeline: 2900, darkV: 0.33, evergreen: true };
+  if (a >= 55) return { low: { spruce: 5, larch: 3, birch: 2 }, treeline: 900, darkV: 0.27 };
+  if (a >= 32) return { low: { broadleaf: 5, pine: 3, birch: 2 }, high: { spruce: 3, pine: 2, birch: 1 }, highAbove: 1200, treeline: 2800, darkV: 0.3 };
+  return { low: { broadleaf: 5, pine: 3, spruce: 2 }, treeline: 3000, darkV: 0.3 };
+}
+
+// Season of the trip that brought you here, as a northern-hemisphere day of year (shifted half a
+// year south of the equator). A month-only date counts as mid-month.
+function seasonFor(name, lat) {
+  const sel = byId(state.sel);
+  const t = sel && sel.kind === 'trip' && sel.stops.some(s => s.place === name) ? sel
+    : trips.filter(x => x.stops.some(s => s.place === name)).pop();
+  if (!t || !t.date || t.date.prec === 'year') return { name: 'summer', month: 7, day: 196 };
+  const d = new Date(t.date.start);
+  if (t.date.prec === 'month') d.setDate(15);
+  let day = Math.round((d - new Date(d.getFullYear(), 0, 1)) / DAY) + 1;
+  if (lat < 0) day = (day + 182) % 365;
+  const m = new Date(2001, 0, day).getMonth() + 1;
+  const season = m >= 3 && m <= 4 ? 'spring' : m >= 5 && m <= 8 ? 'summer' : m >= 9 && m <= 11 ? 'autumn' : 'winter';
+  return { name: season, month: m, day };
+}
+
+// Deciduous leaves peak earlier further north and higher up (≈ Kyoto late Nov, 阿尔山 late Sep,
+// 稻城 early Oct). Returns 'green', 'gold' or 'bare' for one tree.
+function leafState(day, lat, groundM, rnd) {
+  const peak = 335 - (Math.abs(lat) - 35) * 4 - groundM / 1000 * 20;
+  const dd = day - peak;
+  if (dd < -30 || day < 150) return 'green';
+  if (dd > 40) return 'bare';
+  const golden = dd < 0 ? 1 + dd / 30 : 1 - Math.max(0, dd - 12) / 28 * 0.7;
+  return rnd() < golden * 0.95 ? 'gold' : dd > 15 ? 'bare' : 'green';
+}
+
+// Painted sprites, generated once. Small (they show at ~10–30 px) and padded so the atlas never bleeds.
 let spriteCache = null;
 function sprites() {
   if (spriteCache) return spriteCache;
-  const rnd = mulberry32(7);
-  // Spruce spire of ragged, drooping tiers, painted in greys (sunlit left, shaded right). Each tree is
-  // tinted with the satellite colour under it, so stands look like the real forest rising out of the image.
-  // Sprites are small (they show at ~10–30 px) and padded so the atlas never bleeds between them.
-  const conifer = [];
-  for (let v = 0; v < 6; v++) {
-    const P = 3, W = 30 + P * 2, H = 88 + P * 2, c = document.createElement('canvas');
-    c.width = W; c.height = H;
+  const rnd = mulberry32(7), PAD = 3;
+  const paint = (w, h, draw) => {
+    const c = document.createElement('canvas');
+    c.width = w + PAD * 2; c.height = h + PAD * 2;
     const x = c.getContext('2d');
-    x.translate(P, P);
-    const tiers = 8 + (rnd() * 4 | 0), cx = (W - P * 2) / 2, IH = H - P * 2;
+    x.translate(PAD, PAD);
+    draw(x, w, h);
+    return c.toDataURL();
+  };
+  const grey = (x, x0, x1, hi = 235, mid = 165, lo = 85) => {
+    const g = x.createLinearGradient(x0, 0, x1, 0);
+    g.addColorStop(0, `rgb(${hi},${hi},${hi - 8})`);
+    g.addColorStop(0.4, `rgb(${mid},${mid},${mid - 4})`);
+    g.addColorStop(1, `rgb(${lo},${lo + 2},${lo + 5})`);
+    return g;
+  };
+  const trunk = (x, x0, y0, x1, y1, w, shade = 70) => {
+    x.strokeStyle = `rgb(${shade},${shade - 8},${shade - 14})`; x.lineWidth = w; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(x0, y0); x.quadraticCurveTo((x0 + x1) / 2 + (rnd() - .5) * 4, (y0 + y1) / 2, x1, y1); x.stroke();
+  };
+  // A rounded canopy built from overlapping circles, lit from the left.
+  const canopy = (x, cx, cy, rx, ry, n, hi, mid, lo) => {
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd());
+      const px = cx + Math.cos(a) * rx * d * 0.75, py = cy + Math.sin(a) * ry * d * 0.75, r = (rx + ry) / 2 * (0.32 + rnd() * 0.2);
+      x.fillStyle = grey(x, px - r, px + r, hi, mid, lo);
+      x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+    }
+  };
+  // Conifer spire of ragged, drooping tiers. open < 1 makes it wispier (larch).
+  const conifer = (x, W, H, tiers, open = 1) => {
+    const cx = W / 2;
+    x.globalAlpha = open < 1 ? 0.9 : 1;
     for (let i = 0; i < tiers; i++) {
-      const t = i / (tiers - 1), y = 2 + t * (IH - 12), w = 2 + t * (cx - 2) * (0.85 + rnd() * 0.3);
-      const h = (IH - 10) / tiers * 2.2;
-      const g = x.createLinearGradient(cx - w, 0, cx + w, 0);
-      g.addColorStop(0, 'rgb(235,235,225)');
-      g.addColorStop(0.4, 'rgb(165,165,160)');
-      g.addColorStop(1, 'rgb(85,88,90)');
-      x.fillStyle = g;
+      const t = i / (tiers - 1), y = 2 + t * (H - 12), w = 2 + t * (cx - 2) * (0.85 + rnd() * 0.3) * open;
+      const h = (H - 10) / tiers * 2.2 * (open < 1 ? 0.75 : 1);
+      x.fillStyle = grey(x, cx - w, cx + w);
       x.beginPath();
       x.moveTo(cx, y);
-      // ragged lower edge: a few drooping points instead of a smooth curve
-      const points = 5;
       x.lineTo(cx - w, y + h);
+      const points = 5;
       for (let k = 1; k <= points; k++) {
         const px = cx - w + (2 * w) * k / points;
         x.lineTo(px - w / points, y + h * (0.78 + rnd() * 0.12));
@@ -776,10 +881,59 @@ function sprites() {
       x.closePath();
       x.fill();
     }
+    x.globalAlpha = 1;
     x.fillStyle = 'rgb(60,50,44)';
-    x.fillRect(cx - 1, IH - 9, 2, 9);
-    conifer.push(c.toDataURL());
-  }
+    x.fillRect(cx - 1, H - 9, 2, 9);
+  };
+  const variants = (n, fn) => Array.from({ length: n }, fn);
+  const trees = {
+    spruce: variants(6, () => paint(30, 88, (x, W, H) => conifer(x, W, H, 8 + (rnd() * 4 | 0)))),
+    larch: variants(4, () => paint(26, 80, (x, W, H) => conifer(x, W, H, 7 + (rnd() * 3 | 0), 0.8))),
+    pine: variants(4, () => paint(48, 56, (x, W, H) => {
+      trunk(x, W / 2, H, W / 2 + (rnd() - .5) * 8, H * 0.3, 2.5);
+      const clumps = 3 + (rnd() * 3 | 0);
+      for (let i = 0; i < clumps; i++) {
+        const cx = W / 2 + (rnd() - .5) * W * 0.55, cy = H * (0.12 + rnd() * 0.4), rx = W * (0.18 + rnd() * 0.12), ry = rx * 0.45;
+        x.fillStyle = grey(x, cx - rx, cx + rx);
+        x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill();
+      }
+    })),
+    broadleaf: variants(5, () => paint(48, 52, (x, W, H) => {
+      trunk(x, W / 2, H, W / 2, H * 0.55, 3);
+      canopy(x, W / 2, H * 0.4, W * 0.42, H * 0.36, 11, 235, 165, 85);
+    })),
+    birch: variants(4, () => paint(24, 60, (x, W, H) => {
+      trunk(x, W / 2, H, W / 2 + (rnd() - .5) * 3, H * 0.1, 2.2, 225);
+      canopy(x, W / 2, H * 0.42, W * 0.38, H * 0.34, 9, 240, 180, 100);
+    })),
+    bamboo: variants(4, () => paint(36, 64, (x, W, H) => {
+      const culms = 6 + (rnd() * 4 | 0);
+      for (let i = 0; i < culms; i++) {
+        const bx = W / 2 + (rnd() - .5) * 8, tx = W / 2 + (rnd() - .5) * W * 0.9, ty = 4 + rnd() * H * 0.25;
+        x.strokeStyle = `rgb(${150 + rnd() * 60 | 0},${150 + rnd() * 60 | 0},140)`; x.lineWidth = 1.4;
+        x.beginPath(); x.moveTo(bx, H); x.quadraticCurveTo(bx, H * 0.4, tx, ty); x.stroke();
+        for (let k = 0; k < 6; k++) {
+          const t = 0.25 + rnd() * 0.75, lx = bx + (tx - bx) * t * t, ly = H + (ty - H) * t;
+          x.strokeStyle = grey(x, lx - 6, lx + 6); x.lineWidth = 2.2;
+          x.beginPath(); x.moveTo(lx, ly); x.lineTo(lx + (rnd() - .5) * 12, ly + 3 + rnd() * 4); x.stroke();
+        }
+      }
+    })),
+    palm: variants(4, () => paint(48, 60, (x, W, H) => {
+      const tx = W / 2 + (rnd() - .5) * 14, ty = H * 0.22;
+      trunk(x, W / 2, H, tx, ty, 2.6, 120);
+      for (let i = 0; i < 9; i++) {
+        const a = -Math.PI / 2 + (i / 8 - 0.5) * Math.PI * 1.5, len = W * (0.32 + rnd() * 0.12);
+        const ex = tx + Math.cos(a) * len, ey = ty + Math.sin(a) * len * 0.5 + len * 0.45;
+        x.strokeStyle = grey(x, tx - len, tx + len); x.lineWidth = 3;
+        x.beginPath(); x.moveTo(tx, ty); x.quadraticCurveTo(tx + Math.cos(a) * len * 0.6, ty + Math.sin(a) * len * 0.6 - 4, ex, ey); x.stroke();
+      }
+    })),
+    cherry: variants(4, () => paint(50, 44, (x, W, H) => {
+      trunk(x, W / 2, H, W / 2 + (rnd() - .5) * 6, H * 0.5, 3, 80);
+      canopy(x, W / 2, H * 0.42, W * 0.46, H * 0.36, 14, 252, 215, 160);
+    })),
+  };
   const flowers = [];
   const petals = ['#f4f1e8', '#f7d65a', '#c9a0ff', '#ff9fb8', '#ffffff'];
   for (let v = 0; v < 4; v++) {
@@ -798,7 +952,7 @@ function sprites() {
     for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(6 + rnd() * (IW - 12), 4 + rnd() * 10, 2.4, 0, Math.PI * 2); x.fill(); }
     flowers.push(c.toDataURL());
   }
-  return (spriteCache = { conifer, flowers });
+  return (spriteCache = { trees, flowers });
 }
 
 function focusPlace() {
@@ -825,6 +979,7 @@ function clearScenery() {
   scenery.name = null;
   const u = nightMaterial.uniforms;
   u.fpFocus.w = 0;
+  u.fpAutumn = 0;
   for (let i = 0; i < MAX_CLOUDS; i++) u[cloudName(i)].w = 0;
 }
 
@@ -853,7 +1008,9 @@ function setScenery(name) {
       alt: 1300 + rnd() * 1300, w: 2000 + rnd() * 2400,
     });
   }
-  buildVegetation(name, scenery.token);
+  const token = scenery.token;
+  scenery.ready = false;
+  buildVegetation(name, token).finally(() => { if (token === scenery.token) scenery.ready = true; });
 }
 
 const scratchOff = new Cesium.Cartesian3();
@@ -874,7 +1031,7 @@ const gustAt = (along, across, t) => {
 };
 
 function updateScenery(now, dt) {
-  if (now - scenery.lastCheck > 600 && !flying) {
+  if (now - scenery.lastCheck > 600 && !flying && !scenery.pinned) {
     scenery.lastCheck = now;
     const f = focusPlace();
     if (f !== scenery.name) setScenery(f);
@@ -927,13 +1084,24 @@ async function buildVegetation(name, token) {
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const rnd = mulberry32(hashStr(name) ^ 99);
   const mPerPx = 40075016 * Math.cos(latR) / (n * 256);
-  // Classify every pixel: 1 = forest (dark green), 2 = meadow (brighter green), 0 = other.
-  const W = canvas.width, cls = new Uint8Array(W * W);
-  for (let i = 0, k = 0; i < cls.length; i++, k += 4) {
+  const biome = biomeAt(p.lat, p.lon), season = seasonFor(name, p.lat);
+  const lite = isMobile() || (navigator.hardwareConcurrency || 8) <= 4;
+  // Classify every pixel: 1 = forest, 2 = meadow, 0 = other. Forest is dark green, or green with a rough,
+  // speckled canopy texture (broadleaf forest is often as bright as grass, but never as smooth).
+  const W = canvas.width, cls = new Uint8Array(W * W), luma = new Float32Array(W * W);
+  for (let i = 0, k = 0; i < luma.length; i++, k += 4) luma[i] = (0.299 * data[k] + 0.587 * data[k + 1] + 0.114 * data[k + 2]) / 255;
+  for (let y = 1; y < W - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x, k = i * 4;
     const r = data[k], g = data[k + 1], b = data[k + 2];
     const max = Math.max(r, g, b), min = Math.min(r, g, b), v = max / 255, s = max ? (max - min) / max : 0;
     if (g < r * 0.95 || g < b * 0.9 || s < 0.12) continue;
-    cls[i] = v < 0.25 ? 1 : v >= 0.3 ? 2 : 0;
+    let sum = 0, sq = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const l = luma[i + dy * W + dx]; sum += l; sq += l * l; }
+    const rough = Math.sqrt(Math.max(0, sq / 9 - (sum / 9) ** 2));
+    // Rough texture alone also matches steppe and fields; canopy is clearly greener than red, while
+    // dry grass is olive (green ≈ red).
+    const roughCanopy = rough > 0.05 && g > r * 1.06 && s > 0.2 && v < biome.darkV + 0.15;
+    cls[i] = (v < biome.darkV && g > r) || roughCanopy ? 1 : v >= biome.darkV + 0.05 ? 2 : 0;
   }
   // Only plant where a whole block is mostly forest / meadow, so trees grow in stands, not as noise.
   const B = 8, NB = W / B, forestFrac = new Float32Array(NB * NB), meadowFrac = new Float32Array(NB * NB);
@@ -949,15 +1117,22 @@ async function buildVegetation(name, token) {
   // Candidates on every forest / meadow pixel inside dense blocks. Density falls off with distance from
   // the place, like a level of detail: thick stands where the camera looks, thinner towards the edges.
   const cpx = (fx - x0) * 256, cpy = (fy - y0) * 256;
+  // In blossom season cherries line parks, riverbanks and streets: bright green patches and sparse
+  // urban trees grow them, while dense forest keeps its usual mix.
+  const blossom = season.name === 'spring' && biome.low.cherry;
   const trees = [], flowers = [];
   for (let py = 0; py < W; py++) for (let px = 0; px < W; px++) {
-    const c = cls[py * W + px];
+    let c = cls[py * W + px];
     if (!c) continue;
     const bi = (py / B | 0) * NB + (px / B | 0);
     const dm = Math.hypot(px - cpx, py - cpy) * mPerPx;
     if (dm > VEG_RADIUS) continue;
     const keep = Math.exp(-((dm / 1500) ** 2));
-    if (c === 1 ? forestFrac[bi] <= 0.45 || rnd() > 0.7 * keep : meadowFrac[bi] <= 0.6 || rnd() > 0.03 * keep) continue;
+    let force = null;
+    const green = forestFrac[bi] + meadowFrac[bi];
+    if (blossom && green > 0.12 && green < 0.6 && rnd() < 0.6 * keep) {
+      c = 1; force = 'cherry';
+    } else if (c === 1 ? forestFrac[bi] <= 0.45 || rnd() > 0.7 * keep : meadowFrac[bi] <= 0.6 || rnd() > 0.03 * keep) continue;
     // average a 3×3 patch so a tree takes the forest's colour, not one noisy pixel
     let r = 0, g = 0, b = 0, cnt = 0;
     for (let yy = Math.max(0, py - 1); yy <= Math.min(W - 1, py + 1); yy++) for (let xx = Math.max(0, px - 1); xx <= Math.min(W - 1, px + 1); xx++) {
@@ -966,11 +1141,13 @@ async function buildVegetation(name, token) {
     const X = x0 + (px + rnd()) / 256, Y = y0 + (py + rnd()) / 256;
     (c === 1 ? trees : flowers).push({
       lon: X / n * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y / n))) * 180 / Math.PI,
-      rgb: [r / cnt / 255, g / cnt / 255, b / cnt / 255],
+      rgb: [r / cnt / 255, g / cnt / 255, b / cnt / 255], force,
     });
   }
   const pick = (arr, cap) => { for (let i = arr.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr.slice(0, cap); };
-  const plants = [...pick(trees, MAX_TREES).map(s => ({ ...s, kind: 'tree' })), ...pick(flowers, MAX_FLOWERS).map(s => ({ ...s, kind: 'flower' }))];
+  // Phones and low-core machines get a lighter forest; wildflowers only bloom May–September.
+  const flowerCap = season.name === 'summer' && season.month >= 5 ? (lite ? 300 : MAX_FLOWERS) : 0;
+  const plants = [...pick(trees, lite ? 3500 : MAX_TREES).map(s => ({ ...s, kind: 'tree' })), ...pick(flowers, flowerCap).map(s => ({ ...s, kind: 'flower' }))];
   if (!plants.length) return;
 
   const cartos = plants.map(s => Cesium.Cartographic.fromDegrees(s.lon, s.lat));
@@ -984,27 +1161,58 @@ async function buildVegetation(name, token) {
   const fadeTree = new Cesium.NearFarScalar(4500, 1, 12000, 0), fadeFlower = new Cesium.NearFarScalar(1800, 1, 5500, 0);
   const showTree = new Cesium.DistanceDisplayCondition(0, 12500), showFlower = new Cesium.DistanceDisplayCondition(0, 6000);
   const center = scenery.center;
+  const weighted = mix => {
+    const entries = Object.entries(mix), total = entries.reduce((s, [, w]) => s + w, 0);
+    let r = rnd() * total;
+    for (const [k, w] of entries) if ((r -= w) <= 0) return k;
+    return entries[0][0];
+  };
+  const lum = c => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  let autumnTrees = 0, treeCount = 0;
+  const scale = (c, f) => new Cesium.Color(Math.min(1, c[0] * f), Math.min(1, c[1] * f), Math.min(1, c[2] * f), 1);
   plants.forEach((s, i) => {
-    const pos = Cesium.Cartesian3.fromRadians(cartos[i].longitude, cartos[i].latitude, (cartos[i].height || 0) * EXAGGERATION + 1.5);
+    const ground = cartos[i].height || 0, isTree = s.kind === 'tree';
+    let kind = 'flower';
+    if (isTree) {
+      if (ground > biome.treeline) return;
+      kind = s.force || weighted(biome.high && ground > biome.highAbove ? biome.high : biome.low);
+    }
+    const sp_ = SPECIES[kind];
+    if (isTree) treeCount++;
+    const pos = Cesium.Cartesian3.fromRadians(cartos[i].longitude, cartos[i].latitude, ground * EXAGGERATION + 1.5);
     const d = Cesium.Cartesian3.subtract(pos, center, new Cesium.Cartesian3());
-    const isTree = s.kind === 'tree';
-    const h = isTree ? 30 + rnd() * 26 : 9 + rnd() * 5; // 雪岭云杉 really grow 40–60 m
-    // Grey sprite × satellite colour: boost so the sprite's mid-grey lands near the ground's own tone.
-    const k = 1.5 + rnd() * 0.35;
+    const h = isTree ? sp_.h[0] + rnd() * (sp_.h[1] - sp_.h[0]) : 9 + rnd() * 5;
+    // Colour: evergreens (and deciduous trees in summer) take the satellite colour under them, boosted so
+    // the sprite's mid-grey lands on the ground's own tone. Autumn turns a share of deciduous trees gold
+    // and red, winter leaves them brown, spring dresses cherries in pink.
+    let color = Cesium.Color.WHITE, leaf = 'green';
+    if (isTree) {
+      color = scale(s.rgb, 1.5 + rnd() * 0.35);
+      const light = 0.62 + lum(s.rgb) * 1.4;
+      if (kind === 'cherry' && season.name === 'spring') { leaf = 'blossom'; color = scale(sp_.blossom[rnd() * sp_.blossom.length | 0], 0.85 + lum(s.rgb) * 0.6); }
+      else if (sp_.autumn && !biome.evergreen) {
+        leaf = leafState(season.day, p.lat, ground, rnd);
+        if (leaf === 'gold') { color = scale(sp_.autumn[rnd() * sp_.autumn.length | 0], light); autumnTrees++; }
+        else if (leaf === 'bare') color = scale([0.45, 0.38, 0.31], light);
+      }
+    }
+    const art = isTree ? sp.trees[kind] : sp.flowers;
     const b = (isTree ? treeSet : flowerSet).add({
-      color: isTree ? new Cesium.Color(Math.min(1, s.rgb[0] * k), Math.min(1, s.rgb[1] * k), Math.min(1, s.rgb[2] * k), 1) : Cesium.Color.WHITE,
+      color,
       position: pos,
-      image: isTree ? sp.conifer[i % sp.conifer.length] : sp.flowers[i % sp.flowers.length],
-      width: isTree ? h * 0.36 : h * 1.7, height: h, sizeInMeters: true,
+      image: art[i % art.length],
+      width: isTree ? h * sp_.wr : h * 1.7, height: h, sizeInMeters: true,
       verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
       alignedAxis: Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(pos, new Cesium.Cartesian3()),
       translucencyByDistance: isTree ? fadeTree : fadeFlower,
       distanceDisplayCondition: isTree ? showTree : showFlower,
     });
-    scenery.plants.push({ b, phase: rnd() * Math.PI * 2, freq: 1.1 + rnd() * 0.9, amp: isTree ? 0.02 : 0.07, gustAmp: isTree ? 0.06 : 0.12,
+    scenery.plants.push({ b, kind, leaf, phase: rnd() * Math.PI * 2, freq: 1.1 + rnd() * 0.9, amp: isTree ? 0.02 : 0.07, gustAmp: isTree ? 0.06 : 0.12,
       // across matches the shader's cross(wind, up), which points south
       along: Cesium.Cartesian3.dot(d, scenery.east), across: -Cesium.Cartesian3.dot(d, scenery.north) });
   });
+  // Wash the ground around the place in autumn gold in proportion to how many trees have turned.
+  nightMaterial.uniforms.fpAutumn = treeCount ? Math.min(1, autumnTrees / treeCount * 1.3) : 0;
   scenery.trees = scene.primitives.add(treeSet);
   scenery.flowers = scene.primitives.add(flowerSet);
 }
@@ -1264,7 +1472,7 @@ function stopHTML(place, note, color) {
   const st = statusOf(state.places[place]);
   return `<li><button class="stop" data-place="${esc(place)}" style="--c:${color}"><span class="stop-dot"></span>
     <span class="stop-main"><span class="stop-name">${esc(place)}</span>${note ? `<span class="stop-note">${esc(note)}</span>` : ''}</span>
-    ${st.pending ? `<span class="badge ${st.cls}">${st.text}</span>` : ''}</button></li>`;
+    ${st.pending ? `<span class="badge ${st.cls}">${st.text}</span>` : ''}${located(place) ? '<span class="stop-go">近看</span>' : ''}</button></li>`;
 }
 
 function renderCard() {
