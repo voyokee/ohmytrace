@@ -1258,7 +1258,6 @@ function boot() {
     return;
   }
   initGlobe();
-  window.__footprints = { viewer, state, get terrainReady() { return terrainReady; }, get orbit() { return orbit; }, get flying() { return flying; } };
   refresh();
   geocodeMissing();
 }
