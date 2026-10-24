@@ -5,7 +5,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
   const minScale = Math.min(maxScale, mobile ? 0.75 : 0.85);
   const stillScale = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
   let scale = Math.min(window.devicePixelRatio || 1, maxScale);
-  let still = false;
+  let still = false, near = false;
   let samples = [], costs = [], lastFrame = 0, lastChange = performance.now(), goodWindows = 0;
   let wasRunning = true;
   let lastTick = 0;
@@ -13,7 +13,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
     const pixels = still ? stillScale : scale;
     viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
     // Supersampled stills already smooth the silhouette; FXAA also softens mountain/coast detail.
-    if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !still || pixels < 1.5;
+    if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !near && (!still || pixels < 1.5);
     if (scene.globe) scene.globe.maximumScreenSpaceError = still ? 2 : mobile ? (scale < 0.9 ? 6 : 4) : (scale < 1 ? 3 : 2);
     scene.requestRender();
   };
@@ -35,6 +35,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
   window.addEventListener('resize', applyScale);
   return {
     reducedMotion,
+    near(value){if(near===value)return;near=value;applyScale();},
     still(value) {
       if (still === value) return;
       still = value;

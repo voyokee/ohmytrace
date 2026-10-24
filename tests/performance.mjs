@@ -20,6 +20,10 @@ const meadow = await sampleVegetation({ ...options, data: pixels(70, 140, 60) })
 assert.equal(meadow.length, options.flowerCap);
 assert.ok(meadow.every(p => p.kind === 'flower'));
 assert.deepEqual(await sampleVegetation({ ...options, flowerCap: 0, data: pixels(70, 140, 60) }), [], 'Winter has no wildflowers');
+const roofs=pixels(130,130,130);
+for(let y=0;y<width;y++)for(let x=0;x<width;x++)if(x%8===0)roofs.set([20,60,25,255],(y*width+x)*4);
+assert.deepEqual(await sampleVegetation({...options,blossom:true,data:roofs}),[],
+  'Spring must not promote isolated green pixels among buildings into an urban forest');
 // Node has no browser Worker: this also exercises the cooperative fallback.
 const signal = new AbortController().signal;
 assert.deepEqual(await prepareVegetation(options, () => pixels(20, 60, 25), signal), forest);
@@ -58,6 +62,10 @@ policy.still(true);
 assert.equal(requests, stillRequests, 'A settled globe must not start a new render loop');
 policy.still(false);
 assert.equal(viewer.scene.postProcessStages.fxaa.enabled, true, 'Motion must restore inexpensive edge antialiasing');
+policy.near(true);
+assert.equal(viewer.scene.postProcessStages.fxaa.enabled,false,'Dense close-up imagery must not be blurred by FXAA');
+policy.near(false);
+assert.equal(viewer.scene.postProcessStages.fxaa.enabled,true);
 assert.equal(policy.details().pixelRatio, scaled, 'Motion must return to its adaptive pixel budget');
 for (let i = 0; i < 400; i++) { now += 3000; policy.frame(now, false); }
 assert.equal(policy.details().pixelRatio, scaled, 'Intentional idle gaps must not lower quality');

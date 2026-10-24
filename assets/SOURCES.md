@@ -27,3 +27,6 @@ The sun glow is generated in code. Close-up satellite imagery and terrain contin
 ## CesiumJS
 
 `vendor/cesium/` contains the official CesiumJS 1.120.0 browser build, downloaded from the npm registry. Its Apache-2.0 license and third-party notices are preserved in `vendor/cesium/LICENSE.md` and `vendor/cesium/ThirdParty.json`. No engine source modifications were made.
+# 本地三维植被
+
+`models/vegetation.glb` 与 `models/vegetation-low.glb` 为本仓库代码原创生成的三维网格，包含针叶、阔叶、白桦、热带、灌木、樱花和草七类。源代码 `src/scenery/vegetation-assets.js`，生成命令 `node scripts/build-vegetation-assets.mjs`；采用本仓库 MIT 许可，无外部模型下载、纹理或账号依赖。测试会校验交付二进制与生成源一致。

@@ -55,7 +55,9 @@ export async function sampleVegetation(options, checkpoint) {
       const keep = Math.exp(-((dm / 1500) ** 2));
       let force = null;
       const green = forest[bi] + meadow[bi];
-      if (blossom && green > 0.12 && green < 0.6 && random() < 0.6 * keep) {
+      // Blossom colours change the species, never the land-cover requirement. Sparse green roof
+      // pixels in a city block must not seed a full canopy on the surrounding streets/buildings.
+      if (blossom && green > 0.60 && forest[bi] > 0.20 && random() < 0.45 * keep) {
         c = 1; force = 'cherry';
       } else if (c === 1 ? forest[bi] <= 0.45 || random() > 0.7 * keep : meadow[bi] <= 0.6 || random() > 0.03 * keep) continue;
       // Reservoir sampling bounds candidate memory before expensive coordinate/colour work.

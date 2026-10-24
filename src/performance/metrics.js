@@ -8,7 +8,7 @@ export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
     'background:#07111eee;color:#bde8cf;border:1px solid #345;pointer-events:none;font:12px/1.5 monospace';
   document.body.append(panel);
   const controls = document.createElement('div');
-  controls.style.cssText = 'position:fixed;right:16px;top:440px;z-index:31;display:flex;gap:6px';
+  controls.style.cssText = 'position:fixed;right:16px;bottom:120px;max-width:calc(100vw - 32px);z-index:31;display:flex;flex-wrap:wrap;gap:6px';
   for (const action of actions) {
     const button = document.createElement('button');
     button.textContent = action.label;

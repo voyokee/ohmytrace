@@ -1,6 +1,8 @@
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261024-earth';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261024-world';
 import { presentationState } from './presentation-state.js';
 import { earthTexturePlan } from './texture-policy.js';
+import { makeWorldForest, worldHeight, geographicPosition, random } from '../scenery/world-data.js';
+import { createWorldForest } from '../scenery/world-forest.js';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -21,7 +23,7 @@ async function loadTexture(name, maxWidth) {
   return canvas;
 }
 
-function shell(viewer, material, altitude, writeDepth = false) {
+function shell(viewer, material, altitude, writeDepth = false, terrain) {
   const radii = Cesium.Cartesian3.add(Cesium.Ellipsoid.WGS84.radii,
     new Cesium.Cartesian3(altitude, altitude, altitude), new Cesium.Cartesian3());
   // Single front face: Cesium's closed+translucent two-pass path would also draw the far hemisphere.
@@ -30,7 +32,7 @@ function shell(viewer, material, altitude, writeDepth = false) {
       cull: { enabled: true, face: Cesium.CullFace.BACK }, blending: Cesium.BlendingState.ALPHA_BLEND } });
   appearance.isTranslucent = () => !writeDepth || material.uniforms.opacity < 0.999;
   return viewer.scene.primitives.add(new Cesium.Primitive({
-    geometryInstances: new Cesium.GeometryInstance({ geometry: new Cesium.EllipsoidGeometry({ radii,
+    geometryInstances: new Cesium.GeometryInstance({ geometry: terrain || new Cesium.EllipsoidGeometry({ radii,
       stackPartitions: 128, slicePartitions: 256,
       vertexFormat: Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat }) }),
     appearance,
@@ -38,7 +40,27 @@ function shell(viewer, material, altitude, writeDepth = false) {
   }));
 }
 
-export function setupCinematic(viewer, { onError = () => {} } = {}) {
+function pixels(image) {
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512;
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0,1024,512);
+  return {width:1024,height:512,data:context.getImageData(0,0,1024,512).data};
+}
+async function terrainGeometry(map,constrained,isCancelled=()=>false) {
+  const geometry=Cesium.EllipsoidGeometry.createGeometry(new Cesium.EllipsoidGeometry({radii:Cesium.Ellipsoid.WGS84.radii,
+    stackPartitions:constrained?90:180,slicePartitions:constrained?180:360,
+    vertexFormat:Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat}));
+  const values=geometry.attributes.position.values,point=new Cesium.Cartesian3(),carto=new Cesium.Cartographic();
+  for(let i=0;i<values.length;i+=3) {
+    if(i%12000===0)await new Promise(resolve=>setTimeout(resolve,0));
+    if(isCancelled())throw new DOMException('World disposed','AbortError');
+    Cesium.Cartesian3.fromArray(values,i,point);Cesium.Cartographic.fromCartesian(point,Cesium.Ellipsoid.WGS84,carto);
+    const lon=Cesium.Math.toDegrees(carto.longitude),lat=Cesium.Math.toDegrees(carto.latitude);
+    values.set(geographicPosition(lon,lat,worldHeight(map,lon,lat)),i);
+  }
+  geometry.boundingSphere=Cesium.BoundingSphere.fromVertices(values);return geometry;
+}
+
+export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration = 1.65 } = {}) {
   const scene = viewer.scene;
   const plan = earthTexturePlan({ coarsePointer: matchMedia('(pointer: coarse)').matches,
     memoryGB: navigator.deviceMemory, maxTextureSize: Cesium.ContextLimits.maximumTextureSize });
@@ -46,9 +68,11 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
   canvas.id = 'cosmos'; canvas.setAttribute('aria-hidden', 'true');
   const halo = document.createElement('div');
   halo.id = 'sun-halo'; halo.hidden = true; halo.setAttribute('aria-hidden', 'true');
-  document.body.prepend(canvas, halo);
+  const rim=document.createElement('div');rim.id='earth-rim';rim.hidden=true;rim.setAttribute('aria-hidden','true');
+  document.body.prepend(canvas, rim, halo);
   let starImage, materials, textures, error, layers = [], disposed = false;
   let detail = 'preview', upgradeJob;
+  let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout;
   let state = presentationState(0, false), previousHalo = '';
   let surfaceIsolated = false, atmosphereEnabled = true;
   const handoffs = [];
@@ -59,13 +83,23 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
     ctx.fillStyle = '#01030a'; ctx.fillRect(0, 0, w, h);
     if (starImage) {
       ctx.save(); ctx.translate(w * 0.50, h * 0.5); ctx.rotate(0.50); ctx.scale(-1, 1);
-      const scale = Math.max(w / starImage.width, h / starImage.height) * 1.35;
-      const iw = starImage.width * scale, ih = starImage.height * scale;
-      ctx.globalAlpha = 0.82; ctx.drawImage(starImage, -iw * 0.42, -ih * 0.55, iw, ih); ctx.restore();
+      // Exclude the polar rows of the equirectangular sky map, where stars are stretched.
+      const band=starImage.height*.56,scale = Math.max(w / starImage.width, h / band) * 1.25;
+      const iw = starImage.width * scale, ih = band * scale;
+      ctx.globalAlpha = 0.90;ctx.filter='contrast(1.22)';
+      ctx.drawImage(starImage,0,starImage.height*.22,starImage.width,band,-iw*.47,-ih*.52,iw,ih);ctx.restore();
     }
     const dark = ctx.createRadialGradient(w * .5, h * .43, h * .2, w * .5, h * .5, Math.max(w, h) * .85);
     dark.addColorStop(0, '#02061100'); dark.addColorStop(1, '#01030b80');
     ctx.fillStyle = dark; ctx.fillRect(0, 0, w, h);
+    // Crisp points complement the historical galaxy image; painted only on load/resize.
+    const rnd=random(82417),count=Math.round(w*h/450);
+    for(let i=0;i<count;i++) {
+      const x=rnd()*w,y=rnd()*h,bright=rnd(),r=bright>.992?1.4:bright>.95?.8:.35;
+      ctx.fillStyle=`rgba(${185+Math.floor(rnd()*70)},${205+Math.floor(rnd()*50)},255,${.22+bright*.65})`;
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+      if(bright>.996){const glow=ctx.createRadialGradient(x,y,0,x,y,9);glow.addColorStop(0,'#e0f3ffc0');glow.addColorStop(.2,'#b0dcff50');glow.addColorStop(1,'#8ccaff00');ctx.fillStyle=glow;ctx.fillRect(x-9,y-9,18,18);}
+    }
   };
   paint(); window.addEventListener('resize', paint);
   (plan.constrained ? loadTexture('earth/stars.jpg', 2048) : loadImage(asset('earth/stars.jpg'))).then(img => {
@@ -77,8 +111,31 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
     textures = Object.fromEntries(['day', 'height', 'depth', 'night', 'cloud'].map((name, i) => [name, images[i]]));
     materials = createEarthMaterials(textures);
     layers.push(shell(viewer, materials.surface, 12000, true));
-    layers.push(shell(viewer, materials.clouds, 33000));
-    layers.push(shell(viewer, materials.atmosphere, 85000));
+    layers.push(shell(viewer, materials.clouds, 175000));
+    layers.push(shell(viewer, materials.atmosphere, 120000));
+    const dayPixels=pixels(textures.day);heightPixels=pixels(textures.height);
+    const fallback=()=>new Promise((resolve,reject)=>setTimeout(()=>disposed?reject(new DOMException('World disposed','AbortError')):resolve({
+      forest:makeWorldForest(dayPixels,heightPixels,{constrained:plan.constrained})}),0));
+    const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
+      worldWorker=new Worker(new URL('../scenery/world-worker.js',import.meta.url),{type:'module'});
+      worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
+      worldWorker.onmessage=({data})=>{clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
+      worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
+      worldWorker.postMessage({day:dayPixels,height:heightPixels,constrained:plan.constrained});
+    }).catch(()=>fallback()):fallback();
+    worldData.then(async({forest})=>{
+      if(disposed)return;
+      const geometry=await terrainGeometry(heightPixels,plan.constrained,()=>disposed);
+      if(disposed)return;
+      const previous=layers[0],oldMaterial=materials.surface;
+      const replacement=createEarthMaterials(textures);materials.surface=replacement.surface;
+      replacement.clouds.destroy();replacement.atmosphere.destroy();
+      layers[0]=shell(viewer,materials.surface,12000,true,geometry);
+      scene.primitives.remove(previous);reliefReady=true;
+      oldMaterial.destroy();
+      worldForest=createWorldForest(viewer,forest,{constrained:plan.constrained});scene.requestRender();
+    }).catch(reason=>{if(disposed||reason.name==='AbortError')return;worldError=reason.message;console.warn('Miniature world:',reason.message);})
+      .finally(()=>{worldWorker?.terminate();worldWorker=undefined;});
     // Present the small local maps immediately, then replace only the albedo. Never hide the globe
     // or rebuild its geometry/material while the detailed source is decoding.
     if (plan.surfaceWidth > textures.day.width) {
@@ -117,14 +174,19 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
   const start = performance.now();
   return {
     ready, isReady: () => !!materials,
+    groundHeight:(lon,lat)=>reliefReady?worldHeight(heightPixels,lon,lat):12000,
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
     toggleAtmosphere() { atmosphereEnabled = !atmosphereEnabled; },
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
+      worldRelief:reliefReady, ...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {
       if (disposed) return;
       state = presentationState(altitude, !!materials);
+      // Cesium 1.120 also exaggerates glTF models with a local-curvature approximation. At orbital
+      // distances this displaces entire forests. The miniature layer already contains its own relief.
+      scene.verticalExaggeration = state.surface ? 1 : terrainExaggeration;
       if (handoffs[handoffs.length - 1]?.phase !== state.phase) {
         handoffs.push({ phase: state.phase, altitude: Math.round(altitude), mix: +state.mix.toFixed(3) });
         if (handoffs.length > 12) handoffs.shift();
@@ -134,6 +196,12 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
       viewer.canvas.dataset.earthMix = state.mix.toFixed(3);
       viewer.canvas.dataset.earthTexture = String(textures?.day.width || 0);
       viewer.canvas.dataset.earthDetail = detail;
+      viewer.canvas.dataset.worldRelief=String(reliefReady);
+      viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
+      if(worldForest) {
+        worldForest.update({mix:state.mix,day,altitude,now});
+        viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
+      }
       scene.globe.show = state.terrain || surfaceIsolated;
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;
       if (!materials) return;
@@ -156,6 +224,7 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
         } else out.w = 0;
       });
       halo.hidden = !state.surface || day < 0.01;
+      rim.hidden=halo.hidden||!atmosphereEnabled;
       if (halo.hidden) return;
       const p = Cesium.SceneTransforms.worldToWindowCoordinates(scene, Cesium.Cartesian3.ZERO, point);
       if (!p) { halo.hidden = true; return; }
@@ -169,6 +238,9 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
       if (key !== previousHalo) {
         previousHalo = key; halo.style.width = `${radius * 0.95}px`; halo.style.transform = transform;
         halo.style.opacity = state.mix * day;
+        rim.style.width=rim.style.height=`${(radius*2.012).toFixed(1)}px`;
+        rim.style.transform=`translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) translate(-50%,-50%)`;
+        rim.style.opacity=state.mix*day;
       }
     },
     dispose() {
@@ -176,8 +248,9 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
         if (upgradeJob.idle) cancelIdleCallback(upgradeJob.id); else clearTimeout(upgradeJob.id);
       }
       disposed = true; layers.forEach(layer => scene.primitives.remove(layer));
+      clearTimeout(worldTimeout);worldWorker?.terminate();worldForest?.dispose();
       if (materials) [materials.surface, materials.clouds, materials.atmosphere].forEach(material => material.destroy());
-      window.removeEventListener('resize', paint); canvas.remove(); halo.remove();
+      window.removeEventListener('resize', paint); canvas.remove(); halo.remove();rim.remove();
       scene.globe.show = true; scene.skyAtmosphere.show = true;
     },
   };
