@@ -3,13 +3,16 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
   const targetFps = mobile ? 30 : 60;
   const maxScale = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.5);
   const minScale = Math.min(maxScale, mobile ? 0.75 : 0.85);
+  const stillScale = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
   let scale = Math.min(window.devicePixelRatio || 1, maxScale);
+  let still = false;
   let samples = [], costs = [], lastFrame = 0, lastChange = performance.now(), goodWindows = 0;
   let wasRunning = true;
   let lastTick = 0;
   const applyScale = () => {
-    viewer.resolutionScale = scale / (window.devicePixelRatio || 1);
-    if (scene.globe) scene.globe.maximumScreenSpaceError = mobile ? (scale < 0.9 ? 6 : 4) : (scale < 1 ? 3 : 2);
+    const pixels = still ? stillScale : scale;
+    viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
+    if (scene.globe) scene.globe.maximumScreenSpaceError = still ? 2 : mobile ? (scale < 0.9 ? 6 : 4) : (scale < 1 ? 3 : 2);
     scene.requestRender();
   };
   // Let RAF deliver input promptly; throttle optional animation, not Cesium's whole update loop.
@@ -30,7 +33,13 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
   window.addEventListener('resize', applyScale);
   return {
     reducedMotion,
+    still(value) {
+      if (still === value) return;
+      still = value;
+      applyScale();
+    },
     home() {
+      still = false;
       scale = maxScale;
       samples = []; costs = []; lastFrame = 0; goodWindows = 0; lastChange = performance.now();
       applyScale();
@@ -62,6 +71,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
         }
       } else goodWindows = 0;
     },
-    details: () => ({ targetFps, pixelRatio: +scale.toFixed(2), terrainError: scene.globe?.maximumScreenSpaceError }),
+    details: () => ({ targetFps, pixelRatio: +(still ? stillScale : scale).toFixed(2),
+      quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError }),
   };
 }

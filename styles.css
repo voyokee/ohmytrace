@@ -30,7 +30,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 /* ---------- globe ---------- */
 #cosmos { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #sun-halo { position: fixed; left: 0; top: 0; aspect-ratio: 1; pointer-events: none;
-  background: radial-gradient(circle, #fffefa 0%, #ffe8bfb0 5%, #ffd7a250 16%, #a8d7ff20 36%, transparent 64%); }
+  background: radial-gradient(circle, #fffefa 0%, #ffe8bfb0 4%, #ffd7a23a 12%, #a8d7ff12 25%, transparent 52%); }
 body.night-mode #sun-halo { display: none; }
 #globe { position: fixed; inset: 0; }
 #globe .cesium-viewer, #globe .cesium-widget, #globe canvas { width: 100%; height: 100%; }

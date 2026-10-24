@@ -1,8 +1,8 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-clear');
 const { prepareVegetation, yieldToMain } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
-const { setupCinematic } = await import('./src/rendering/cinematic.js?v=20261024');
+const { setupCinematic } = await import('./src/rendering/cinematic.js?v=20261024-clear');
 
 /* ================= constants ================= */
 
@@ -104,9 +104,9 @@ ${clouds}
   // Near the ground, far terrain is coarse (big flat triangles), so its relief lighting fades with
   // distance while blue aerial haze takes over, as real mountain ranges do.
   float dist = length(pEC);
-  float far = smoothstep(6000.0, 70000.0, dist) * fpHaze;
+  float far = smoothstep(12000.0, 90000.0, dist) * fpHaze;
   float reliefA = (1.0 - shade) * fpRelief * (1.0 - 0.75 * far);
-  float hazeA = far * 0.55;
+  float hazeA = far * 0.28;
 
   float gust = 0.0, inFocus = 0.0;
   if (fpFocus.w > 0.0) {
@@ -132,7 +132,11 @@ ${clouds}
   if (fpSpace > 0.001) {
     vec3 earth = normalize(pos);
     vec3 eye = normalize(czm_inverseView[3].xyz - pos);
-    float edge = pow(1.0 - max(0.0, dot(earth, eye)), 4.0) * fpSpace * 0.28;
+    vec3 earthEC = normalize((czm_view * vec4(earth, 0.0)).xyz);
+    float daylight = smoothstep(-0.25, 0.85, dot(earthEC, normalize(vec3(0.85, 0.4, 0.9))));
+    float dayShadow = (1.0 - daylight) * fpSpace * 0.46;
+    acc *= 1.0 - dayShadow; keep *= 1.0 - dayShadow;
+    float edge = pow(1.0 - max(0.0, dot(earth, eye)), 6.0) * fpSpace * 0.14;
     acc = acc * (1.0 - edge) + vec3(0.19, 0.57, 0.95) * edge;
     keep *= 1.0 - edge;
   }
@@ -516,7 +520,7 @@ function initGlobe() {
   document.addEventListener('click', () => { lightsAnimating = true; scene.requestRender(); });
 
   const layer = viewer.imageryLayers.get(0);
-  layer.saturation = 1.12; layer.contrast = 1.08; layer.gamma = 1.04;
+  layer.saturation = 1.16; layer.contrast = 1.18; layer.gamma = 0.98; layer.brightness = 1.04;
 
   const g = scene.globe;
   g.enableLighting = false;
@@ -573,17 +577,22 @@ function initGlobe() {
   lightCapacity = Math.min(MAX_LIGHTS, Math.max(8, 2 ** Math.ceil(Math.log2(placeNames().filter(located).length || 1))));
   nightMaterial = makeNightMaterial();
   g.material = nightMaterial;
-  scene.skyAtmosphere.brightnessShift = 0.05;
+  scene.skyAtmosphere.brightnessShift = -0.12;
   scene.sun.show = false;  // our light is camera-relative; a real sun in the sky would contradict it
   scene.moon.show = false;
 
   // Idle motion: slow spin from space, gentle orbit around a selected place.
   let lastT = performance.now();
   let frameStart = 0, drawStart = 0;
+  let cameraMoving = false;
+  viewer.camera.moveStart.addEventListener(() => { cameraMoving = true; });
+  viewer.camera.moveEnd.addEventListener(() => { cameraMoving = false; });
   scene.preUpdate.addEventListener(() => {
     const now = performance.now();
     frameStart = now;
     drawCommands = 0;
+    renderPolicy.still(!cameraMoving && !flying && !state.sel && !pickName && now >= globalSpinUntil &&
+      now - lastInput > 800 && viewer.camera.positionCartographic.height > 4e6);
     if (!renderPolicy.tick(now)) return;
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
@@ -804,7 +813,7 @@ function updateLights(now, dt) {
   if (Math.abs(targetDay - dayMix) < .002) dayMix = targetDay;
   u.fpSpace = space * space * (3 - 2 * space) * dayMix;
   cinematic.update(u.fpSpace);
-  u.fpDark = NIGHT_DARKNESS * (1 - u.fpSpace) + 0.08 * u.fpSpace;
+  u.fpDark = NIGHT_DARKNESS * (1 - u.fpSpace) + 0.025 * u.fpSpace;
   u.fpRelief = 0.55 * (1 - u.fpSpace) + 0.12 * u.fpSpace;
   u.fpHaze = 1 - Math.min(1, Math.max(0, (camH - 25000) / 95000));
   updateSun();
@@ -1926,7 +1935,6 @@ function boot() {
   load();
   bindEvents();
   updatePlayUI();
-  if (window.innerWidth > 1100) body.classList.add('list-open');
   buildModel();
   if (!window.Cesium) {
     $('#ld-sub').textContent = '地图引擎加载失败，请检查网络后刷新';

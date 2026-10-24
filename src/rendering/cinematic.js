@@ -5,13 +5,19 @@ export function setupCinematic(viewer) {
   // An independent, low-poly shell avoids competing with terrain's imagery sampler budget.
   // NASA's Blue Marble cloud composite is decorative historical imagery, not live weather.
   const cloudMaterial = new Cesium.Material({ fabric: {
-    type: 'FootprintClouds', uniforms: { cloudMap: cloudTextureUrl, opacity: .82 },
+    type: 'FootprintClouds', uniforms: { cloudMap: cloudTextureUrl, opacity: .76 },
     source: `czm_material czm_getMaterial(czm_materialInput inputData) {
       czm_material m = czm_getDefaultMaterial(inputData);
       float density = texture(cloudMap, inputData.st).r;
+      // Discard the composite's grey veil, leaving distinct white cloud banks.
+      float cover = pow(smoothstep(0.32, 0.92, density), 1.35);
+      vec3 pEC = -inputData.positionToEyeEC;
+      vec3 n = normalize(cross(dFdx(pEC), dFdy(pEC)));
+      if (dot(n, inputData.positionToEyeEC) < 0.0) n = -n;
+      float daylight = smoothstep(-0.25, 0.85, dot(n, normalize(vec3(0.85, 0.4, 0.9))));
       m.diffuse = vec3(0.0);
-      m.emission = vec3(0.94, 0.97, 1.0);
-      m.alpha = pow(density, 1.35) * opacity;
+      m.emission = vec3(0.96, 0.98, 1.0) * mix(0.56, 1.0, daylight);
+      m.alpha = cover * opacity;
       return m;
     }`,
   } });
@@ -79,6 +85,6 @@ export function setupCinematic(viewer) {
   });
   return { update(value) {
     cloudShell.show = value > .01;
-    cloudMaterial.uniforms.opacity = value * .82;
+    cloudMaterial.uniforms.opacity = value * .76;
   } };
 }

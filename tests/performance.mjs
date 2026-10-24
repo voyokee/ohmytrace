@@ -48,6 +48,14 @@ for (let i = 0; i < 1400; i++) { now += 70; policy.frame(now, true, 40); }
 assert.equal(policy.details().pixelRatio, 0.85, 'Pixel resolution must stay above the lower bound');
 assert.equal(viewer.scene.globe.maximumScreenSpaceError, 3, 'Persistent slow drawing must preserve a reasonable terrain detail floor');
 const scaled = policy.details().pixelRatio;
+policy.still(true);
+assert.equal(policy.details().pixelRatio, 2, 'A settled globe must regain retina detail');
+assert.equal(policy.details().quality, 'still');
+const stillRequests = requests;
+policy.still(true);
+assert.equal(requests, stillRequests, 'A settled globe must not start a new render loop');
+policy.still(false);
+assert.equal(policy.details().pixelRatio, scaled, 'Motion must return to its adaptive pixel budget');
 for (let i = 0; i < 400; i++) { now += 3000; policy.frame(now, false); }
 assert.equal(policy.details().pixelRatio, scaled, 'Intentional idle gaps must not lower quality');
 policy.home();
@@ -58,4 +66,11 @@ assert.equal(viewer.useDefaultRenderLoop, false);
 document.hidden = false; events.get('visibilitychange')();
 assert.equal(viewer.useDefaultRenderLoop, true);
 assert.ok(requests > 0);
-console.log('PASS: bounded vegetation, terrain exclusions, deterministic placement, fallback/cancellation, adaptive resolution, idle and visibility');
+const phone = { scene: { globe: {}, requestRender() {} } };
+const phonePolicy = createRenderPolicy(phone, { mobile: true, reducedMotion: false });
+assert.equal(phonePolicy.details().pixelRatio, 1);
+phonePolicy.still(true);
+assert.equal(phonePolicy.details().pixelRatio, 1.5, 'Settled phone views must use a bounded clear presentation');
+phonePolicy.home();
+assert.equal(phonePolicy.details().pixelRatio, 1, 'Phone flights must keep the smaller animation budget');
+console.log('PASS: bounded vegetation, terrain exclusions, deterministic placement, fallback/cancellation, adaptive resolution, still/motion quality, idle and visibility');
