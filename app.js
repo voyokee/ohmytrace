@@ -2,7 +2,7 @@
 'use strict';
 const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-clear');
 const { prepareVegetation, yieldToMain } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
-const { setupCinematic } = await import('./src/rendering/cinematic.js?v=20261024-clear');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261024-earth');
 
 /* ================= constants ================= */
 
@@ -533,7 +533,7 @@ function initGlobe() {
   g.baseColor = Cesium.Color.fromCssColorString('#cfdbe6'); // imagery stops near ±85°, so the poles show this icy tone
   scene.backgroundColor = Cesium.Color.TRANSPARENT;
   scene.skyBox.show = false;
-  cinematic = setupCinematic(viewer);
+  cinematic = setupCinematic(viewer, { onError: () => toast('全球材质加载失败，暂用卫星影像') });
   scene.skyAtmosphere.show = true;
   scene.fog.enabled = true;
   scene.postProcessStages.fxaa.enabled = true;
@@ -591,6 +591,8 @@ function initGlobe() {
     const now = performance.now();
     frameStart = now;
     drawCommands = 0;
+    cinematic.update({ altitude: viewer.camera.positionCartographic.height, day: dayMix,
+      lightUniforms: nightMaterial.uniforms, reducedMotion, now });
     renderPolicy.still(!cameraMoving && !flying && !state.sel && !pickName && now >= globalSpinUntil &&
       now - lastInput > 800 && viewer.camera.positionCartographic.height > 4e6);
     if (!renderPolicy.tick(now)) return;
@@ -624,12 +626,12 @@ function initGlobe() {
     scene.debugCommandFilter = () => { drawCommands++; return true; };
     import('./src/performance/metrics.js?v=20261024').then(({ attachFrameMetrics }) => {
       attachFrameMetrics(viewer, () => ({ trees: scenery.plants.length, lightSlots: lightCapacity,
-        ...frameTimings, drawCommands,
+        ...frameTimings, drawCommands, ...cinematic.details(),
         ...renderPolicy.details(), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :
           performance.now() < globalSpinUntil ? 'intro' : 'idle' }), [
         { label: '隔离植被', run: () => scenery.collections.forEach(set => { set.show = !set.show; }) },
-        { label: '隔离材质', run: () => { scene.globe.material = scene.globe.material ? undefined : nightMaterial; } },
-        { label: '隔离大气', run: () => { scene.skyAtmosphere.show = !scene.skyAtmosphere.show; } },
+        { label: '隔离材质', run: () => { cinematic.toggleSurface(); scene.globe.material = scene.globe.material ? undefined : nightMaterial; } },
+        { label: '隔离大气', run: () => { cinematic.toggleAtmosphere(); } },
       ]);
     });
   }
@@ -655,7 +657,7 @@ function initGlobe() {
     }, 2600);
   };
   const check = () => {
-    if (scene.globe.tilesLoaded && performance.now() - t0 > 800) { scene.postRender.removeEventListener(check); onLoaded(); }
+    if (cinematic.isReady() && performance.now() - t0 > 800) { scene.postRender.removeEventListener(check); onLoaded(); }
   };
   scene.postRender.addEventListener(check);
   setTimeout(onLoaded, 12000);
@@ -812,7 +814,6 @@ function updateLights(now, dt) {
   dayMix += (targetDay - dayMix) * Math.min(1, dt * 3);
   if (Math.abs(targetDay - dayMix) < .002) dayMix = targetDay;
   u.fpSpace = space * space * (3 - 2 * space) * dayMix;
-  cinematic.update(u.fpSpace);
   u.fpDark = NIGHT_DARKNESS * (1 - u.fpSpace) + 0.025 * u.fpSpace;
   u.fpRelief = 0.55 * (1 - u.fpSpace) + 0.12 * u.fpSpace;
   u.fpHaze = 1 - Math.min(1, Math.max(0, (camH - 25000) / 95000));
@@ -1484,7 +1485,7 @@ function renderStats() {
   }
   const current = homes.find(h => h.kind === 'home');
   if (current) parts.push(`<span class="home-stat">现居 <b>${esc(coreName(current.place))}</b></span>`);
-  $('#stats').innerHTML = parts.join('<i>·</i>');
+  $('#stats').innerHTML = parts.map(part => `<span class="stat-item">${part}</span>`).join('<i>·</i>');
 }
 
 function statusOf(p) {

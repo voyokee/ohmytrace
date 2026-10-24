@@ -30,7 +30,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 /* ---------- globe ---------- */
 #cosmos { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #sun-halo { position: fixed; left: 0; top: 0; aspect-ratio: 1; pointer-events: none;
-  background: radial-gradient(circle, #fffefa 0%, #ffe8bfb0 4%, #ffd7a23a 12%, #a8d7ff12 25%, transparent 52%); }
+  background: radial-gradient(circle, #fffefa 0%, #fff5e7 3%, #ffe2bbcc 8%, #ffd69b42 22%, #9acbff16 40%, transparent 62%); }
 body.night-mode #sun-halo { display: none; }
 #globe { position: fixed; inset: 0; }
 #globe .cesium-viewer, #globe .cesium-widget, #globe canvas { width: 100%; height: 100%; }
@@ -74,8 +74,9 @@ body.picking #globe canvas { cursor: crosshair; }
 /* ---------- brand ---------- */
 #brand { position: fixed; top: 28px; left: 34px; z-index: 5; pointer-events: none; text-shadow: 0 2px 18px rgba(0,0,0,.6); max-width: calc(100vw - 220px); }
 #brand .eyebrow { font-size: 11px; letter-spacing: .34em; color: var(--faint); }
-#brand h1 { margin: 4px 0 6px; font: 600 34px/1.15 var(--serif); letter-spacing: .08em; }
+#brand h1 { margin: 4px 0 6px; font: 600 clamp(34px, 3.4vw, 48px)/1.15 var(--serif); letter-spacing: .08em; }
 .stats { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.stats .stat-item { display: inline-block; white-space: nowrap; }
 .stats b { color: var(--text); font-weight: 600; margin-right: 2px; }
 .stats i { font-style: normal; margin: 0 9px; color: var(--faint); }
 .stats .home-stat b { color: var(--home); }
@@ -193,7 +194,7 @@ body.list-open #list { opacity: 1; transform: none; pointer-events: auto; }
 .card-nav button:not(:disabled):hover { background: rgba(255,255,255,.07); color: var(--text); }
 
 /* ---------- timeline ---------- */
-#timeline { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(960px, calc(100vw - 64px)); height: 70px; z-index: 5;
+#timeline { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(1360px, calc(100vw - 64px)); height: 70px; z-index: 5;
   display: flex; align-items: center; gap: 14px; padding: 0 18px 0 13px; transition: opacity .3s; }
 #timeline.empty { opacity: 0; pointer-events: none; }
 .play { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #1c1306; background: var(--accent);
@@ -315,6 +316,18 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
 .ld-sub { margin-top: 10px; color: var(--faint); font-size: 13px; letter-spacing: .1em; }
 
 /* ---------- mobile ---------- */
+@media (min-width: 721px) {
+  #brand .eyebrow { font-size: 12px; }
+  .stats { font-size: 16px; }
+  .tb { width: 52px; height: 52px; }
+  #timeline { height: 88px; padding: 0 22px 0 16px; gap: 20px; }
+  .play { width: 60px; height: 60px; }
+  .tl-rail { top: 35px; }
+  .tl-band { top: 31px; }
+  .tl-sep { top: 28px; }
+  .tl-dot { top: 36px; width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+  .tl-year { top: 56px; font-size: 14px; }
+}
 @media (max-width: 720px) {
   /* A live WebGL backdrop makes large blur filters especially costly on phones. */
   .glass, .tb, .mk-label, .chip, #modal, #modal .dialog { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -322,7 +335,7 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
   #brand { top: calc(14px + env(safe-area-inset-top)); left: 16px; max-width: calc(100vw - 210px); }
   #brand .eyebrow { font-size: 10px; }
   #brand h1 { font-size: 24px; margin: 2px 0 4px; }
-  .stats { font-size: 12px; line-height: 1.7; }
+  .stats { font-size: 12px; line-height: 1.7; width: calc(100vw - 32px); }
   .stats i { margin: 0 6px; }
   .chips { margin-top: 8px; }
   #toolbar { top: calc(14px + env(safe-area-inset-top)); right: 14px; gap: 8px; }

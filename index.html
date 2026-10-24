@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#04060b">
 <title>我的足迹</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css">
-<link rel="stylesheet" href="styles.css">
-<script>window.CESIUM_BASE_URL = 'https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/';</script>
-<script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js" defer></script>
-<script src="app.js?v=20261024-clear" defer></script>
+<link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
+<link rel="stylesheet" href="styles.css?v=20261024-earth">
+<script>window.CESIUM_BASE_URL = 'vendor/cesium/';</script>
+<script src="vendor/cesium/Cesium.js" defer></script>
+<script src="app.js?v=20261024-earth" defer></script>
 </head>
 <body>
 <div id="globe"></div>
@@ -84,7 +84,7 @@
 </div>
 
 <div id="toast"></div>
-<div id="credits"></div>
+<div id="credits"><span>全球素材 NASA/GSFC · GEBCO</span></div>
 
 <div id="loader">
   <div class="ld-inner">
