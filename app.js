@@ -1,8 +1,9 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-clear');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-detail');
+const { constrainedDevice } = await import('./src/rendering/texture-policy.js');
 const { prepareVegetation, yieldToMain } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261024-earth');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261024-detail');
 
 /* ================= constants ================= */
 
@@ -496,7 +497,8 @@ function setPlace(name, data) {
 /* ================= globe ================= */
 
 function initGlobe() {
-  const mobile = isMobile();
+  const mobile = constrainedDevice({ coarsePointer: matchMedia('(pointer: coarse)').matches,
+    memoryGB: navigator.deviceMemory });
   const imagery = new Cesium.UrlTemplateImageryProvider({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     maximumLevel: 18,

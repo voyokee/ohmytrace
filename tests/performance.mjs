@@ -33,7 +33,8 @@ const events = new Map();
 globalThis.window = { devicePixelRatio: 2, addEventListener: (name, fn) => events.set(name, fn) };
 globalThis.document = { hidden: false, addEventListener: (name, fn) => events.set(name, fn) };
 Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => now } });
-const viewer = { useDefaultRenderLoop: true, scene: { globe: { maximumScreenSpaceError: 2 }, requestRender: () => requests++ } };
+const viewer = { useDefaultRenderLoop: true, scene: { globe: { maximumScreenSpaceError: 2 },
+  postProcessStages: { fxaa: { enabled: true } }, requestRender: () => requests++ } };
 const policy = createRenderPolicy(viewer, { mobile: false, reducedMotion: false });
 assert.equal(viewer.scene.requestRenderMode, true);
 assert.equal(viewer.scene.maximumRenderTimeChange, Infinity);
@@ -51,10 +52,12 @@ const scaled = policy.details().pixelRatio;
 policy.still(true);
 assert.equal(policy.details().pixelRatio, 2, 'A settled globe must regain retina detail');
 assert.equal(policy.details().quality, 'still');
+assert.equal(viewer.scene.postProcessStages.fxaa.enabled, false, 'Retina stills must preserve surface detail without FXAA softening');
 const stillRequests = requests;
 policy.still(true);
 assert.equal(requests, stillRequests, 'A settled globe must not start a new render loop');
 policy.still(false);
+assert.equal(viewer.scene.postProcessStages.fxaa.enabled, true, 'Motion must restore inexpensive edge antialiasing');
 assert.equal(policy.details().pixelRatio, scaled, 'Motion must return to its adaptive pixel budget');
 for (let i = 0; i < 400; i++) { now += 3000; policy.frame(now, false); }
 assert.equal(policy.details().pixelRatio, scaled, 'Intentional idle gaps must not lower quality');

@@ -1,5 +1,17 @@
 import assert from 'node:assert/strict';
 import { presentationState, geographicUV, TERRAIN_END, HERO_START, TERRAIN_PRELOAD } from '../src/rendering/presentation-state.js';
+import { earthTexturePlan, constrainedDevice } from '../src/rendering/texture-policy.js';
+
+const desktop = earthTexturePlan({ coarsePointer: false, maxTextureSize: 16384 });
+assert.equal(desktop.surfaceWidth, 5400, 'A fine-pointer desktop must retain native surface detail, including in narrow panels');
+assert.equal(desktop.previewWidth, 2048, 'Detailed textures must not delay the lightweight first presentation');
+assert.equal(constrainedDevice({ coarsePointer: false }), false);
+assert.equal(earthTexturePlan({ coarsePointer: true, maxTextureSize: 8192 }).surfaceWidth, 4096,
+  'Touch devices should receive surface detail without the full desktop memory budget');
+assert.equal(earthTexturePlan({ memoryGB: 2, maxTextureSize: 8192 }).surfaceWidth, 2048,
+  'Known low-memory devices must retain the small texture budget');
+assert.equal(earthTexturePlan({ maxTextureSize: 1024 }).surfaceWidth, 1024, 'Respect actual GPU texture limits');
+assert.equal(earthTexturePlan({ maxTextureSize: 4096 }).surfaceWidth, 4096);
 
 for (const altitude of [0, 10000, TERRAIN_END, 1000000, HERO_START, TERRAIN_PRELOAD, 35000000]) {
   const pending = presentationState(altitude, false);
@@ -25,4 +37,4 @@ assert.deepEqual(geographicUV(540, -90), geographicUV(180, -90));
 const shanghai = geographicUV(121.4737, 31.2304);
 assert.ok(shanghai[0] > 0.83 && shanghai[0] < 0.84 && shanghai[1] > 0.67 && shanghai[1] < 0.68,
   'Shanghai must align with east Asia in the global data, without a longitude or north/south flip');
-console.log('PASS: global/terrain handoff, asset fallback, preload, monotonic fading and geographic alignment');
+console.log('PASS: device/GPU texture budgets, global/terrain handoff, asset fallback, preload, monotonic fading and geographic alignment');

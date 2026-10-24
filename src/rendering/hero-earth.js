@@ -1,9 +1,11 @@
 import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261024-earth';
 import { presentationState } from './presentation-state.js';
+import { earthTexturePlan } from './texture-policy.js';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
   const image = new Image();
+  image.decoding = 'async';
   image.onload = () => resolve(image);
   image.onerror = () => reject(new Error('Unable to load ' + url));
   image.src = url;
@@ -12,6 +14,7 @@ const loadImage = url => new Promise((resolve, reject) => {
 // Decode once and bound texture memory. The downloaded originals remain unchanged.
 async function loadTexture(name, maxWidth) {
   const image = await loadImage(asset(name));
+  if (image.width <= maxWidth) return image;
   const canvas = document.createElement('canvas'), ratio = Math.min(1, maxWidth / image.width);
   canvas.width = Math.round(image.width * ratio); canvas.height = Math.round(image.height * ratio);
   canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -36,13 +39,16 @@ function shell(viewer, material, altitude, writeDepth = false) {
 }
 
 export function setupCinematic(viewer, { onError = () => {} } = {}) {
-  const scene = viewer.scene, mobile = matchMedia('(max-width: 720px)').matches;
+  const scene = viewer.scene;
+  const plan = earthTexturePlan({ coarsePointer: matchMedia('(pointer: coarse)').matches,
+    memoryGB: navigator.deviceMemory, maxTextureSize: Cesium.ContextLimits.maximumTextureSize });
   const canvas = document.createElement('canvas');
   canvas.id = 'cosmos'; canvas.setAttribute('aria-hidden', 'true');
   const halo = document.createElement('div');
   halo.id = 'sun-halo'; halo.hidden = true; halo.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas, halo);
   let starImage, materials, textures, error, layers = [], disposed = false;
+  let detail = 'preview', upgradeJob;
   let state = presentationState(0, false), previousHalo = '';
   let surfaceIsolated = false, atmosphereEnabled = true;
   const handoffs = [];
@@ -62,18 +68,41 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
     ctx.fillStyle = dark; ctx.fillRect(0, 0, w, h);
   };
   paint(); window.addEventListener('resize', paint);
-  (mobile ? loadTexture('earth/stars.jpg', 2048) : loadImage(asset('earth/stars.jpg'))).then(img => {
+  (plan.constrained ? loadTexture('earth/stars.jpg', 2048) : loadImage(asset('earth/stars.jpg'))).then(img => {
     if (!disposed) { starImage = img; paint(); }
   }).catch(() => {});
-  const ready = Promise.all(['earth/day.jpg', 'earth/height.jpg', 'earth/depth.jpg', 'earth/night.jpg', 'clouds-nasa.jpg']
-    .map(name => loadTexture(mobile && name.startsWith('earth/') ? name.replace('.jpg', '-mobile.jpg') : name,
-      mobile ? 2048 : 4096))).then(images => {
+  const ready = Promise.all(['earth/day-mobile.jpg', 'earth/height-mobile.jpg', 'earth/depth-mobile.jpg',
+    'earth/night-mobile.jpg', 'clouds-nasa.jpg'].map(name => loadTexture(name, plan.previewWidth))).then(images => {
     if (disposed) return false;
     textures = Object.fromEntries(['day', 'height', 'depth', 'night', 'cloud'].map((name, i) => [name, images[i]]));
     materials = createEarthMaterials(textures);
     layers.push(shell(viewer, materials.surface, 12000, true));
     layers.push(shell(viewer, materials.clouds, 33000));
     layers.push(shell(viewer, materials.atmosphere, 85000));
+    // Present the small local maps immediately, then replace only the albedo. Never hide the globe
+    // or rebuild its geometry/material while the detailed source is decoding.
+    if (plan.surfaceWidth > textures.day.width) {
+      detail = 'loading';
+      const upgrade = async () => {
+        upgradeJob = undefined;
+        if (disposed) return;
+        try {
+          const image = await loadTexture('earth/day.jpg', plan.surfaceWidth);
+          if (disposed) return;
+          textures.day = image;
+          materials.surface.uniforms.dayMap = image;
+          detail = 'full';
+          scene.requestRender();
+        } catch {
+          if (disposed) return;
+          detail = 'preview-fallback';
+          scene.requestRender();
+        }
+      };
+      upgradeJob = typeof requestIdleCallback === 'function'
+        ? { idle: true, id: requestIdleCallback(upgrade, { timeout: 1200 }) }
+        : { idle: false, id: setTimeout(upgrade, 0) };
+    } else detail = 'limited';
     scene.requestRender(); return true;
   }).catch(reason => {
     layers.forEach(layer => scene.primitives.remove(layer)); layers = [];
@@ -91,6 +120,7 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
     toggleAtmosphere() { atmosphereEnabled = !atmosphereEnabled; },
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
+      earthDetail: detail,
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {
       if (disposed) return;
@@ -102,6 +132,8 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
       }
       viewer.canvas.dataset.renderer = state.phase;
       viewer.canvas.dataset.earthMix = state.mix.toFixed(3);
+      viewer.canvas.dataset.earthTexture = String(textures?.day.width || 0);
+      viewer.canvas.dataset.earthDetail = detail;
       scene.globe.show = state.terrain || surfaceIsolated;
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;
       if (!materials) return;
@@ -140,6 +172,9 @@ export function setupCinematic(viewer, { onError = () => {} } = {}) {
       }
     },
     dispose() {
+      if (upgradeJob) {
+        if (upgradeJob.idle) cancelIdleCallback(upgradeJob.id); else clearTimeout(upgradeJob.id);
+      }
       disposed = true; layers.forEach(layer => scene.primitives.remove(layer));
       if (materials) [materials.surface, materials.clouds, materials.atmosphere].forEach(material => material.destroy());
       window.removeEventListener('resize', paint); canvas.remove(); halo.remove();
