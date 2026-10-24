@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/performance.mjs && node tests/rendering.mjs && node tests/delivery.mjs && node tests/micro-world.mjs"
+    "test": "node tests/performance.mjs && node tests/rendering.mjs && node tests/delivery.mjs && node tests/micro-world.mjs && node tests/terrain-picking.mjs"
   },
   "engines": { "node": ">=20" }
 }

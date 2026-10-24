@@ -47,7 +47,7 @@ function pixels(image) {
 }
 async function terrainGeometry(map,constrained,isCancelled=()=>false) {
   const geometry=Cesium.EllipsoidGeometry.createGeometry(new Cesium.EllipsoidGeometry({radii:Cesium.Ellipsoid.WGS84.radii,
-    stackPartitions:constrained?90:180,slicePartitions:constrained?180:360,
+    stackPartitions:constrained?90:256,slicePartitions:constrained?180:512,
     vertexFormat:Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat}));
   const values=geometry.attributes.position.values,point=new Cesium.Cartesian3(),carto=new Cesium.Cartographic();
   for(let i=0;i<values.length;i+=3) {
@@ -74,7 +74,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   let detail = 'preview', upgradeJob;
   let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout;
   let state = presentationState(0, false), previousHalo = '';
-  let surfaceIsolated = false, atmosphereEnabled = true;
+  let surfaceIsolated = false, atmosphereEnabled = true, terrainEnabled=true;
   const handoffs = [];
   const paint = () => {
     const w = window.innerWidth, h = window.innerHeight, dpr = Math.min(devicePixelRatio || 1, 1.5);
@@ -86,7 +86,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       // Exclude the polar rows of the equirectangular sky map, where stars are stretched.
       const band=starImage.height*.56,scale = Math.max(w / starImage.width, h / band) * 1.25;
       const iw = starImage.width * scale, ih = band * scale;
-      ctx.globalAlpha = 0.90;ctx.filter='contrast(1.22)';
+      ctx.globalAlpha = 0.95;ctx.filter='brightness(1.55) contrast(1.24)';
       ctx.drawImage(starImage,0,starImage.height*.22,starImage.width,band,-iw*.47,-ih*.52,iw,ih);ctx.restore();
     }
     const dark = ctx.createRadialGradient(w * .5, h * .43, h * .2, w * .5, h * .5, Math.max(w, h) * .85);
@@ -98,7 +98,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       const x=rnd()*w,y=rnd()*h,bright=rnd(),r=bright>.992?1.4:bright>.95?.8:.35;
       ctx.fillStyle=`rgba(${185+Math.floor(rnd()*70)},${205+Math.floor(rnd()*50)},255,${.22+bright*.65})`;
       ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
-      if(bright>.996){const glow=ctx.createRadialGradient(x,y,0,x,y,9);glow.addColorStop(0,'#e0f3ffc0');glow.addColorStop(.2,'#b0dcff50');glow.addColorStop(1,'#8ccaff00');ctx.fillStyle=glow;ctx.fillRect(x-9,y-9,18,18);}
+      if(bright>.996){const glow=ctx.createRadialGradient(x,y,0,x,y,5);glow.addColorStop(0,'#e0f3ffc0');glow.addColorStop(.2,'#b0dcff50');glow.addColorStop(1,'#8ccaff00');ctx.fillStyle=glow;ctx.fillRect(x-5,y-5,10,10);}
     }
   };
   paint(); window.addEventListener('resize', paint);
@@ -111,7 +111,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     textures = Object.fromEntries(['day', 'height', 'depth', 'night', 'cloud'].map((name, i) => [name, images[i]]));
     materials = createEarthMaterials(textures);
     layers.push(shell(viewer, materials.surface, 12000, true));
-    layers.push(shell(viewer, materials.clouds, 175000));
+    layers.push(shell(viewer, materials.clouds, 230000));
     layers.push(shell(viewer, materials.atmosphere, 120000));
     const dayPixels=pixels(textures.day);heightPixels=pixels(textures.height);
     const fallback=()=>new Promise((resolve,reject)=>setTimeout(()=>disposed?reject(new DOMException('World disposed','AbortError')):resolve({
@@ -177,6 +177,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     groundHeight:(lon,lat)=>reliefReady?worldHeight(heightPixels,lon,lat):12000,
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
     toggleAtmosphere() { atmosphereEnabled = !atmosphereEnabled; },
+    toggleTerrain() {terrainEnabled=!terrainEnabled;},
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
       worldRelief:reliefReady, ...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
@@ -202,7 +203,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
         worldForest.update({mix:state.mix,day,altitude,now});
         viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
       }
-      scene.globe.show = state.terrain || surfaceIsolated;
+      scene.globe.show = terrainEnabled && (state.terrain || surfaceIsolated);
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;
       if (!materials) return;
       Cesium.Matrix4.multiplyByPointAsVector(viewer.camera.inverseViewMatrix, sunEC, sunWC);
@@ -233,12 +234,12 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       const focal = viewer.canvas.clientHeight / (2 * Math.tan(cam.frustum.fovy / 2));
       const radius = focal * radiusEarth / Math.sqrt(Math.max(1, distance * distance - radiusEarth * radiusEarth));
       const length = Math.hypot(SUN_EC[0], SUN_EC[1]);
-      const transform = `translate(${(p.x + radius * SUN_EC[0] / length).toFixed(1)}px,${(p.y - radius * SUN_EC[1] / length).toFixed(1)}px) translate(-50%,-50%)`;
+      const transform = `translate(${(p.x + radius * 1.018 * SUN_EC[0] / length).toFixed(1)}px,${(p.y - radius * 1.018 * SUN_EC[1] / length).toFixed(1)}px) translate(-50%,-50%)`;
       const key = transform + radius.toFixed(1) + day.toFixed(2) + state.mix.toFixed(2);
       if (key !== previousHalo) {
         previousHalo = key; halo.style.width = `${radius * 0.95}px`; halo.style.transform = transform;
         halo.style.opacity = state.mix * day;
-        rim.style.width=rim.style.height=`${(radius*2.012).toFixed(1)}px`;
+        rim.style.width=rim.style.height=`${(radius*2.025).toFixed(1)}px`;
         rim.style.transform=`translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) translate(-50%,-50%)`;
         rim.style.opacity=state.mix*day;
       }

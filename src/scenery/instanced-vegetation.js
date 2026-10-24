@@ -12,6 +12,7 @@ export function vegetationShader({wind=false}={}) {
   const direction=new Cesium.Cartesian3(...SUN_EC);Cesium.Cartesian3.normalize(direction,direction);
   return new Cesium.CustomShader({lightingModel:Cesium.LightingModel.UNLIT,
     uniforms:{u_sun:{type:Cesium.UniformType.VEC3,value:direction},u_day:{type:Cesium.UniformType.FLOAT,value:1},
+      u_autumn:{type:Cesium.UniformType.FLOAT,value:0},u_snow:{type:Cesium.UniformType.FLOAT,value:0},
       u_time:{type:Cesium.UniformType.FLOAT,value:0}},
     ...(wind?{vertexShaderText:`void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
       float h=clamp(vsInput.attributes.texCoord_0.x,0.0,1.0);
@@ -19,6 +20,13 @@ export function vegetationShader({wind=false}={}) {
       vsOutput.positionMC.xy += vec2(0.35,0.18)*h*h*sin(u_time*0.8+phase);
     }`}:{}),
     fragmentShaderText:`void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+      if(u_autumn>0.0) {
+        float leaf=fsInput.attributes.texCoord_0.y*step(0.30,fsInput.attributes.texCoord_0.x);
+        vec3 amber=vec3(0.55,0.23,0.025)*(0.70+0.30*fsInput.attributes.texCoord_0.x);
+        material.diffuse=mix(material.diffuse,amber,u_autumn*leaf*0.75);
+      }
+      if(u_snow>0.0)material.diffuse=mix(material.diffuse,vec3(0.70,0.75,0.78),
+        smoothstep(0.45,0.95,fsInput.attributes.texCoord_0.x)*u_snow*0.65);
       float sun=max(0.0,dot(normalize(fsInput.attributes.normalEC),u_sun));
       float light=0.40+sun*0.90;
       material.diffuse *= vec3(1.04,1.0,0.91)*light*mix(0.12,1.0,u_day);

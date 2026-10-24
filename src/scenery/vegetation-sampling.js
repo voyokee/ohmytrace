@@ -19,6 +19,10 @@ export async function sampleVegetation(options, checkpoint) {
       const i = y * W + x, k = i * 4;
       const r = data[k], g = data[k + 1], b = data[k + 2];
       const max = Math.max(r, g, b), min = Math.min(r, g, b), v = max / 255, s = max ? (max - min) / max : 0;
+      // Sparse dry scrub is allowed only for an explicitly selected arid habitat. Grey roofs,
+      // blue water, white salt/snow and very bright bare dunes remain empty.
+      if(options.arid&&r>g*1.08&&g>r*.56&&b<g*.85&&s>.18&&v>.25&&v<.72){cls[i]=3;continue;}
+      if(b>r*1.2&&b>g*.7)continue;
       if (g < r * 0.95 || g < b * 0.9 || s < 0.12) continue;
       let sum = 0, sq = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -26,7 +30,7 @@ export async function sampleVegetation(options, checkpoint) {
       }
       const rough = Math.sqrt(Math.max(0, sq / 9 - (sum / 9) ** 2));
       const canopy = rough > 0.05 && g > r * 1.06 && s > 0.2 && v < darkV + 0.15;
-      cls[i] = (v < darkV && g > r) || canopy ? 1 : v >= darkV + 0.05 ? 2 : 0;
+      cls[i] = (v < darkV && g > r && (rough > .014 || b < g * .55)) || canopy ? 1 : v >= darkV + 0.05 ? 2 : 0;
     }
   }
   const B = 8, NB = W / B;
@@ -42,8 +46,8 @@ export async function sampleVegetation(options, checkpoint) {
       forest[by * NB + bx] = f / (B * B); meadow[by * NB + bx] = m / (B * B);
     }
   }
-  const trees = [], flowers = [];
-  let treeSeen = 0, flowerSeen = 0;
+  const trees = [], flowers = [],nearFlowers=[],farFlowers=[];
+  let treeSeen = 0, flowerSeen = 0,nearSeen=0,farSeen=0;
   for (let py = 0; py < W; py++) {
     if (checkpoint && py % 16 === 0) await checkpoint();
     for (let px = 0; px < W; px++) {
@@ -57,12 +61,17 @@ export async function sampleVegetation(options, checkpoint) {
       const green = forest[bi] + meadow[bi];
       // Blossom colours change the species, never the land-cover requirement. Sparse green roof
       // pixels in a city block must not seed a full canopy on the surrounding streets/buildings.
-      if (blossom && green > 0.60 && forest[bi] > 0.20 && random() < 0.45 * keep) {
+      if(c===3){if(random()>.001*keep)continue;}
+      else if (blossom && green > 0.60 && forest[bi] > 0.20 && random() < 0.45 * keep) {
         c = 1; force = 'cherry';
-      } else if (c === 1 ? forest[bi] <= 0.45 || random() > 0.7 * keep : meadow[bi] <= 0.6 || random() > 0.03 * keep) continue;
+      } else if (c === 1 ? forest[bi] <= 0.45 || random() > 0.7 * keep : meadow[bi] <= 0.6 || random() > (options.focusGrass&&dm<450?.10:.03) * keep) continue;
       // Reservoir sampling bounds candidate memory before expensive coordinate/colour work.
-      const arr = c === 1 ? trees : flowers, cap = c === 1 ? treeCap : flowerCap;
-      const seen = c === 1 ? ++treeSeen : ++flowerSeen;
+      const woody=c!==2;
+      const localMeadow=!woody&&options.focusGrass;
+      const local=dm<450,nearCap=Math.round(flowerCap*.65);
+      const arr = woody ? trees : localMeadow?(local?nearFlowers:farFlowers):flowers;
+      const cap = woody ? treeCap : localMeadow?(local?nearCap:flowerCap-nearCap):flowerCap;
+      const seen = woody ? ++treeSeen : localMeadow?(local?++nearSeen:++farSeen):++flowerSeen;
       if (!cap) continue;
       const slot = seen <= cap ? seen - 1 : Math.floor(random() * seen);
       if (slot >= cap) continue;
@@ -76,8 +85,8 @@ export async function sampleVegetation(options, checkpoint) {
       arr[slot] = { lon: X / n * 360 - 180,
         lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * Y / n))) * 180 / Math.PI,
         rgb: [r / count / 255, g / count / 255, b / count / 255], distance: dm,
-        force, kind: c === 1 ? 'tree' : 'flower' };
+        force, kind: woody ? 'tree' : 'flower' };
     }
   }
-  return [...trees, ...flowers];
+  return [...trees, ...flowers,...nearFlowers,...farFlowers];
 }

@@ -11,8 +11,9 @@ export class SceneryManager {
     this.exit();this.config={...config,template:sceneTemplateFor(config)};this.controller=new AbortController();
     this.preload().catch(()=>{});this.count=0;this.phase='loading';
     const fog=this.viewer.scene.fog,layer=this.viewer.imageryLayers.get(0);
-    this.original={fog:fog.density,brightness:layer.brightness,saturation:layer.saturation,contrast:layer.contrast};
+    this.original={fog:fog.density,fogSse:fog.screenSpaceErrorFactor,brightness:layer.brightness,saturation:layer.saturation,contrast:layer.contrast};
     fog.density=this.config.template.fog;
+    fog.screenSpaceErrorFactor=this.constrained?16:12;
     [layer.brightness,layer.saturation,layer.contrast]=this.config.template.tone;
     this.effects.enter(this.config);return this.config.template;
   }
@@ -40,17 +41,25 @@ export class SceneryManager {
   }
   update({now=performance.now(),day=1}={}) {
     if(!this.config)return;
+    // Cesium 1.120 thins fog using height above the ellipsoid. On a 4 km plateau that leaves
+    // hundreds of kilometres of invisible terrain active. Compensate for the location's ground
+    // elevation so distant ranges fade naturally while the nearby forest stays clear.
+    const ground=Math.max(0,this.config.height||0);
+    this.viewer.scene.fog.density=this.config.template.fog*Math.min(10,1+ground/1500);
     this.shader.setUniform('u_day',day);this.shader.setUniform('u_time',this.reducedMotion?0:now/1000*this.config.template.wind);
+    this.shader.setUniform('u_autumn',this.config.template.autumn||0);this.shader.setUniform('u_snow',this.config.template.snow||0);
     this.effects.update(now,day);
     this.viewer.canvas.dataset.scenery=JSON.stringify(this.details());
   }
   toggle(){for(const model of this.models)model.show=!model.show;}
   unavailable(name){if(this.config?.name===name)this.phase='unavailable';}
-  details(){return {sceneryTemplate:this.config?.template.id||null,sceneryPhase:this.phase||'idle',
-    instances:this.count||0,sceneryChunks:this.chunkCount||0,sceneryModels:this.models.length,vegetationLod:this.constrained?'low':'near/far',...this.effects.details()};}
+  details(){return {sceneryTemplate:this.config?.template.id||null,sceneryLabel:this.config?.template.label||null,sceneryPhase:this.phase||'idle',
+    instances:this.count||0,sceneryChunks:this.chunkCount||0,sceneryModels:this.models.length,
+    vegetationVisible:this.models.some(model=>model.show),vegetationLod:this.constrained?'low':'near/far',...this.effects.details()};}
   exit(){this.generation++;this.controller?.abort();for(const model of this.models)this.viewer.scene.primitives.remove(model);
     this.models=[];this.effects.exit();if(this.original){const layer=this.viewer.imageryLayers.get(0);this.viewer.scene.fog.density=this.original.fog;
       layer.brightness=this.original.brightness;layer.saturation=this.original.saturation;layer.contrast=this.original.contrast;}
+    if(this.original)this.viewer.scene.fog.screenSpaceErrorFactor=this.original.fogSse;
     this.original=undefined;this.config=undefined;this.count=this.chunkCount=0;this.phase='idle';
     this.viewer.canvas.dataset.scenery=JSON.stringify(this.details());}
   dispose(){this.exit();this.shader.destroy();this.effects.dispose();}

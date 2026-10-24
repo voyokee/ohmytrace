@@ -19,6 +19,9 @@ assert.deepEqual(await sampleVegetation({ ...options, data: pixels(20, 40, 180) 
 const meadow = await sampleVegetation({ ...options, data: pixels(70, 140, 60) });
 assert.equal(meadow.length, options.flowerCap);
 assert.ok(meadow.every(p => p.kind === 'flower'));
+const focusedMeadow=await sampleVegetation({...options,focusGrass:true,data:pixels(70,140,60),mPerPx:10,radius:3000,flowerCap:100});
+assert.ok(focusedMeadow.filter(p=>p.distance<450).length>=60,'Low grassland views must reserve most detail near the camera');
+assert.ok(focusedMeadow.length<=100,'Focusing grass must not increase its instance budget');
 assert.deepEqual(await sampleVegetation({ ...options, flowerCap: 0, data: pixels(70, 140, 60) }), [], 'Winter has no wildflowers');
 const roofs=pixels(130,130,130);
 for(let y=0;y<width;y++)for(let x=0;x<width;x++)if(x%8===0)roofs.set([20,60,25,255],(y*width+x)*4);

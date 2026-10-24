@@ -3,10 +3,19 @@
 const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-world');
 const { constrainedDevice } = await import('./src/rendering/texture-policy.js');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
+const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
 const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261024-world');
 const { SceneryManager } = await import('./src/scenery/scenery-manager.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
+const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
+const demoParams=new URLSearchParams(location.search),demoKey=demoParams.get('demo');
+const demoBase=Object.hasOwn(SCENE_DEMOS,demoKey)?SCENE_DEMOS[demoKey]:undefined;
+const demoMonth=Number(demoParams.get('month'));
+const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
+const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
+const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261024-profile'):null;
 
 /* ================= constants ================= */
 
@@ -68,7 +77,7 @@ let lightCapacity = 8;
 function makeNightMaterial() {
   const uniforms = {
     fpRadius: 60000, fpDark: NIGHT_DARKNESS, fpRelief: 0.55, fpTime: 0, fpHaze: 0, fpAutumn: 0,
-    fpSpace: 0,
+    fpSpace: 0, fpTerrainDay:0,
     fpLight: new Cesium.Cartesian3(0, 0, 1), fpWind: new Cesium.Cartesian3(1, 0, 0),
     fpFocus: new Cesium.Cartesian4(0, 0, 0, 0),
   };
@@ -121,9 +130,9 @@ ${clouds}
     gust = smoothstep(0.55, 1.0, wave) * inFocus;
   }
 
-  float nightA = fpDark * (1.0 - lit);
+  float nightA = fpDark * (1.0 - lit) * (1.0 - fpTerrainDay);
   float rim = lit * (1.0 - lit) * 4.0;
-  float w = rim * 0.1 + lit * 0.05 + gust * 0.07;
+  float w = (rim * 0.1 + lit * 0.05) * (1.0 - fpTerrainDay) + gust * 0.07;
   float autumnA = fpAutumn * inFocus * 0.2;
   // Composite as premultiplied layers over the imagery, in order:
   // relief shadow, cloud shadow, autumn wash, haze, night tint, warm light.
@@ -179,14 +188,15 @@ let markers = [], arcSource = null, arcEntities = [], originEntity = null;
 let geo = { busy: false, done: 0, total: 0, failed: false };
 // name -> { pos, cur, wake }; cur fades toward the target brightness once performance.now() >= wake
 const lights = new Map();
-let nightMaterial = null, lightsOn = false, replayLit = null;
-let renderPolicy, cinematic, sceneryManager, cameraDirector, globalSpinUntil = 0, lightsAnimating = true;
+let nightMaterial = null, terrainDaylight = null, materialIsolated = false, lightsOn = false, replayLit = null;
+let renderPolicy, cinematic, sceneryManager, cameraDirector, terrainPicking, globalSpinUntil = 0, lightsAnimating = true;
 let cinematicDay = true, dayMix = 1;
 const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function load() {
+  if(sceneDemo){importCsvText(demoCsv(sceneDemo),'replace');return;}
   try {
     const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (d && Array.isArray(d.rows)) { state.rows = d.rows; state.places = d.places || {}; return; }
@@ -194,6 +204,7 @@ function load() {
   importCsvText(DEFAULT_CSV, 'replace');
 }
 function save() {
+  if(sceneDemo)return;
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ rows: state.rows, places: state.places })); } catch (e) { /* storage unavailable */ }
 }
 
@@ -518,7 +529,7 @@ function initGlobe() {
     'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer'));
 
   viewer = new Cesium.Viewer('globe', {
-    baseLayer: new Cesium.ImageryLayer(imagery),
+    baseLayer: new Cesium.ImageryLayer(imagery,{maximumAnisotropy:mobile?2:4}),
     terrain,
     animation: false, timeline: false, baseLayerPicker: false, geocoder: false, homeButton: false,
     sceneModePicker: false, navigationHelpButton: false, fullscreenButton: false, infoBox: false,
@@ -528,17 +539,19 @@ function initGlobe() {
     contextOptions: { webgl: { alpha: true } },
   });
   scene = viewer.scene;
+  let removeFrameMetrics;
+  terrainPicking=installTerrainPicking(viewer,{constrained:mobile});
   renderPolicy = createRenderPolicy(viewer, { mobile, reducedMotion });
   sceneryManager = new SceneryManager(viewer, { constrained: mobile, reducedMotion });
   cameraDirector = new CameraDirector(viewer);
   window.addEventListener('pagehide', event => {
     if(event.persisted || viewer.isDestroyed())return;
-    clearScenery();sceneryManager.dispose();cinematic.dispose();viewer.destroy();
+    removeFrameMetrics?.();terrainPicking.dispose();clearScenery();sceneryManager.dispose();cinematic.dispose();viewer.destroy();
   });
   document.addEventListener('click', () => { lightsAnimating = true; scene.requestRender(); });
 
   const layer = viewer.imageryLayers.get(0);
-  layer.saturation = 1.16; layer.contrast = 1.18; layer.gamma = 0.98; layer.brightness = 1.04;
+  layer.saturation = 1.16; layer.contrast = 1.18; layer.gamma = 1; layer.brightness = 1.04;
 
   const g = scene.globe;
   g.enableLighting = false;
@@ -556,7 +569,7 @@ function initGlobe() {
   scene.fog.enabled = true;
   scene.postProcessStages.fxaa.enabled = true;
   const ssc = scene.screenSpaceCameraController;
-  ssc.minimumZoomDistance = 150;
+  ssc.minimumZoomDistance = 35;
   ssc.maximumZoomDistance = 4.5e7;
   viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
@@ -594,6 +607,7 @@ function initGlobe() {
 
   lightCapacity = Math.min(MAX_LIGHTS, Math.max(8, 2 ** Math.ceil(Math.log2(placeNames().filter(located).length || 1))));
   nightMaterial = makeNightMaterial();
+  terrainDaylight = createTerrainDaylight(MAX_CLOUDS);
   g.material = nightMaterial;
   scene.skyAtmosphere.brightnessShift = -0.12;
   scene.sun.show = false;  // our light is camera-relative; a real sun in the sky would contradict it
@@ -642,22 +656,32 @@ function initGlobe() {
     lastRender = now;
     renderPolicy.frame(now, flying || !!orbit || !!scenery.name || now < globalSpinUntil, frameTimings.drawMs);
   });
-  scene.postRender.addEventListener(updateMarkers);
-  scene.postRender.addEventListener(() => { frameTimings.drawMs = +(performance.now() - drawStart).toFixed(1); });
-  if (new URLSearchParams(location.search).has('perf')) {
+  if (metricTools) {
     scene.debugCommandFilter = () => { drawCommands++; return true; };
-    import('./src/performance/metrics.js?v=20261024').then(({ attachFrameMetrics }) => {
-      attachFrameMetrics(viewer, () => ({ trees: scenery.plants.filter(p=>p.species!=='grass'&&p.species!=='shrub').length, lightSlots: lightCapacity,
-        ...frameTimings, drawCommands, ...cinematic.details(), ...sceneryManager.details(), ...cameraDirector.details(),
+      removeFrameMetrics=metricTools.attachFrameMetrics(viewer, () => ({ trees: scenery.plants.filter(p=>p.species!=='grass'&&p.species!=='shrub').length, lightSlots: lightCapacity,
+        ...frameTimings, drawCommands, terrainVisible:scene.globe.show,logDepth:scene.logarithmicDepthBuffer,
+        orbiting:!!orbit,collision:scene.screenSpaceCameraController.enableCollisionDetection,
+        terrainMaterial:materialIsolated?'off':scene.globe.material===terrainDaylight?'daylight':'footprint',imageryAnisotropy:mobile?2:4,
+        ...cinematic.details(), ...sceneryManager.details(), ...cameraDirector.details(),...terrainPicking.details(),
         ...renderPolicy.details(), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :
           performance.now() < globalSpinUntil ? 'intro' : 'idle' }), [
         { label: '隔离植被', run: () => sceneryManager.toggle() },
-        { label: '隔离材质', run: () => { cinematic.toggleSurface(); scene.globe.material = scene.globe.material ? undefined : nightMaterial; } },
+        { label: '隔离材质', run: () => { cinematic.toggleSurface(); materialIsolated=!materialIsolated; } },
         { label: '隔离大气', run: () => { cinematic.toggleAtmosphere(); } },
         { label: '隔离雾与粒子', run: () => sceneryManager.effects.toggle() },
+        { label: '隔离地形', run: () => cinematic.toggleTerrain() },
+        { label: '深度缓冲对比', run: () => {scene.logarithmicDepthBuffer=!scene.logarithmicDepthBuffer;} },
+        { label: '暂停环绕', run: () => {orbit=null;} },
+        { label: '碰撞检测对比', run: () => {scene.screenSpaceCameraController.enableCollisionDetection=!scene.screenSpaceCameraController.enableCollisionDetection;} },
       ]);
-    });
   }
+  // Keep DOM work outside the GPU timer query; submitting its end after label layout would count
+  // GPU idle time waiting for the CPU as rendering time on some drivers.
+  scene.postRender.addEventListener(()=>{
+    const before=performance.now();frameTimings.renderMs=+(before-drawStart).toFixed(1);
+    updateMarkers();frameTimings.markersMs=+(performance.now()-before).toFixed(1);
+    frameTimings.drawMs=+(performance.now()-drawStart).toFixed(1);
+  });
 
   const c = centroid();
   viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(c.lon + 75, c.lat * 0.3, 3.4e7) });
@@ -839,6 +863,8 @@ function updateLights(now, dt) {
   dayMix += (targetDay - dayMix) * Math.min(1, dt * 3);
   if (Math.abs(targetDay - dayMix) < .002) dayMix = targetDay;
   u.fpSpace = space * space * (3 - 2 * space) * dayMix;
+  const nearDay=Math.min(1,Math.max(0,(160000-camH)/70000));
+  u.fpTerrainDay=nearDay*nearDay*(3-2*nearDay)*dayMix;
   u.fpDark = NIGHT_DARKNESS * (1 - u.fpSpace) + 0.025 * u.fpSpace;
   u.fpRelief = 0.55 * (1 - u.fpSpace) + 0.12 * u.fpSpace;
   u.fpHaze = 1 - Math.min(1, Math.max(0, (camH - 25000) / 95000));
@@ -862,6 +888,9 @@ function updateLights(now, dt) {
     v.w = outsideLocalView ? 0 : L.cur;
   }
   for (; n < lightCapacity; n++) u[lightName(n)].w = 0;
+  syncTerrainDaylight(terrainDaylight,u,viewer.camera.viewMatrix);
+  const material=materialIsolated?undefined:u.fpTerrainDay===1?terrainDaylight:nightMaterial;
+  if(scene.globe.material!==material)scene.globe.material=material;
 }
 
 /* ---------- scenery: clouds, wind and vegetation around the place in focus ---------- */
@@ -1026,6 +1055,7 @@ function updateScenery(now, dt) {
   if (!scenery.name) return;
   sceneryManager.update({ now, day: dayMix });
   const u = nightMaterial.uniforms, t = u.fpTime;
+  u.fpAutumn=scenery.template.autumn||0;
   // Shadow falls away from the light: shift each cloud's footprint along the horizontal light direction.
   const L = scratchLight, Lup = Math.max(0.2, Cesium.Cartesian3.dot(L, scenery.up));
   const Le = Cesium.Cartesian3.dot(L, scenery.east), Ln = Cesium.Cartesian3.dot(L, scenery.north);
@@ -1079,6 +1109,8 @@ async function buildVegetation(name, token, signal) {
   const theme = scenery.template;
   const plants = await prepareVegetation({
     width: canvas.width, darkV: biome.darkV, blossom: season.name === 'spring' && !!biome.low.cherry,
+    arid: theme.id==='desert',
+    focusGrass:theme.id==='grassland',
     cpx: (fx - x0) * 256, cpy: (fy - y0) * 256,
     mPerPx: 40075016 * Math.cos(latR) / (n * 256), radius: VEG_RADIUS,
     x0, y0, n, seed: hashStr(name) ^ 99, treeCap: Math.round((lite ? 600 : MAX_TREES) * theme.density),
@@ -1109,8 +1141,10 @@ async function buildVegetation(name, token, signal) {
       species: kind, height, width: small ? 1.2 : .75 + rnd() * .4, angle: rnd() * Math.PI * 2 });
   }
   if (token !== scenery.token || signal.aborted) return;
-  scenery.plants = placements;
-  await sceneryManager.populate(name, placements);
+  const suitable=await filterSteepPlants(placements,{signal});
+  if(token!==scenery.token||signal.aborted)return;
+  scenery.plants = suitable;
+  await sceneryManager.populate(name, suitable);
 }
 
 
@@ -1318,6 +1352,7 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 
 function renderChips() {
   const out = [];
+  if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
   const n = pendingPlaces().length;
