@@ -1,8 +1,10 @@
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261024-world';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-scenic';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan } from './texture-policy.js';
-import { makeWorldForest, worldHeight, geographicPosition, random } from '../scenery/world-data.js';
-import { createWorldForest } from '../scenery/world-forest.js';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-scenic';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-scenic';
+import {makeWorldSurface,surfaceGround} from '../scenery/world-surface.js';
+import {makeCanopyContact} from '../scenery/canopy-contact.js';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-scenic';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -40,30 +42,23 @@ function shell(viewer, material, altitude, writeDepth = false, terrain) {
   }));
 }
 
-function pixels(image) {
-  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512;
-  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0,1024,512);
-  return {width:1024,height:512,data:context.getImageData(0,0,1024,512).data};
+function pixels(image,width=1024) {
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=width/2;
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0,width,width/2);
+  return {width,height:width/2,data:context.getImageData(0,0,width,width/2).data};
 }
-async function terrainGeometry(map,constrained,isCancelled=()=>false) {
-  const geometry=Cesium.EllipsoidGeometry.createGeometry(new Cesium.EllipsoidGeometry({radii:Cesium.Ellipsoid.WGS84.radii,
-    stackPartitions:constrained?90:256,slicePartitions:constrained?180:512,
-    vertexFormat:Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat}));
-  const values=geometry.attributes.position.values,point=new Cesium.Cartesian3(),carto=new Cesium.Cartographic();
-  for(let i=0;i<values.length;i+=3) {
-    if(i%12000===0)await new Promise(resolve=>setTimeout(resolve,0));
-    if(isCancelled())throw new DOMException('World disposed','AbortError');
-    Cesium.Cartesian3.fromArray(values,i,point);Cesium.Cartographic.fromCartesian(point,Cesium.Ellipsoid.WGS84,carto);
-    const lon=Cesium.Math.toDegrees(carto.longitude),lat=Cesium.Math.toDegrees(carto.latitude);
-    values.set(geographicPosition(lon,lat,worldHeight(map,lon,lat)),i);
-  }
-  geometry.boundingSphere=Cesium.BoundingSphere.fromVertices(values);return geometry;
+function terrainGeometry(data) {
+  return new Cesium.Geometry({attributes:{
+    position:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.DOUBLE,componentsPerAttribute:3,values:data.positions}),
+    normal:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.FLOAT,componentsPerAttribute:3,values:data.normals}),
+    st:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.FLOAT,componentsPerAttribute:2,values:data.st})},
+    indices:data.indices,primitiveType:Cesium.PrimitiveType.TRIANGLES,
+    boundingSphere:Cesium.BoundingSphere.fromVertices(data.positions)});
 }
 
 export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration = 1.65 } = {}) {
   const scene = viewer.scene;
-  const plan = earthTexturePlan({ coarsePointer: matchMedia('(pointer: coarse)').matches,
-    memoryGB: navigator.deviceMemory, maxTextureSize: Cesium.ContextLimits.maximumTextureSize });
+  const plan = earthTexturePlan({ ...runtimeDeviceConfig(),maxTextureSize: Cesium.ContextLimits.maximumTextureSize });
   const canvas = document.createElement('canvas');
   canvas.id = 'cosmos'; canvas.setAttribute('aria-hidden', 'true');
   const halo = document.createElement('div');
@@ -72,7 +67,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   document.body.prepend(canvas, rim, halo);
   let starImage, materials, textures, error, layers = [], disposed = false;
   let detail = 'preview', upgradeJob;
-  let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout;
+  let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout,worldDataSource='pending';
   let state = presentationState(0, false), previousHalo = '';
   let surfaceIsolated = false, atmosphereEnabled = true, terrainEnabled=true;
   const handoffs = [];
@@ -109,24 +104,39 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     'earth/night-mobile.jpg', 'clouds-nasa.jpg'].map(name => loadTexture(name, plan.previewWidth))).then(images => {
     if (disposed) return false;
     textures = Object.fromEntries(['day', 'height', 'depth', 'night', 'cloud'].map((name, i) => [name, images[i]]));
+    const contact=document.createElement('canvas');contact.width=contact.height=1;
+    textures.contact=contact;
     materials = createEarthMaterials(textures);
     layers.push(shell(viewer, materials.surface, 12000, true));
-    layers.push(shell(viewer, materials.clouds, 230000));
+    layers.push(shell(viewer, materials.clouds, 170000));
     layers.push(shell(viewer, materials.atmosphere, 120000));
-    const dayPixels=pixels(textures.day);heightPixels=pixels(textures.height);
-    const fallback=()=>new Promise((resolve,reject)=>setTimeout(()=>disposed?reject(new DOMException('World disposed','AbortError')):resolve({
-      forest:makeWorldForest(dayPixels,heightPixels,{constrained:plan.constrained})}),0));
+    const dayPixels=pixels(textures.day),nightPixels=pixels(textures.night);heightPixels=pixels(textures.height,plan.constrained?1024:2048);
+    const fallback=()=>new Promise((resolve,reject)=>setTimeout(async()=>{
+      try {
+        worldDataSource='fallback';
+        if(disposed)throw new DOMException('World disposed','AbortError');
+        const forest=makeWorldForest(dayPixels,heightPixels,{constrained:plan.constrained,nightMap:nightPixels});
+        forest.contact=makeCanopyContact(forest,{constrained:plan.constrained,dayMap:dayPixels,heightMap:heightPixels});
+        const surface=await makeWorldSurface(heightPixels,{constrained:plan.constrained,checkpoint:async()=>{
+          await new Promise(r=>setTimeout(r,0));if(disposed)throw new DOMException('World disposed','AbortError');
+        }});
+        resolve({forest,surface});
+      }catch(error){reject(error);}
+    },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-scenic',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
-      worldWorker.onmessage=({data})=>{clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
+      worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
-      worldWorker.postMessage({day:dayPixels,height:heightPixels,constrained:plan.constrained});
+      worldWorker.postMessage({day:dayPixels,height:heightPixels,night:nightPixels,constrained:plan.constrained});
     }).catch(()=>fallback()):fallback();
-    worldData.then(async({forest})=>{
+    worldData.then(({forest,surface})=>{
       if(disposed)return;
-      const geometry=await terrainGeometry(heightPixels,plan.constrained,()=>disposed);
+      const geometry=terrainGeometry(surface);
       if(disposed)return;
+      const atlas=document.createElement('canvas');atlas.width=forest.contact.width;atlas.height=forest.contact.height;
+      atlas.getContext('2d').putImageData(new ImageData(forest.contact.data,atlas.width,atlas.height),0,0);
+      textures.contact=atlas;delete forest.contact;
       const previous=layers[0],oldMaterial=materials.surface;
       const replacement=createEarthMaterials(textures);materials.surface=replacement.surface;
       replacement.clouds.destroy();replacement.atmosphere.destroy();
@@ -174,13 +184,13 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   const start = performance.now();
   return {
     ready, isReady: () => !!materials,
-    groundHeight:(lon,lat)=>reliefReady?worldHeight(heightPixels,lon,lat):12000,
+    groundHeight:(lon,lat)=>reliefReady?surfaceGround(heightPixels,lon,lat,plan.constrained):12000,
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
     toggleAtmosphere() { atmosphereEnabled = !atmosphereEnabled; },
     toggleTerrain() {terrainEnabled=!terrainEnabled;},
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
-      worldRelief:reliefReady, ...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
+      worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF, worldContactMap:textures?.contact.width||0, ...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {
       if (disposed) return;
@@ -198,10 +208,13 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       viewer.canvas.dataset.earthTexture = String(textures?.day.width || 0);
       viewer.canvas.dataset.earthDetail = detail;
       viewer.canvas.dataset.worldRelief=String(reliefReady);
+      viewer.canvas.dataset.worldDataSource=worldDataSource;
       viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
       if(worldForest) {
         worldForest.update({mix:state.mix,day,altitude,now});
+        if(materials)materials.surface.uniforms.canopyMix=Math.min(1,worldForest.details().worldTrees/1000);
         viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
+        viewer.canvas.dataset.worldReady=String(worldForest.details().worldReady);
       }
       scene.globe.show = terrainEnabled && (state.terrain || surfaceIsolated);
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;

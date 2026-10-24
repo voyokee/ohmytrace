@@ -1,4 +1,4 @@
-export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
+export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=false }) {
   const scene = viewer.scene;
   const targetFps = mobile ? 30 : 60;
   const maxScale = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.5);
@@ -10,7 +10,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
   let wasRunning = true;
   let lastTick = 0;
   const applyScale = () => {
-    const pixels = still ? stillScale : scale;
+    const pixels = benchmark?1:still ? stillScale : scale;
     viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
     // Supersampled stills already smooth the silhouette; FXAA also softens mountain/coast detail.
     if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !near && (!still || pixels < 1.5);
@@ -48,13 +48,16 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
       applyScale();
     },
     tick(now) {
-      if (now - lastTick < 1000 / targetFps - 1) return false;
-      lastTick = now;
+      const interval=1000/targetFps,elapsed=now-lastTick;
+      if(elapsed<interval-1)return false;
+      // Keep the cadence anchored across RAF jitter. Resetting the origin to each accepted
+      // frame slowly lost 30 Hz slots; skip missed slots without scheduling catch-up frames.
+      lastTick+=Math.max(1,Math.floor((elapsed+1)/interval))*interval;
       return true;
     },
     // Only sample during continuous animation. An intentional idle gap is not a slow frame.
     frame(now, active, drawMs = Infinity) {
-      if (!active) { lastFrame = 0; samples = []; costs = []; return; }
+      if (benchmark || !active) { lastFrame = 0; samples = []; costs = []; return; }
       if (lastFrame && now - lastFrame < 250) samples.push(now - lastFrame);
       costs.push(drawMs);
       lastFrame = now;
@@ -74,7 +77,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion }) {
         }
       } else goodWindows = 0;
     },
-    details: () => ({ targetFps, pixelRatio: +(still ? stillScale : scale).toFixed(2),
+    details: () => ({ targetFps, pixelRatio: +(benchmark?1:still ? stillScale : scale).toFixed(2),
       quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError }),
   };
 }

@@ -18,6 +18,8 @@ A 3D night globe where the places you've been light up.
 
 ![那拉提：雪岭云杉林与空中草原](docs/scenery.jpg)
 
+本轮 Scenic Earth 调整加入区域森林冠层、开阔草原规则、城市核心排除、树根与实际网格贴合，以及山脊、雪线和接触暗部。保持单 Cesium 引擎、静态部署；实现细节与剩余视觉差距见 [微缩世界](docs/MICRO_WORLD.md) 和 [验证记录](docs/VALIDATION.md)。
+
 ## 功能
 
 - **全球日间地球**：独立地表、海洋、云和大气材质，共享光照方向；全球与真实地形使用同一套地理坐标和相机。

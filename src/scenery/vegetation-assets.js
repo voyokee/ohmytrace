@@ -34,7 +34,7 @@ function assetMesh(kind, low) {
     const normal=p=>{const d=sub(p,center).map((x,i)=>x/(radii[i]*radii[i])),l=Math.hypot(...d)||1;return d.map(x=>x/l);};
     const point=(j,i) => {const a=(i%sides)/sides*Math.PI*2,b=j/levels*Math.PI;
       // Uneven branch tips break the smooth balloon silhouette, including in the orbital LOD.
-      const r=1+.12*Math.sin(a*3+seed*7+j*2.1)+.07*Math.cos(a*5-seed*3+j);
+      const r=1+.19*Math.sin(a*3+seed*7+j*2.1)+.09*Math.cos(a*5-seed*3+j);
       return add(center,[Math.sin(b)*Math.cos(a)*radii[0]*r,Math.sin(b)*Math.sin(a)*radii[1]*r,Math.cos(b)*radii[2]]);};
     for(let j=0;j<levels;j++)for(let i=0;i<sides;i++) {
       const p=point(j,i),q=point(j+1,i),r=point(j+1,i+1),s=point(j,i+1);
@@ -67,10 +67,10 @@ function assetMesh(kind, low) {
           leaf.map((x,i)=>x*(.79+t*.34)+(i===0?t*.035:0)),low?7:10);}
       cone([0,0,.83],.07,.17,leaf.map(x=>x*1.12),low?5:7);
     } else if(kind==='tropical') {
-      crown([0,0,.77],[.32,.28,.23],leaf);
-      for(let i=0;i<(low?5:9);i++){const a=i*2.399,p=[Math.cos(a)*.27,Math.sin(a)*.27,.54+(i%3)*.075];
+      crown([0,0,.84],[.32,.29,.16],leaf);
+      for(let i=0;i<(low?5:9);i++){const a=i*2.399,p=[Math.cos(a)*.27,Math.sin(a)*.27,.58+(i%3)*.095];
         if(!low)branch([0,0,.3],p,.018,[.28,.23,.12]);
-        crown(p,[.20,.18,.18],leaf.map(x=>x*(.82+(i%5)*.055)),i+.3);}
+        crown(p,[.22,.20,.14],leaf.map(x=>x*(.82+(i%5)*.055)),i+.3);}
     } else if(kind==='birch') {
       crown([0,0,.75],[.18,.16,.25],leaf);
       for(let i=0;i<(low?3:7);i++){const a=i*2.399,p=[Math.cos(a)*.13,Math.sin(a)*.13,.40+i*.055];

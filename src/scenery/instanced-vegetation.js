@@ -1,14 +1,14 @@
-import { instantiateVegetation } from './vegetation-assets.js';
-import { SUN_EC } from '../rendering/earth-materials.js?v=20261024-world';
+import { instantiateVegetation } from './vegetation-assets.js?v=20261025-scenic';
+import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-scenic';
 const libraries = new Map();
 export function preloadVegetation(low=false) {
   const key=low?'vegetation-low.glb':'vegetation.glb';
-  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key,import.meta.url))
+  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-scenic',import.meta.url))
     .then(r=>{if(!r.ok)throw new Error('Vegetation asset HTTP '+r.status);return r.arrayBuffer();})
     .then(buffer=>new Uint8Array(buffer)).catch(error=>{libraries.delete(key);throw error;}));
   return libraries.get(key);
 }
-export function vegetationShader({wind=false}={}) {
+export function vegetationShader({wind=false,world=false}={}) {
   const direction=new Cesium.Cartesian3(...SUN_EC);Cesium.Cartesian3.normalize(direction,direction);
   return new Cesium.CustomShader({lightingModel:Cesium.LightingModel.UNLIT,
     uniforms:{u_sun:{type:Cesium.UniformType.VEC3,value:direction},u_day:{type:Cesium.UniformType.FLOAT,value:1},
@@ -27,6 +27,14 @@ export function vegetationShader({wind=false}={}) {
       }
       if(u_snow>0.0)material.diffuse=mix(material.diffuse,vec3(0.70,0.75,0.78),
         smoothstep(0.45,0.95,fsInput.attributes.texCoord_0.x)*u_snow*0.65);
+      ${world?`// Low-frequency regional colour variation uses real world positions, never screen noise.
+      vec3 p=normalize(fsInput.attributes.positionWC);
+      float canopyVariation=sin(p.x*47.0+p.y*29.0)*sin(p.z*63.0-p.x*17.0);
+      float deciduous=fsInput.attributes.texCoord_0.y*step(0.30,fsInput.attributes.texCoord_0.x);
+      float north=smoothstep(0.59,0.75,p.z);
+      float autumn=smoothstep(0.15,0.72,canopyVariation)*north*deciduous;
+      material.diffuse=mix(material.diffuse,vec3(0.46,0.29,0.035),autumn*0.68);
+      material.diffuse*=0.90+0.17*(canopyVariation*.5+.5);`:''}
       float sun=max(0.0,dot(normalize(fsInput.attributes.normalEC),u_sun));
       float light=0.40+sun*0.90;
       material.diffuse *= vec3(1.04,1.0,0.91)*light*mix(0.12,1.0,u_day);
@@ -50,7 +58,8 @@ export async function makeVegetationModel(viewer,chunk,{low=false,shader,signal,
     if(!species.has(p.species))species.set(p.species,{species:p.species,t:[],r:[],s:[]});
     const group=species.get(p.species),width=p.width||1;
     group.t.push(local.x,local.y,local.z);group.r.push(quaternion.x,quaternion.y,quaternion.z,quaternion.w);
-    group.s.push(p.height*width,p.height*width,p.height);
+    const aspect=p.aspect||1;
+    group.s.push(p.height*width*aspect,p.height*width/aspect,p.height);
   }
   const groups=[...species.values()].map(g=>({species:g.species,translations:new Float32Array(g.t),
     rotations:new Float32Array(g.r),scales:new Float32Array(g.s)}));

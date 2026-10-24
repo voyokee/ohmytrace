@@ -14,3 +14,9 @@ export function earthTexturePlan({ coarsePointer = false, memoryGB, maxTextureSi
     constrained,
   };
 }
+
+// Explicit quality preview exercises the same memory/instance/LOD policy as a touch device.
+export function runtimeDeviceConfig() {
+  return {coarsePointer:matchMedia('(pointer: coarse)').matches ||
+    new URLSearchParams(location.search).get('quality')==='mobile',memoryGB:navigator.deviceMemory};
+}

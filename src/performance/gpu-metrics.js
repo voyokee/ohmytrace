@@ -1,4 +1,5 @@
 import {profileGl} from './profile-gl.js';
+import {createDrawStatistics} from './draw-statistics.js';
 // Opt-in diagnostics only. Queries are bounded and read back after the GPU has finished.
 export function attachGpuMetrics(viewer) {
   const gl=viewer.canvas.getContext('webgl2')||viewer.canvas.getContext('webgl');
@@ -6,8 +7,9 @@ export function attachGpuMetrics(viewer) {
   const renderer=gl?gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER):'unavailable';
   const ext=gl?.getExtension('EXT_disjoint_timer_query_webgl2');
   const cpu=profileGl(gl,viewer.scene),removeFrame=viewer.scene.postRender.addEventListener(()=>cpu.frame());
+  const draw=gl&&new URLSearchParams(location.search).has('profilegpu')?createDrawStatistics(gl,viewer.scene):null;
   let active,elapsed=null,frame=0;const pending=[];
-  if(!ext||!gl.createQuery)return {details:()=>({gpuMs:null,gpuRenderer:renderer,...cpu.details()}),dispose(){removeFrame();cpu.dispose();}};
+  if(!ext||!gl.createQuery)return {details:()=>({gpuMs:null,gpuRenderer:renderer,...cpu.details(),...draw?.details()}),dispose(){draw?.dispose();removeFrame();cpu.dispose();}};
   const removeBefore=viewer.scene.preRender.addEventListener(()=>{
     if(++frame%12)return;
     if(gl.isContextLost()||active)return;
@@ -25,8 +27,8 @@ export function attachGpuMetrics(viewer) {
     if(!active)return;gl.endQuery(ext.TIME_ELAPSED_EXT);pending.push(active);active=undefined;
   });
   return {
-    details:()=>({gpuMs:elapsed===null?null:+elapsed.toFixed(2),gpuRenderer:renderer,...cpu.details()}),
-    dispose(){removeBefore();removeAfter();removeFrame();cpu.dispose();if(active)gl.endQuery(ext.TIME_ELAPSED_EXT);
+    details:()=>({gpuMs:elapsed===null?null:+elapsed.toFixed(2),gpuRenderer:renderer,...cpu.details(),...draw?.details()}),
+    dispose(){removeBefore();removeAfter();draw?.dispose();removeFrame();cpu.dispose();if(active)gl.endQuery(ext.TIME_ELAPSED_EXT);
       if(active)gl.deleteQuery(active);pending.forEach(q=>gl.deleteQuery(q));},
   };
 }

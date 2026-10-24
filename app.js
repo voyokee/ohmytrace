@@ -1,11 +1,13 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261024-world');
-const { constrainedDevice } = await import('./src/rendering/texture-policy.js');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-scenic');
+const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js');
+const benchmark=visualBenchmark(location.search);
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-scenic');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261024-world');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-scenic');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-scenic');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
@@ -15,7 +17,7 @@ const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
 const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
-const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261024-profile'):null;
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-scenic'):null;
 
 /* ================= constants ================= */
 
@@ -511,8 +513,7 @@ function setPlace(name, data) {
 /* ================= globe ================= */
 
 function initGlobe() {
-  const mobile = constrainedDevice({ coarsePointer: matchMedia('(pointer: coarse)').matches,
-    memoryGB: navigator.deviceMemory });
+  const mobile = constrainedDevice(runtimeDeviceConfig());
   const imagery = new Cesium.UrlTemplateImageryProvider({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     maximumLevel: 18,
@@ -533,7 +534,7 @@ function initGlobe() {
     terrain,
     animation: false, timeline: false, baseLayerPicker: false, geocoder: false, homeButton: false,
     sceneModePicker: false, navigationHelpButton: false, fullscreenButton: false, infoBox: false,
-    selectionIndicator: false, creditContainer: $('#credits'), msaaSamples: 1,
+    selectionIndicator: false, scene3DOnly:true, creditContainer: $('#credits'), msaaSamples: 1,
     useBrowserRecommendedResolution: false,
     orderIndependentTranslucency: false,
     contextOptions: { webgl: { alpha: true } },
@@ -541,7 +542,7 @@ function initGlobe() {
   scene = viewer.scene;
   let removeFrameMetrics;
   terrainPicking=installTerrainPicking(viewer,{constrained:mobile});
-  renderPolicy = createRenderPolicy(viewer, { mobile, reducedMotion });
+  renderPolicy = createRenderPolicy(viewer, { mobile, reducedMotion, benchmark:benchmark.enabled });
   sceneryManager = new SceneryManager(viewer, { constrained: mobile, reducedMotion });
   cameraDirector = new CameraDirector(viewer);
   window.addEventListener('pagehide', event => {
@@ -622,7 +623,6 @@ function initGlobe() {
   scene.preUpdate.addEventListener(() => {
     const now = performance.now();
     frameStart = now;
-    drawCommands = 0;
     cinematic.update({ altitude: viewer.camera.positionCartographic.height, day: dayMix,
       lightUniforms: nightMaterial.uniforms, reducedMotion, now });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
@@ -630,6 +630,7 @@ function initGlobe() {
     renderPolicy.still(!cameraMoving && !flying && !state.sel && !pickName && now >= globalSpinUntil &&
       now - lastInput > 800 && viewer.camera.positionCartographic.height > 4e6);
     if (!renderPolicy.tick(now)) return;
+    if(benchmark.enabled)scene.requestRender();
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
     const animatedScenery = scenery.name && !reducedMotion && !body.classList.contains('modal-open');
@@ -648,6 +649,7 @@ function initGlobe() {
   });
   let lastRender = performance.now();
   scene.preRender.addEventListener(() => {
+    drawCommands=0;
     const now = performance.now();
     frameTimings.engineMs = +(now - frameStart).toFixed(1);
     updateLights(now, Math.min((now - lastRender) / 1000, 0.1));
@@ -663,7 +665,7 @@ function initGlobe() {
         orbiting:!!orbit,collision:scene.screenSpaceCameraController.enableCollisionDetection,
         terrainMaterial:materialIsolated?'off':scene.globe.material===terrainDaylight?'daylight':'footprint',imageryAnisotropy:mobile?2:4,
         ...cinematic.details(), ...sceneryManager.details(), ...cameraDirector.details(),...terrainPicking.details(),
-        ...renderPolicy.details(), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :
+        ...renderPolicy.details(), qualityProfile:mobile?'mobile':'desktop', ...(benchmark.enabled?benchmarkDetails(viewer):{}), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :
           performance.now() < globalSpinUntil ? 'intro' : 'idle' }), [
         { label: '隔离植被', run: () => sceneryManager.toggle() },
         { label: '隔离材质', run: () => { cinematic.toggleSurface(); materialIsolated=!materialIsolated; } },
@@ -728,7 +730,7 @@ function homeView(duration = 2.4) {
   renderPolicy.home();
   if (scenery.name) clearScenery();
   orbit = null;
-  const c = centroid();
+  const c = centroid(),comparisonView=benchmark.view;
   const flight = flightGeneration = cameraDirector.begin('leaving');
   flying = true;
   const focal = viewer.canvas.clientHeight / (2 * Math.tan(viewer.camera.frustum.fovy / 2));
@@ -736,10 +738,10 @@ function homeView(duration = 2.4) {
   const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
   const altitude = earthRadius * (Math.sqrt(1 + (focal / Math.max(1, screenRadius)) ** 2) - 1);
   viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(c.lon - 30, c.lat - 4, altitude),
+    destination: Cesium.Cartesian3.fromDegrees(comparisonView?.lon??c.lon-30, comparisonView?.lat??c.lat-4, altitude),
     orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     duration,
-    complete: () => { if (flight === flightGeneration) { flying = false; cameraDirector.finish(flight,'global'); globalSpinUntil = performance.now() + 8000; } },
+    complete: () => { if (flight === flightGeneration) { flying = false; cameraDirector.finish(flight,'global'); globalSpinUntil = benchmark.enabled?0:performance.now() + 8000; } },
     cancel: () => { if (flight === flightGeneration) flying = false; },
   });
 }
@@ -1105,7 +1107,7 @@ async function buildVegetation(name, token, signal) {
 
   const rnd = mulberry32(hashStr(name) ^ 99);
   const biome = biomeAt(p.lat, p.lon), season = seasonFor(name, p.lat);
-  const lite = constrainedDevice({ coarsePointer: matchMedia('(pointer: coarse)').matches, memoryGB: navigator.deviceMemory });
+  const lite = constrainedDevice(runtimeDeviceConfig());
   const theme = scenery.template;
   const plants = await prepareVegetation({
     width: canvas.width, darkV: biome.darkV, blossom: season.name === 'spring' && !!biome.low.cherry,

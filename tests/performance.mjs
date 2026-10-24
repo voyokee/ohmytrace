@@ -88,3 +88,16 @@ assert.equal(phonePolicy.details().pixelRatio, 1.5, 'Settled phone views must us
 phonePolicy.home();
 assert.equal(phonePolicy.details().pixelRatio, 1, 'Phone flights must keep the smaller animation budget');
 console.log('PASS: bounded vegetation, terrain exclusions, deterministic placement, fallback/cancellation, adaptive resolution, still/motion quality, idle and visibility');
+const benchmarkViewer={scene:{globe:{},requestRender(){},postProcessStages:{fxaa:{enabled:true}}}};
+const benchmarkPolicy=createRenderPolicy(benchmarkViewer,{mobile:true,reducedMotion:false,benchmark:true});
+benchmarkPolicy.still(true);
+assert.equal(benchmarkPolicy.details().pixelRatio,1,'Comparison pixels must stay fixed even for stills');
+for(let i=0;i<10000;i++)benchmarkPolicy.frame(i*34,true,40);
+assert.equal(benchmarkPolicy.details().pixelRatio,1,'Long benchmarks must not adapt away from the comparison resolution');
+
+const cadence=createRenderPolicy({scene:{globe:{},requestRender(){}}},{mobile:true,reducedMotion:false});
+let accepted=0,rafTime=0;
+for(let i=0;i<360;i++){rafTime+=[16.2,17.1,16.7][i%3];if(cadence.tick(rafTime))accepted++;}
+assert.ok(Math.abs(accepted-rafTime/1000*30)<2,'RAF jitter must not drift the phone animation cadence below 30 Hz');
+const delayed=cadence.tick(rafTime+1000);assert.equal(delayed,true);
+assert.equal(cadence.tick(rafTime+1001),false,'A long task must not trigger a burst of catch-up frames');

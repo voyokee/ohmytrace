@@ -1,8 +1,8 @@
-import { makeVegetationModel, vegetationShader, preloadVegetation } from './instanced-vegetation.js';
+import { makeVegetationModel, vegetationShader, preloadVegetation } from './instanced-vegetation.js?v=20261025-scenic';
 export function createWorldForest(viewer,forest,{constrained=false}={}) {
-  const shader=vegetationShader(),live=new Map(),pending=new Map(),retries=new Map();
+  const shader=vegetationShader({world:true}),live=new Map(),pending=new Map(),retries=new Map();
   const controller=new AbortController();
-  let lastCheck=-Infinity,disposed=false,currentMix=1,failures=0;
+  let lastCheck=-Infinity,disposed=false,currentMix=1,failures=0,settled=false;
   const maxChunks=constrained?12:28;
   const direction=new Cesium.Cartesian3();
   const chunks=forest.chunks.map(c=>({...c,up:Cesium.Cartesian3.normalize(Cesium.Cartesian3.fromDegrees(c.lon,c.lat),new Cesium.Cartesian3())}));
@@ -31,11 +31,12 @@ export function createWorldForest(viewer,forest,{constrained=false}={}) {
       for(const entry of live.values()) {entry.model.show=mix>0.01;
         if(Math.abs(entry.model.color.alpha-mix)>0.01)entry.model.color=Cesium.Color.WHITE.withAlpha(mix);}
       if(now-lastCheck<550)return;lastCheck=now;
-      if(mix<0.01) {for(const [key,e]of live) {viewer.scene.primitives.remove(e.model);if(e.probe)viewer.scene.primitives.remove(e.probe);live.delete(key);}return;}
+      if(mix<0.01) {settled=false;for(const [key,e]of live) {viewer.scene.primitives.remove(e.model);if(e.probe)viewer.scene.primitives.remove(e.probe);live.delete(key);}return;}
       Cesium.Cartesian3.normalize(viewer.camera.positionWC,direction);
       const wanted=chunks.map(chunk=>({chunk,dot:Cesium.Cartesian3.dot(chunk.up,direction)}))
         .filter(x=>x.dot>0.28).sort((a,b)=>b.dot-a.dot).slice(0,maxChunks);
       const keys=new Set(wanted.map(x=>x.chunk.key)),low=constrained||altitude>5000000;
+      settled=wanted.every(({chunk})=>live.get(chunk.key)?.model.ready&&live.get(chunk.key).low===low)&&pending.size===0;
       for(const [key,e]of live) {
         if(!keys.has(key)&&now-e.lastSeen>1800 || e.low!==low) {viewer.scene.primitives.remove(e.model);if(e.probe)viewer.scene.primitives.remove(e.probe);live.delete(key);}
         else if(keys.has(key))e.lastSeen=now;
@@ -47,7 +48,7 @@ export function createWorldForest(viewer,forest,{constrained=false}={}) {
       }
     },
     details:()=>({worldTrees:[...live.values()].reduce((n,e)=>n+(e.model.ready?e.chunk.plants.length:0),0),
-      worldChunks:live.size,worldPending:pending.size,worldCandidates:forest.count,worldFailures:failures}),
+      worldReady:settled,worldChunks:live.size,worldPending:pending.size,worldCandidates:forest.count,worldBiomes:forest.biomes,worldFailures:failures}),
     dispose(){disposed=true;controller.abort();for(const e of live.values()){viewer.scene.primitives.remove(e.model);if(e.probe)viewer.scene.primitives.remove(e.probe);}live.clear();shader.destroy();},
   };
 }

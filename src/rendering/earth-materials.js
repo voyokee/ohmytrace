@@ -17,6 +17,7 @@ export function createEarthMaterials(textures) {
   const common = () => ({ sunWC: new Cesium.Cartesian3(1, 0, 0), opacity: 1, day: 1, cloudPhase: 0 });
   const uniforms = { ...common(), dayMap: textures.day, heightMap: textures.height,
     depthMap: textures.depth, nightMap: textures.night, cloudMap: textures.cloud,
+    contactMap: textures.contact, canopyMix:0, reliefStrength:8.5,
     texel: new Cesium.Cartesian2(1 / textures.height.width, 1 / textures.height.height), visitRadius: 0.045 };
   let visits = '';
   for (const name of visitNames) {
@@ -49,25 +50,34 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float hS=texture(heightMap,wrappedUV(uv-vec2(0.0,texel.y))).r;
   float dx=hE-hW,dy=hN-hS;
   float elevation = texture(heightMap, uv).r;
-  float snowLine = mix(0.68, 0.20, pow(abs(up.z), 1.8));
-  float ridge = smoothstep(0.015, 0.11, length(vec2(dx, dy)));
+  float snowLine = mix(0.78,0.18,smoothstep(0.45,1.10,abs(asin(up.z))));
+  float ridge = smoothstep(0.004, 0.055, length(vec2(dx, dy)));
   float existingSnow=smoothstep(0.36,0.78,luminance)*(1.0-smoothstep(0.04,0.19,abs(albedo.r-albedo.b)));
-  float snow = smoothstep(snowLine, snowLine + 0.16, elevation) * (0.08 + existingSnow * 0.78 + ridge * 0.12) * (1.0 - ocean);
-  albedo = mix(albedo, vec3(0.91, 0.95, 0.97), snow);
-  vec3 relief = normalize(up - (east * dx + north * dy) * 7.5 * (1.0 - ocean));
+  vec3 relief = normalize(up - (east * dx + north * dy) * reliefStrength * (1.0 - ocean));
   vec3 face = normalize(cross(dFdx(pos * 0.000001), dFdy(pos * 0.000001)));
   face *= sign(dot(face, up));
-  relief = normalize(mix(relief, face, 0.50 * (1.0 - ocean)));
+  relief = normalize(mix(relief, face, 0.60 * (1.0 - ocean)));
+  // Snow rests on high, upward-facing slopes; steep ridges expose cool rock below the cap.
+  float resting = smoothstep(0.42, 0.94, dot(relief,up));
+  float snow = smoothstep(snowLine-0.035, snowLine+0.14, elevation) *
+    (0.08+existingSnow*0.74+ridge*0.54) * (0.40+resting*0.60) * (1.0-ocean);
+  float alpine = smoothstep(snowLine-0.16,snowLine,elevation) * ridge * (1.0-ocean);
+  albedo=mix(albedo,mix(albedo,vec3(0.40,0.43,0.42),0.52),alpine*(1.0-snow));
+  albedo = mix(albedo, vec3(0.91, 0.95, 0.98), clamp(snow,0.0,0.96));
   vec3 L = normalize(sunWC), V = normalize(czm_inverseView[3].xyz - pos);
   float daylight = smoothstep(-0.30, 0.88, dot(up, L));
-  float reliefLight = clamp(0.58 + 0.55 * dot(relief, L), 0.42, 1.15);
+  float reliefLight = clamp(0.50 + 0.67 * dot(relief, L), 0.34, 1.18);
   vec2 cloudUV = wrappedUV(uv + vec2(cloudPhase, 0.0));
   vec2 shadowOffset = vec2(dot(L, east) / max(0.25, cos((uv.y-0.5)*czm_pi)), dot(L, north) * 2.0) * 0.00085 / max(0.3, dot(up,L));
   float cloudShadow = cloudCover(texture(cloudMap, wrappedUV(cloudUV + shadowOffset)).r);
   vec3 natural = albedo * (0.32 + daylight * 0.80) * mix(reliefLight, 1.0, ocean);
   float valley=clamp(((hE+hW+hN+hS)*0.25-elevation)*8.0,0.0,0.20);
   natural*=1.0-valley*(1.0-ocean);
-  natural *= 1.0 - cloudShadow * 0.22 * daylight;
+  vec2 habitat=texture(contactMap,uv).rg;
+  float contact=habitat.r*canopyMix*(1.0-ocean);
+  natural=mix(natural,natural*vec3(0.80,1.16,0.72),habitat.g*0.35*(1.0-ocean));
+  natural*=1.0-contact*(0.14+0.14*daylight);
+  natural *= 1.0 - cloudShadow * 0.18 * daylight;
   float spec = pow(max(0.0, dot(up, normalize(L + V))), 55.0) * ocean * daylight;
   natural += vec3(0.56, 0.72, 0.79) * spec * 0.34;
   float footprint = 0.0;
@@ -96,7 +106,7 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   vec3 color = mix(vec3(0.30, 0.39, 0.50), vec3(1.0, 0.985, 0.955), light);
   color *= clamp(1.0 - gradient * 0.8, 0.7, 1.15);
   m.diffuse = vec3(0.0); m.emission = color;
-  m.alpha = cover * opacity * mix(0.16, 0.88, day);
+  m.alpha = cover * opacity * mix(0.16, 0.78, day);
   return m;
 }` } });
   const atmosphere = new Cesium.Material({ translucent: true, fabric: {
