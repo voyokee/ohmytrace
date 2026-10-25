@@ -18,7 +18,7 @@ A 3D night globe where the places you've been light up.
 
 ![那拉提：雪岭云杉林与空中草原](docs/scenery.jpg)
 
-本轮 Scenic Earth 调整加入区域森林冠层、开阔草原规则、城市核心排除、树根与实际网格贴合，以及山脊、雪线和接触暗部。保持单 Cesium 引擎、静态部署；实现细节与剩余视觉差距见 [微缩世界](docs/MICRO_WORLD.md) 和 [验证记录](docs/VALIDATION.md)。
+本轮 Scenic Earth 调整加入区域森林冠层、开阔草原规则、城市核心排除、树根与实际网格贴合，以及山脊、雪线和接触暗部。树冠改为更多小叶簇，并加入逐株形状与色彩变化；森林 LOD 等待新模型就绪后替换，全球与近景共用光照方向。保持单 Cesium 引擎、静态部署；实现细节与剩余视觉差距见 [微缩世界](docs/MICRO_WORLD.md) 和 [验证记录](docs/VALIDATION.md)。
 
 ## 功能
 
@@ -77,11 +77,7 @@ python3 -m http.server 8765
 代码仍可直接静态部署，新增的模块位于 `src/performance/`、`src/scenery/`、`src/rendering/`。运行性能相关逻辑检查：
 
 ```bash
-node tests/performance.mjs
-node tests/rendering.mjs
-node tests/delivery.mjs
-node tests/micro-world.mjs
-node tests/terrain-picking.mjs
+npm test
 ```
 
 低空高度查询使用有界地形空间索引，保留原始网格与 Cesium 三角形求交，避免每帧遍历整块高密度地形。仅对固定的 1.120 版本和已验证的高度图网格启用，其余情况回退原引擎。白天近景使用独立材质，云影与风向在 CPU 端转换一次坐标；夜景和飞行过渡继续平滑混合。具体精度、缓存预算和实测限制见验证记录。

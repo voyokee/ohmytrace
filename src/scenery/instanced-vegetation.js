@@ -1,27 +1,29 @@
-import { instantiateVegetation } from './vegetation-assets.js?v=20261025-scenic';
-import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-scenic';
+import {worldCanopyVertexShader} from './canopy-shader.js';
+import { instantiateVegetation } from './vegetation-assets.js?v=20261025-canopy';
+import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-canopy';
 const libraries = new Map();
 export function preloadVegetation(low=false) {
   const key=low?'vegetation-low.glb':'vegetation.glb';
-  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-scenic',import.meta.url))
+  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-canopy',import.meta.url))
     .then(r=>{if(!r.ok)throw new Error('Vegetation asset HTTP '+r.status);return r.arrayBuffer();})
     .then(buffer=>new Uint8Array(buffer)).catch(error=>{libraries.delete(key);throw error;}));
   return libraries.get(key);
 }
 export function vegetationShader({wind=false,world=false}={}) {
+  const shapeVariation=world&&Cesium.VERSION==='1.120';
   const direction=new Cesium.Cartesian3(...SUN_EC);Cesium.Cartesian3.normalize(direction,direction);
   return new Cesium.CustomShader({lightingModel:Cesium.LightingModel.UNLIT,
     uniforms:{u_sun:{type:Cesium.UniformType.VEC3,value:direction},u_day:{type:Cesium.UniformType.FLOAT,value:1},
       u_autumn:{type:Cesium.UniformType.FLOAT,value:0},u_snow:{type:Cesium.UniformType.FLOAT,value:0},
       u_time:{type:Cesium.UniformType.FLOAT,value:0}},
-    ...(wind?{vertexShaderText:`void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+    ...(shapeVariation?{varyings:{v_canopySeed:Cesium.VaryingType.FLOAT},vertexShaderText:worldCanopyVertexShader}:wind?{vertexShaderText:`void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
       float h=clamp(vsInput.attributes.texCoord_0.x,0.0,1.0);
       float phase=dot(vsInput.attributes.positionMC.xy,vec2(0.001,0.0015));
       vsOutput.positionMC.xy += vec2(0.35,0.18)*h*h*sin(u_time*0.8+phase);
     }`}:{}),
     fragmentShaderText:`void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       if(u_autumn>0.0) {
-        float leaf=fsInput.attributes.texCoord_0.y*step(0.30,fsInput.attributes.texCoord_0.x);
+        float leaf=fsInput.attributes.texCoord_0.y*fsInput.attributes.texCoord_1.y;
         vec3 amber=vec3(0.55,0.23,0.025)*(0.70+0.30*fsInput.attributes.texCoord_0.x);
         material.diffuse=mix(material.diffuse,amber,u_autumn*leaf*0.75);
       }
@@ -30,7 +32,10 @@ export function vegetationShader({wind=false,world=false}={}) {
       ${world?`// Low-frequency regional colour variation uses real world positions, never screen noise.
       vec3 p=normalize(fsInput.attributes.positionWC);
       float canopyVariation=sin(p.x*47.0+p.y*29.0)*sin(p.z*63.0-p.x*17.0);
-      float deciduous=fsInput.attributes.texCoord_0.y*step(0.30,fsInput.attributes.texCoord_0.x);
+      float deciduous=fsInput.attributes.texCoord_0.y*fsInput.attributes.texCoord_1.y;
+      ${shapeVariation?`float leafMask=fsInput.attributes.texCoord_1.y;
+      vec3 leafTone=mix(vec3(0.82,0.94,0.90),vec3(1.15,1.05,0.78),v_canopySeed);
+      material.diffuse*=mix(vec3(1.0),leafTone,leafMask);`:''}
       float north=smoothstep(0.59,0.75,p.z);
       float autumn=smoothstep(0.15,0.72,canopyVariation)*north*deciduous;
       material.diffuse=mix(material.diffuse,vec3(0.46,0.29,0.035),autumn*0.68);

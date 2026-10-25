@@ -1,4 +1,4 @@
-export const SUN_EC = [0.72, 0.64, 0.70];
+export {SUN_EC} from './sunlight.js';
 const visitNames = Array.from({ length: 64 }, (_, i) => 'visit' + String(i).padStart(2, '0'));
 // All maps share geodetic coordinates, independent of the ellipsoid mesh UV convention.
 const coordinates = `

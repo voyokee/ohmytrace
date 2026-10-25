@@ -1,10 +1,11 @@
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-scenic';
+import {syncCameraSun} from './sunlight.js';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-canopy';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-scenic';
-import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-scenic';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-canopy';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-canopy';
 import {makeWorldSurface,surfaceGround} from '../scenery/world-surface.js';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-scenic';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-canopy';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -124,7 +125,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }catch(error){reject(error);}
     },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-scenic',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-canopy',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
       worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
@@ -185,6 +186,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   return {
     ready, isReady: () => !!materials,
     groundHeight:(lon,lat)=>reliefReady?surfaceGround(heightPixels,lon,lat,plan.constrained):12000,
+    toggleForestDetail(){worldForest?.toggleDetail();},
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
     toggleAtmosphere() { atmosphereEnabled = !atmosphereEnabled; },
     toggleTerrain() {terrainEnabled=!terrainEnabled;},
@@ -219,8 +221,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       scene.globe.show = terrainEnabled && (state.terrain || surfaceIsolated);
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;
       if (!materials) return;
-      Cesium.Matrix4.multiplyByPointAsVector(viewer.camera.inverseViewMatrix, sunEC, sunWC);
-      Cesium.Cartesian3.normalize(sunWC, sunWC);
+      syncCameraSun(viewer.camera.inverseViewMatrix,sunEC,sunWC);
       for (const material of [materials.surface, materials.clouds, materials.atmosphere]) {
         const u = material.uniforms;
         Cesium.Cartesian3.clone(sunWC, u.sunWC);

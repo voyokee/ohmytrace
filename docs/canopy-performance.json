@@ -1,0 +1,148 @@
+{
+  "baselineCommit": "1d8d64afb058ad2727ae749adac255762a3f7459",
+  "hardware": "Apple M1 / ANGLE Metal / in-app browser",
+  "sampling": "Last 10 ready two-second windows; fixed camera and 1x actual pixels. GPU submission interval includes waits; not shader-only time. Mobile quality on desktop hardware, no phone hardware test. Sequential samples may vary with load; FPS differences are not attributed to this change.",
+  "desktopBefore": {
+    "source": "canopy-before-samples.json",
+    "windows": 10,
+    "renderPixels": "1448\u00d71086",
+    "viewport": "1448\u00d71086",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 11714070,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 5230,
+    "detailedChunks": 0,
+    "medians": {
+      "fps": 57.0,
+      "p95FrameMs": 25.35,
+      "gpuMs": 7.515,
+      "drawMs": 1.0,
+      "engineMs": 0.15000000000000002,
+      "effectsMs": 0.05
+    },
+    "vegetationDraws": 44,
+    "vegetationTriangles": 664856,
+    "qualityProfile": "desktop"
+  },
+  "desktopAfter": {
+    "source": "canopy-final-asia-samples.json",
+    "windows": 10,
+    "renderPixels": "1448\u00d71086",
+    "viewport": "1448\u00d71086",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 11714070,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 5230,
+    "detailedChunks": 0,
+    "medians": {
+      "fps": 60.0,
+      "p95FrameMs": 19.25,
+      "gpuMs": 8.98,
+      "drawMs": 0.8,
+      "engineMs": 0.1,
+      "effectsMs": 0.0
+    },
+    "vegetationDraws": 44,
+    "vegetationTriangles": 664856,
+    "qualityProfile": "desktop"
+  },
+  "mobileBefore": {
+    "source": "scenic-mobile-samples.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "viewport": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "detailedChunks": 0,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 36.95,
+      "gpuMs": 2.165,
+      "drawMs": 1.45,
+      "engineMs": 0.2,
+      "effectsMs": 0.1
+    },
+    "vegetationDraws": 24,
+    "vegetationTriangles": 95348,
+    "qualityProfile": "mobile"
+  },
+  "mobileAfter": {
+    "source": "canopy-final-mobile-samples.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "viewport": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "detailedChunks": 0,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 37.45,
+      "gpuMs": 2.215,
+      "drawMs": 0.7,
+      "engineMs": 0.15000000000000002,
+      "effectsMs": 0.0
+    },
+    "vegetationDraws": 24,
+    "vegetationTriangles": 95348,
+    "qualityProfile": "mobile"
+  },
+  "detailInspection": {
+    "source": "canopy-lod-samples.json",
+    "windows": 10,
+    "renderPixels": "1448\u00d71086",
+    "viewport": "1448\u00d71086",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 11714070,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 5230,
+    "detailedChunks": 4,
+    "medians": {
+      "fps": 60.0,
+      "p95FrameMs": 19.35,
+      "gpuMs": 10.785,
+      "drawMs": 0.95,
+      "engineMs": 0.2,
+      "effectsMs": 0.0
+    },
+    "vegetationDraws": 44,
+    "vegetationTriangles": 1225892,
+    "qualityProfile": "desktop"
+  },
+  "lodObservations": {
+    "interval": "2 seconds, not a frame-by-frame no-flash proof",
+    "minInstances": 5230,
+    "maxInstances": 5230,
+    "detailedCounts": [
+      0,
+      2,
+      4
+    ],
+    "maxStagingObserved": 0,
+    "failures": 0,
+    "finalDetailed": 0
+  }
+}

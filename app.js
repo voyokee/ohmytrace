@@ -1,13 +1,14 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-scenic');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-canopy');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js');
 const benchmark=visualBenchmark(location.search);
-const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-scenic');
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-canopy');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-scenic');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-scenic');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-canopy');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-canopy');
+const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
@@ -17,7 +18,7 @@ const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
 const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
-const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-scenic'):null;
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-canopy'):null;
 
 /* ================= constants ================= */
 
@@ -668,6 +669,7 @@ function initGlobe() {
         ...renderPolicy.details(), qualityProfile:mobile?'mobile':'desktop', ...(benchmark.enabled?benchmarkDetails(viewer):{}), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :
           performance.now() < globalSpinUntil ? 'intro' : 'idle' }), [
         { label: '隔离植被', run: () => sceneryManager.toggle() },
+        { label: '森林 LOD 对比', run: () => cinematic.toggleForestDetail() },
         { label: '隔离材质', run: () => { cinematic.toggleSurface(); materialIsolated=!materialIsolated; } },
         { label: '隔离大气', run: () => { cinematic.toggleAtmosphere(); } },
         { label: '隔离雾与粒子', run: () => sceneryManager.effects.toggle() },
@@ -759,6 +761,9 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   const pitch = Cesium.Math.toRadians(close ? framing?.pitch||-19 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
   const flight = flightGeneration = cameraDirector.begin('entering');
   flying = true;
+  // Fetch/survey the destination during the flight; distance bands keep local models/effects
+  // hidden from orbit. Unknown ground heights retain the normal arrival-time fallback.
+  if(close&&placeName&&terrainReady&&Number.isFinite(state.places[placeName]?.h))setScenery(placeName);
   return new Promise(res => {
     viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(sphere.center, 0), {
       offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), pitch, range),
@@ -836,23 +841,10 @@ function lightTarget(name) {
   return 1;
 }
 
-const scratchGround = new Cesium.Cartesian3(), scratchENU = new Cesium.Matrix4(), scratchLight = new Cesium.Cartesian3();
-
-// Light comes from the camera's left and slightly behind, low in the sky, so the faces we look
-// at are side-lit; it turns with the camera, which keeps every view well modelled.
+const scratchLight=new Cesium.Cartesian3();
+// Keep terrain, foliage and cloud shadows aligned with the orbital presentation's art light.
 function updateSun() {
-  const cam = viewer.camera;
-  const ground = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(cam.positionWC, scratchGround);
-  if (!ground) return;
-  Cesium.Transforms.eastNorthUpToFixedFrame(ground, undefined, scratchENU);
-  const az = cam.heading - Cesium.Math.toRadians(110), el = Cesium.Math.toRadians(38);
-  scratchLight.x = Math.sin(az) * Math.cos(el);
-  scratchLight.y = Math.cos(az) * Math.cos(el);
-  scratchLight.z = Math.sin(el);
-  Cesium.Matrix4.multiplyByPointAsVector(scratchENU, scratchLight, scratchLight);
-  const u = nightMaterial.uniforms;
-  Cesium.Matrix4.multiplyByPointAsVector(cam.viewMatrix, scratchLight, u.fpLight);
-  Cesium.Cartesian3.normalize(u.fpLight, u.fpLight);
+  syncCameraSun(viewer.camera.inverseViewMatrix,nightMaterial.uniforms.fpLight,scratchLight);
 }
 
 function updateLights(now, dt) {

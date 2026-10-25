@@ -6,31 +6,34 @@ const add = (a,b) => a.map((x,i)=>x+b[i]);
 const sub = (a,b) => a.map((x,i)=>x-b[i]);
 const cross = (a,b) => [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 function assetMesh(kind, low) {
-  const positions=[],normals=[],colors=[],indices=[];
-  const tri=(a,b,c,color,smooth) => {
+  const positions=[],normals=[],colors=[],indices=[],canopy=[];
+  const flexibility={spruce:.18,broadleaf:1,birch:.55,tropical:1,shrub:.65,sakura:.85,grass:0}[kind];
+  const tri=(a,b,c,color,smooth,foliage=false) => {
     const n=cross(sub(b,a),sub(c,a)), length=Math.hypot(...n)||1, base=positions.length/3;
     for(const p of [a,b,c]) { positions.push(...p);
       const normal=smooth?smooth(p):n.map(x=>x/length);normals.push(...normal);
       // glTF vertex colours are linear. Authoring sRGB directly made the old crowns chalky.
       const fleck=.94+.06*Math.sin(p[0]*139+p[1]*173+p[2]*97);
-      const f=(0.58+Math.sqrt(Math.max(0,p[2]))*0.50)*fleck;
+      const ambient=foliage ? .66+.34*Math.sqrt(Math.max(0,.5+.5*normal[2])) : 1;
+      const f=(0.58+Math.sqrt(Math.max(0,p[2]))*0.50)*fleck*ambient;
+      canopy.push(flexibility,foliage?1:0);
       colors.push(...color.map(x=>Math.pow(Math.min(1,x*f),2.2))); }
     indices.push(base,base+1,base+2);
   };
-  const cone=(center,radius,height,color,sides=low?5:7,topRadius=0) => {
+  const cone=(center,radius,height,color,sides=low?5:7,topRadius=0,foliage=false) => {
     for(let i=0;i<sides;i++) {
       const a=i/sides*Math.PI*2,b=(i+1)/sides*Math.PI*2;
       const ripple=1+.12*Math.sin(i*2.39+center[2]*31), next=1+.12*Math.sin((i+1)*2.39+center[2]*31);
       const p=add(center,[Math.cos(a)*radius*ripple,Math.sin(a)*radius*ripple,0]);
       const q=add(center,[Math.cos(b)*radius*next,Math.sin(b)*radius*next,0]);
       const t=add(center,[Math.cos(a)*topRadius,Math.sin(a)*topRadius,height]);
-      tri(p,q,t,color);
-      if(topRadius) tri(q,add(center,[Math.cos(b)*topRadius,Math.sin(b)*topRadius,height]),t,color);
-      tri(center,q,p,color);
+      tri(p,q,t,color,undefined,foliage);
+      if(topRadius) tri(q,add(center,[Math.cos(b)*topRadius,Math.sin(b)*topRadius,height]),t,color,undefined,foliage);
+      tri(center,q,p,color,undefined,foliage);
     }
   };
-  const crown=(center,radii,color,seed=0) => {
-    const sides=low?7:10, levels=low?3:5;
+  const crown=(center,radii,color,seed=0,tuft=false) => {
+    const sides=low?7:tuft?9:10, levels=low?(tuft?2:3):tuft?4:5;
     const normal=p=>{const d=sub(p,center).map((x,i)=>x/(radii[i]*radii[i])),l=Math.hypot(...d)||1;return d.map(x=>x/l);};
     const point=(j,i) => {const a=(i%sides)/sides*Math.PI*2,b=j/levels*Math.PI;
       // Uneven branch tips break the smooth balloon silhouette, including in the orbital LOD.
@@ -38,8 +41,8 @@ function assetMesh(kind, low) {
       return add(center,[Math.sin(b)*Math.cos(a)*radii[0]*r,Math.sin(b)*Math.sin(a)*radii[1]*r,Math.cos(b)*radii[2]]);};
     for(let j=0;j<levels;j++)for(let i=0;i<sides;i++) {
       const p=point(j,i),q=point(j+1,i),r=point(j+1,i+1),s=point(j,i+1);
-      if(j<levels-1)tri(p,q,r,color,normal);
-      if(j>0)tri(p,r,s,color,normal);
+      if(j<levels-1)tri(p,q,r,color,normal,true);
+      if(j>0)tri(p,r,s,color,normal,true);
     }
   };
   const branch=(a,b,radius,color)=>{
@@ -64,32 +67,40 @@ function assetMesh(kind, low) {
       const tiers=low?5:9;
       for(let j=0;j<tiers;j++) {const t=j/tiers;
         cone([Math.sin(j*2.4)*.012,Math.cos(j*2.4)*.012,.15+t*.72],.30*Math.pow(1-t,.78),.25-t*.12,
-          leaf.map((x,i)=>x*(.79+t*.34)+(i===0?t*.035:0)),low?7:10);}
-      cone([0,0,.83],.07,.17,leaf.map(x=>x*1.12),low?5:7);
+          leaf.map((x,i)=>x*(.79+t*.34)+(i===0?t*.035:0)),low?7:10,0,true);}
+      cone([0,0,.83],.07,.17,leaf.map(x=>x*1.12),low?5:7,0,true);
     } else if(kind==='tropical') {
-      crown([0,0,.84],[.32,.29,.16],leaf);
-      for(let i=0;i<(low?5:9);i++){const a=i*2.399,p=[Math.cos(a)*.27,Math.sin(a)*.27,.58+(i%3)*.095];
-        if(!low)branch([0,0,.3],p,.018,[.28,.23,.12]);
-        crown(p,[.22,.20,.14],leaf.map(x=>x*(.82+(i%5)*.055)),i+.3);}
+      // Twelve small, tiered umbrella tufts replace six large pods. The orbital model keeps
+      // exactly the same 180-triangle budget; close/far models share all tuft centres.
+      crown([-.025,.02,.88],[.15,.13,.12],leaf,0,true);
+      for(let i=0;i<11;i++) {
+        const a=i*2.399,r=i<5?.23:.29,p=[Math.cos(a)*r,Math.sin(a)*r,i<5?.77+(i%2)*.055:.57+(i%3)*.065];
+        if(!low&&i%2===0)branch([0,0,.32],p,.016,[.28,.23,.12]);
+        crown(p,[i<5?.17:.15,.13,.11],leaf.map(x=>x*(.80+(i%5)*.06)),i+.3,true);
+      }
     } else if(kind==='birch') {
-      crown([0,0,.75],[.18,.16,.25],leaf);
-      for(let i=0;i<(low?3:7);i++){const a=i*2.399,p=[Math.cos(a)*.13,Math.sin(a)*.13,.40+i*.055];
-        if(!low)branch([0,0,.23+i*.04],p,.012,bark);
-        crown(p,[.14,.12,.17],leaf.map(x=>x*(.83+i*.035)),i+.1);}
+      crown([0,0,.87],[.13,.11,.13],leaf,0,true);
+      for(let i=0;i<7;i++) {
+        const a=i*2.399,r=.10+(i%2)*.035,p=[Math.cos(a)*r,Math.sin(a)*r,.40+i*.062];
+        if(!low)branch([0,0,.23+i*.04],p,.010,bark);
+        crown(p,[.10,.085,.13],leaf.map(x=>x*(.82+i*.035)),i+.1,true);
+      }
       if(!low)for(let i=0;i<4;i++)cone([0,0,.12+i*.12],.036,.014,[.14,.15,.13],6,.034);
     } else if(kind==='shrub') {
       crown([0,0,.25],[.38,.31,.25],leaf);
     } else {
-      crown([0,0,.79],[.22,.20,.21],leaf);
-      for(let i=0;i<(low?5:10);i++){const a=i*2.399,p=[Math.cos(a)*(.19+(i%2)*.04),Math.sin(a)*(.19+(i%2)*.04),.47+(i%4)*.075];
-        if(!low)branch([0,0,.24+(i%3)*.07],p,.015,bark);
-        crown(p,[.15+(i%2)*.025,.14,.15],leaf.map(x=>x*(.78+(i%6)*.05)),i+.7);}
+      crown([0,.02,.88],[.14,.12,.12],leaf,0,true);
+      for(let i=0;i<11;i++) {
+        const a=i*2.399,r=i<4?.15:.19+(i%3)*.025,p=[Math.cos(a)*r,Math.sin(a)*r,i<4?.77+(i%2)*.045:.45+(i%4)*.075];
+        if(!low&&i%2===0)branch([0,0,.24+(i%3)*.07],p,.013,bark);
+        crown(p,[.13+(i%2)*.015,.11,.12],leaf.map(x=>x*(.78+(i%6)*.05)),i+.7,true);
+      }
     }
   }
   const texcoords=new Float32Array(positions.length/3*2);
   for(let i=0;i<positions.length/3;i++){texcoords[i*2]=Math.max(0,positions[i*3+2]);
     texcoords[i*2+1]=['broadleaf','birch','sakura'].includes(kind)?1:0;}
-  return {positions:new Float32Array(positions),normals:new Float32Array(normals),colors:new Float32Array(colors),texcoords,indices:new Uint16Array(indices)};
+  return {positions:new Float32Array(positions),normals:new Float32Array(normals),colors:new Float32Array(colors),texcoords,canopy:new Float32Array(canopy),indices:new Uint16Array(indices)};
 }
 export function encodeGlb(json, bin) {
   const text=new TextEncoder().encode(JSON.stringify(json)), jsonLength=Math.ceil(text.length/4)*4, binLength=Math.ceil(bin.length/4)*4;
@@ -131,7 +142,8 @@ export function makeVegetationLibrary(low=false) {
     const mesh=assetMesh(kind,low);
     json.meshes.push({name:kind,primitives:[{attributes:{POSITION:out.accessor(mesh.positions,'VEC3',5126,34962),
       NORMAL:out.accessor(mesh.normals,'VEC3',5126,34962),COLOR_0:out.accessor(mesh.colors,'VEC3',5126,34962),
-      TEXCOORD_0:out.accessor(mesh.texcoords,'VEC2',5126,34962)},
+      TEXCOORD_0:out.accessor(mesh.texcoords,'VEC2',5126,34962),
+      TEXCOORD_1:out.accessor(mesh.canopy,'VEC2',5126,34962)},
       indices:out.accessor(mesh.indices,'SCALAR',5123,34963),material:0}]});
     json.scenes[0].nodes.push(json.nodes.length);json.nodes.push({mesh:json.meshes.length-1,name:kind,translation:[json.nodes.length*1.1,0,0]});
   }

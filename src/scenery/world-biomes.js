@@ -2,9 +2,9 @@
 // elevation still decide whether ground can support a tree. No per-place tree coordinates.
 export const WORLD_BIOMES = Object.freeze({
   boreal: { species: 'spruce', density: .91, height: 145000, width: 1.02, treeline: 2200 },
-  temperate: { species: 'broadleaf', density: .84, height: 115000, width: 1.40, treeline: 3000 },
-  birch: { species: 'birch', density: .87, height: 132000, width: 1.40, treeline: 2350 },
-  tropical: { species: 'tropical', density: .97, height: 125000, width: 1.30, treeline: 3650 },
+  temperate: { species: 'broadleaf', density: .84, height: 140000, width: 1.05, treeline: 3000 },
+  birch: { species: 'birch', density: .87, height: 145000, width: 1.15, treeline: 2350 },
+  tropical: { species: 'tropical', density: .97, height: 155000, width: .94, treeline: 3650 },
   mountain: { species: 'spruce', density: .76, height: 128000, width: 1.10, treeline: 3300 },
   steppe: { species: 'birch', density: .10, height: 65000, width: 1.25, treeline: 2300 },
 });
