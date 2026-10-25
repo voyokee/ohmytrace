@@ -1,5 +1,5 @@
-import {surfaceGround} from './world-surface.js';
-import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-canopy';
+import {surfaceGround} from './world-surface.js?v=20261025-landscape';
+import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-landscape';
 import {mapPixel,elevationAt} from './world-elevation.js';
 export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js';
 const RAD=Math.PI/180;

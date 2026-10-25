@@ -36,12 +36,14 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   vec3 albedo = texture(dayMap, uv).rgb;
   float ocean = smoothstep(0.015, 0.075, albedo.b - max(albedo.r, albedo.g));
   float depth = texture(depthMap, uv).r;
-  float shelf = pow(clamp(depth, 0.0, 1.0), 20.0);
-  vec3 water = mix(vec3(0.012, 0.17, 0.29), vec3(0.045, 0.47, 0.50), shelf);
-  water += albedo * 0.16;
-  albedo = mix(albedo * 1.34, water, ocean * 0.93);
+  float shelf = smoothstep(0.83,0.995,depth);
+  vec3 water = mix(vec3(0.012,0.12,0.29),vec3(0.025,0.32,0.49),smoothstep(0.25,0.86,depth));
+  water = mix(water,vec3(0.045,0.55,0.60),shelf);
+  // Keep geographic bathymetry, without amplifying the JPEG's baked hillshade into dark blocks.
+  water += albedo * 0.035;
+  albedo = mix(albedo * 1.38, water, ocean * 0.98);
   float luminance = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
-  albedo = mix(vec3(luminance), albedo, 1.10);
+  albedo = mix(vec3(luminance), albedo, 1.14);
   vec3 east = normalize(vec3(-up.y, up.x, 0.000001));
   vec3 north = normalize(cross(up, east));
   float hE=texture(heightMap,wrappedUV(uv+vec2(texel.x,0.0))).r;
@@ -50,27 +52,34 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float hS=texture(heightMap,wrappedUV(uv-vec2(0.0,texel.y))).r;
   float dx=hE-hW,dy=hN-hS;
   float elevation = texture(heightMap, uv).r;
-  float snowLine = mix(0.78,0.18,smoothstep(0.45,1.10,abs(asin(up.z))));
+  float snowLine = mix(0.79,0.18,smoothstep(0.40,1.12,abs(asin(up.z))));
   float ridge = smoothstep(0.004, 0.055, length(vec2(dx, dy)));
   float existingSnow=smoothstep(0.36,0.78,luminance)*(1.0-smoothstep(0.04,0.19,abs(albedo.r-albedo.b)));
   vec3 relief = normalize(up - (east * dx + north * dy) * reliefStrength * (1.0 - ocean));
-  vec3 face = normalize(cross(dFdx(pos * 0.000001), dFdy(pos * 0.000001)));
-  face *= sign(dot(face, up));
-  relief = normalize(mix(relief, face, 0.60 * (1.0 - ocean)));
-  // Snow rests on high, upward-facing slopes; steep ridges expose cool rock below the cap.
-  float resting = smoothstep(0.42, 0.94, dot(relief,up));
-  float snow = smoothstep(snowLine-0.035, snowLine+0.14, elevation) *
-    (0.08+existingSnow*0.74+ridge*0.54) * (0.40+resting*0.60) * (1.0-ocean);
-  float alpine = smoothstep(snowLine-0.16,snowLine,elevation) * ridge * (1.0-ocean);
-  albedo=mix(albedo,mix(albedo,vec3(0.40,0.43,0.42),0.52),alpine*(1.0-snow));
-  albedo = mix(albedo, vec3(0.91, 0.95, 0.98), clamp(snow,0.0,0.96));
+  vec3 meshNormal=normalize((czm_inverseView*vec4(inputData.normalEC,0.0)).xyz);
+  relief = normalize(mix(relief, meshNormal, 0.76 * (1.0 - ocean)));
+  vec3 face=normalize(cross(dFdx(pos*0.000001),dFdy(pos*0.000001)));
+  face*=sign(dot(face,up));
+  relief=normalize(mix(relief,face,ridge*0.22*(1.0-ocean)));
+  // A clear cap and a separate rock band read at orbital scale. Latitude, altitude, source snow
+  // and actual slope still gate coverage; dry plateaus do not receive a uniform white blanket.
+  float resting = smoothstep(0.40, 0.90, dot(relief,up));
+  // At world-map resolution narrow peaks are averaged down. Lower only rugged snow caps a little,
+  // retaining the latitude band and the source-snow gate rather than whitening entire plateaus.
+  float resolvedSnowLine=snowLine-ridge*0.07;
+  float snow = smoothstep(resolvedSnowLine-0.035,resolvedSnowLine+0.055,elevation) *
+    (0.08+existingSnow*0.82+ridge*0.42) * (0.38+resting*0.62) * (1.0-ocean);
+  float alpine = smoothstep(snowLine-0.20,snowLine-0.015,elevation) * ridge * (1.0-ocean);
+  albedo=mix(albedo,mix(albedo,vec3(0.31,0.35,0.38),0.70),alpine*(1.0-snow));
+  albedo = mix(albedo, vec3(0.96, 0.98, 1.0), clamp(snow,0.0,0.98));
   vec3 L = normalize(sunWC), V = normalize(czm_inverseView[3].xyz - pos);
   float daylight = smoothstep(-0.30, 0.88, dot(up, L));
-  float reliefLight = clamp(0.50 + 0.67 * dot(relief, L), 0.34, 1.18);
+  float reliefLight = clamp(0.50 + 0.71 * dot(relief, L), 0.34, 1.22);
   vec2 cloudUV = wrappedUV(uv + vec2(cloudPhase, 0.0));
   vec2 shadowOffset = vec2(dot(L, east) / max(0.25, cos((uv.y-0.5)*czm_pi)), dot(L, north) * 2.0) * 0.00085 / max(0.3, dot(up,L));
   float cloudShadow = cloudCover(texture(cloudMap, wrappedUV(cloudUV + shadowOffset)).r);
-  vec3 natural = albedo * (0.32 + daylight * 0.80) * mix(reliefLight, 1.0, ocean);
+  vec3 slopeTint=mix(vec3(0.78,0.86,1.04),vec3(1.07,1.025,0.94),smoothstep(-0.1,0.8,dot(relief,L)));
+  vec3 natural = albedo * (0.36 + daylight * 0.83) * mix(slopeTint*reliefLight,vec3(1.0),ocean);
   float valley=clamp(((hE+hW+hN+hS)*0.25-elevation)*8.0,0.0,0.20);
   natural*=1.0-valley*(1.0-ocean);
   vec2 habitat=texture(contactMap,uv).rg;
@@ -89,6 +98,9 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   color += vec3(1.0, 0.61, 0.15) * footprint * (0.36 + day * 0.12);
   float edge = pow(1.0 - max(0.0, dot(up, V)), 5.0);
   color = mix(color, vec3(0.11, 0.40, 0.71), edge * 0.24 * day);
+  // Preserve warm sand / cool snow hues when direct light exceeds display white.
+  float peak=max(color.r,max(color.g,color.b));
+  if(peak>0.90)color*=(0.90+0.10*(1.0-exp(-(peak-0.90)*6.0)))/peak;
   m.diffuse = vec3(0.0); m.emission = clamp(color, 0.0, 1.0); m.alpha = opacity;
   return m;
 }` } });

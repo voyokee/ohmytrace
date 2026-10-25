@@ -1,4 +1,4 @@
-import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-canopy';
+import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-landscape';
 // Opt-in, local diagnostics. No telemetry leaves the browser.
 export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
   if (!new URLSearchParams(location.search).has('perf')) return;
@@ -27,6 +27,11 @@ export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
   shell.addEventListener('toggle',syncControls);syncControls();
   let frames = [], count = 0, last = 0, start = performance.now(), longTasks = 0;
   const history = [];
+  const tracing=new URLSearchParams(location.search).has('trace'),updates=[];
+  const removeUpdates=tracing?viewer.scene.preUpdate.addEventListener(()=>{
+    updates.push({cpu:performance.now(),raf:document.timeline?.currentTime});
+    if(updates.length>240)updates.shift();
+  }):()=>{};
   let observer;
   if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
     observer = new PerformanceObserver(list => { longTasks += list.getEntries().length; });
@@ -34,6 +39,7 @@ export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
   }
   const remove = viewer.scene.postRender.addEventListener(() => {
     const now = performance.now();
+    if(tracing&&updates.length)updates[updates.length-1].render=now;
     if (last && now - last < 250) frames.push(now - last);
     count++;
     last = now;
@@ -54,7 +60,8 @@ export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
     history.push(snapshot);
     if (history.length > 60) history.shift();
     panel.dataset.samples = JSON.stringify(history);
+    if(tracing)panel.dataset.frameTrace=JSON.stringify(updates);
     frames = []; count = 0; longTasks = 0; start = now;
   }, 2000);
-  return () => { clearInterval(timer); remove();gpu.dispose();observer?.disconnect(); shell.remove(); controls.remove(); };
+  return () => { clearInterval(timer); remove();removeUpdates();gpu.dispose();observer?.disconnect(); shell.remove(); controls.remove(); };
 }

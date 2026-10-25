@@ -1,13 +1,13 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-canopy');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-landscape');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js');
 const benchmark=visualBenchmark(location.search);
-const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-canopy');
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-landscape');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-canopy');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-canopy');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-landscape');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-landscape');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -18,7 +18,7 @@ const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
 const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
-const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-canopy'):null;
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-landscape'):null;
 
 /* ================= constants ================= */
 
@@ -736,7 +736,8 @@ function homeView(duration = 2.4) {
   const flight = flightGeneration = cameraDirector.begin('leaving');
   flying = true;
   const focal = viewer.canvas.clientHeight / (2 * Math.tan(viewer.camera.frustum.fovy / 2));
-  const screenRadius = Math.min(viewer.canvas.clientWidth * 0.44, viewer.canvas.clientHeight * 0.435);
+  const screenRadius = Math.min(viewer.canvas.clientWidth * (benchmark.enabled ? 0.44 : 0.45),
+    viewer.canvas.clientHeight * (benchmark.enabled ? 0.435 : 0.48));
   const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
   const altitude = earthRadius * (Math.sqrt(1 + (focal / Math.max(1, screenRadius)) ** 2) - 1);
   viewer.camera.flyTo({

@@ -48,7 +48,10 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
       applyScale();
     },
     tick(now) {
-      const interval=1000/targetFps,elapsed=now-lastTick;
+      // The document timeline shares RAF's timestamp, unaffected by CPU work before preUpdate.
+      // https://www.w3.org/TR/web-animations-1/#document-timelines
+      const stamp=document.timeline?.currentTime,clock=Number.isFinite(stamp)?stamp:now;
+      const interval=1000/targetFps,elapsed=clock-lastTick;
       if(elapsed<interval-1)return false;
       // Keep the cadence anchored across RAF jitter. Resetting the origin to each accepted
       // frame slowly lost 30 Hz slots; skip missed slots without scheduling catch-up frames.
@@ -78,6 +81,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
       } else goodWindows = 0;
     },
     details: () => ({ targetFps, pixelRatio: +(benchmark?1:still ? stillScale : scale).toFixed(2),
-      quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError }),
+      quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError,
+      cadenceClock:Number.isFinite(document.timeline?.currentTime)?'animation':'performance' }),
   };
 }

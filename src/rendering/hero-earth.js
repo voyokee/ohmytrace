@@ -1,11 +1,11 @@
 import {syncCameraSun} from './sunlight.js';
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-canopy';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-landscape';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-canopy';
-import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-canopy';
-import {makeWorldSurface,surfaceGround} from '../scenery/world-surface.js';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-landscape';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-landscape';
+import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-landscape';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-canopy';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-landscape';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -69,6 +69,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   let starImage, materials, textures, error, layers = [], disposed = false;
   let detail = 'preview', upgradeJob;
   let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout,worldDataSource='pending';
+  let worldSurfaceStats={};
   let state = presentationState(0, false), previousHalo = '';
   let surfaceIsolated = false, atmosphereEnabled = true, terrainEnabled=true;
   const handoffs = [];
@@ -82,7 +83,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       // Exclude the polar rows of the equirectangular sky map, where stars are stretched.
       const band=starImage.height*.56,scale = Math.max(w / starImage.width, h / band) * 1.25;
       const iw = starImage.width * scale, ih = band * scale;
-      ctx.globalAlpha = 0.95;ctx.filter='brightness(1.55) contrast(1.24)';
+      ctx.globalAlpha = 0.72;ctx.filter='brightness(1.45) contrast(1.35)';
       ctx.drawImage(starImage,0,starImage.height*.22,starImage.width,band,-iw*.47,-ih*.52,iw,ih);ctx.restore();
     }
     const dark = ctx.createRadialGradient(w * .5, h * .43, h * .2, w * .5, h * .5, Math.max(w, h) * .85);
@@ -125,7 +126,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }catch(error){reject(error);}
     },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-canopy',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-landscape',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
       worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
@@ -133,6 +134,9 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     }).catch(()=>fallback()):fallback();
     worldData.then(({forest,surface})=>{
       if(disposed)return;
+      installSurfaceSampling(heightPixels,plan.constrained,surface.refinements);
+      worldSurfaceStats={worldSurfaceTriangles:surface.indices.length/3,worldSurfaceVertices:surface.positions.length/3,
+        worldMountainCells:surface.refinements.reduce((n,v)=>n+v,0)};
       const geometry=terrainGeometry(surface);
       if(disposed)return;
       const atlas=document.createElement('canvas');atlas.width=forest.contact.width;atlas.height=forest.contact.height;
@@ -192,7 +196,8 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     toggleTerrain() {terrainEnabled=!terrainEnabled;},
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
-      worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF, worldContactMap:textures?.contact.width||0, ...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
+      worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF, worldContactMap:textures?.contact.width||0,
+      ...worldSurfaceStats,...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {
       if (disposed) return;

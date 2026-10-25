@@ -101,3 +101,21 @@ for(let i=0;i<360;i++){rafTime+=[16.2,17.1,16.7][i%3];if(cadence.tick(rafTime))a
 assert.ok(Math.abs(accepted-rafTime/1000*30)<2,'RAF jitter must not drift the phone animation cadence below 30 Hz');
 const delayed=cadence.tick(rafTime+1000);assert.equal(delayed,true);
 assert.equal(cadence.tick(rafTime+1001),false,'A long task must not trigger a burst of catch-up frames');
+
+const animationClock=createRenderPolicy({scene:{globe:{},requestRender(){}}},{mobile:true,reducedMotion:false});
+document.timeline={currentTime:0};let timelineAccepted=0;const acceptedFrames=[];
+for(let i=1;i<=360;i++) {
+ document.timeline.currentTime=i*1000/60-2;
+ if(animationClock.tick(document.timeline.currentTime+[.2,4.9,.3,5.6,1,3.8][i%6])){
+  timelineAccepted++;acceptedFrames.push(i);
+ }
+ assert.equal(animationClock.tick(document.timeline.currentTime+8),false,'Repeated work in one animation frame must not advance the render cadence');
+}
+assert.ok(Math.abs(timelineAccepted-180)<=1);
+assert.ok(acceptedFrames.slice(1).every((n,i)=>n-acceptedFrames[i]===2),'CPU callback offsets must not turn a stable 30 Hz schedule into 50/16 ms alternation');
+assert.equal(animationClock.details().cadenceClock,'animation');
+document.timeline.currentTime=null;
+assert.equal(animationClock.tick(8000),true,'An unavailable animation timeline must fall back to the monotonic CPU clock');
+assert.equal(animationClock.details().cadenceClock,'performance');
+delete document.timeline;
+console.log('PASS: RAF-aligned document clock, CPU-offset independence, same-frame deduplication and inactive-timeline fallback');
