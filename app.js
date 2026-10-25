@@ -1,6 +1,6 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-ridges');
+const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-places');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
 const benchmark=visualBenchmark(location.search);
@@ -11,6 +11,10 @@ const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=2026102
 const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-handoff');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
+const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
+const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-places');
+const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
+const {GEOCODER_VERSION,needsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
 const demoParams=new URLSearchParams(location.search),demoKey=demoParams.get('demo');
@@ -188,7 +192,8 @@ const state = { rows: [], places: {}, sel: null, year: null, playing: false };
 let trips = [], homes = [], typeColors = {};
 let viewer, scene, terrainReady = false;
 let flying = false, flightGeneration = 0, orbit = null, lastInput = 0, pickName = null, playToken = 0;
-let markers = [], arcSource = null, arcEntities = [], originEntity = null;
+let footprintOverlay, mapChooser, markerInfo=new Map(), timelineGroups=new Map();
+let arcSource = null, arcEntities = [], originEntity = null, arcSignature="";
 let geo = { busy: false, done: 0, total: 0, failed: false };
 // name -> { pos, cur, wake }; cur fades toward the target brightness once performance.now() >= wake
 const lights = new Map();
@@ -430,18 +435,20 @@ function originOf(t) {
 }
 
 const byId = id => trips.find(t => t.id === id) || homes.find(h => h.id === id) || null;
-const inYear = t => !state.year || (t.year != null && t.year <= state.year && state.year <= t.endYear);
+const inYear = t => matchesYear(t,state.year);
+const visibleHomes = () => homes.filter(inYear);
 const visibleTrips = () => trips.filter(inYear);
 const located = name => { const p = state.places[name]; return p && p.lat != null; };
 
 /* ================= geocoding ================= */
 
 let lastGeo = 0;
-async function nominatim(q, limit = 6) {
+async function nominatim(q, limit = 6, scope = {}) {
   const wait = lastGeo + 1100 - Date.now(); // public Nominatim allows ~1 request/second
   if (wait > 0) await sleep(wait);
   lastGeo = Date.now();
-  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&accept-language=zh-CN,zh,en&limit=' + limit + '&q=' + encodeURIComponent(q);
+  const params=new URLSearchParams({format:'jsonv2','accept-language':'zh-CN,zh,en',addressdetails:'1',limit:String(limit),q,...scope});
+  const url = 'https://nominatim.openstreetmap.org/search?'+params;
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
@@ -459,7 +466,7 @@ function pickBest(results, core, prov) {
   let best = null, bestScore = -Infinity;
   for (const r of results) {
     const disp = r.display_name || '';
-    if (prov && !disp.includes(prov)) continue;
+    if (!fitsProvince(r,prov)) continue;
     if (coverage(core, disp) < 0.6) continue; // reject fuzzy matches that share almost no characters
     let bonus = CAT_BONUS[r.category] ?? 0;
     if (r.category === 'boundary' && /national_park|protected_area/.test(r.type)) bonus = .5;
@@ -471,17 +478,18 @@ function pickBest(results, core, prov) {
 
 async function autoLocate(name) {
   const prov = detectProvince(name), core = coreName(name, prov);
-  const queries = core !== name ? [name, core] : [name];
+  const queries = placeQueries(name,core,PROVINCES),scope=provinceSearchOptions(prov);
+  const result=(r,status)=>({lat:+r.lat,lon:+r.lon,status,label:r.display_name,countryCode:r.address?.country_code,geocoderVersion:GEOCODER_VERSION});
   try {
     for (const q of queries) {
-      const best = pickBest(await nominatim(q), core, prov);
-      if (best) return { lat: +best.lat, lon: +best.lon, status: 'auto', label: best.display_name };
+      const best = pickBest(await nominatim(q,6,scope), core, name.includes('交界')?null:prov);
+      if (best) return result(best,'auto');
     }
     if (prov) {
-      const r = await nominatim(prov, 1);
-      if (r[0]) return { lat: +r[0].lat, lon: +r[0].lon, status: 'rough', label: r[0].display_name };
+      const best=provinceFallback(await nominatim(prov,6,provinceSearchOptions(prov,true)),prov);
+      if(best)return result(best,'rough');
     }
-    return { status: 'notfound' };
+    return { status: 'notfound',geocoderVersion:GEOCODER_VERSION };
   } catch (e) {
     return null; // network problem: leave unset so a retry picks it up
   }
@@ -489,12 +497,12 @@ async function autoLocate(name) {
 
 async function geocodeMissing() {
   if (geo.busy) return;
-  const todo = placeNames().filter(n => !state.places[n]);
+  const todo = placeNames().filter(n => needsGeocoding(state.places[n]));
   if (!todo.length) return;
   geo = { busy: true, done: 0, total: todo.length, failed: false };
   renderChips();
   for (const n of todo) {
-    if (state.places[n]) { geo.done++; continue; }
+    if (!needsGeocoding(state.places[n])) { geo.done++; continue; }
     const r = await autoLocate(n);
     if (r) { state.places[n] = r; save(); refresh(); } else geo.failed = true;
     geo.done++;
@@ -549,7 +557,7 @@ function initGlobe() {
   cameraDirector = new CameraDirector(viewer);
   window.addEventListener('pagehide', event => {
     if(event.persisted || viewer.isDestroyed())return;
-    removeFrameMetrics?.();terrainPicking.dispose();clearScenery();sceneryManager.dispose();cinematic.dispose();viewer.destroy();
+    removeFrameMetrics?.();footprintOverlay?.dispose();mapChooser?.dispose();terrainPicking.dispose();clearScenery();sceneryManager.dispose();cinematic.dispose();viewer.destroy();
   });
   document.addEventListener('click', () => { lightsAnimating = true; scene.requestRender(); });
 
@@ -666,7 +674,7 @@ function initGlobe() {
   if (metricTools) {
     scene.debugCommandFilter = () => { drawCommands++; return true; };
       removeFrameMetrics=metricTools.attachFrameMetrics(viewer, () => ({ trees: scenery.plants.filter(p=>p.species!=='grass'&&p.species!=='shrub').length, lightSlots: lightCapacity,
-        ...frameTimings, drawCommands, terrainVisible:scene.globe.show,logDepth:scene.logarithmicDepthBuffer,
+        ...frameTimings,...(footprintOverlay?.details()||{}),viewYear:state.year,visibleTrips:visibleTrips().length, drawCommands, terrainVisible:scene.globe.show,logDepth:scene.logarithmicDepthBuffer,
         orbiting:!!orbit,cameraMoving,nativeCameraMoving,...cameraMotion.details(),lightsAnimating,selected:!!state.sel,
         collision:scene.screenSpaceCameraController.enableCollisionDetection,
         terrainMaterial:materialIsolated?'off':scene.globe.material===terrainDaylight?'daylight':'footprint',imageryAnisotropy:mobile?2:4,
@@ -709,7 +717,7 @@ function initGlobe() {
       lightsAnimating = true;
       scene.requestRender();
       const now = performance.now();
-      [...lights.values()].forEach((L, i) => { L.wake = now + i * 420; });
+      [...lights.values()].forEach((L, i) => { L.wake = now + footprintIntroDelay(i,lights.size); });
     }, 2600);
   };
   const check = () => {
@@ -843,8 +851,8 @@ function lightTarget(name) {
   if (!lightsOn) return 0;
   if (replayLit) return replayLit.has(name) ? 1 : 0;
   if (state.year) {
-    const lit = homes.some(h => h.place === name) || visibleTrips().some(t => t.stops.some(s => s.place === name));
-    return lit ? 1 : 0.15;
+    const lit = visibleHomes().some(h => h.place === name) || visibleTrips().some(t => t.stops.some(s => s.place === name));
+    return lit ? 1 : 0;
   }
   return 1;
 }
@@ -1150,111 +1158,67 @@ async function buildVegetation(name, token, signal) {
 }
 
 
-/* ---------- HTML markers ---------- */
+/* ---------- footprint overlay ---------- */
 
-let lastNear = null, markersDirty = true, markerWidth = 0, markerHeight = 0;
-let markerMix = -1, markerRelief = false;
-const markerView = new Cesium.Matrix4();
-const markerOccluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, Cesium.Cartesian3.ZERO);
-const markerScratch = new Cesium.Cartesian3(), markerPosition = new Cesium.Cartesian3(), markerWindow = new Cesium.Cartesian2();
-
+function markerObstacles() {
+  return [$('#brand'),$('#stats'),$('#chips'),$('#toolbar'),$('#timeline'),body.classList.contains('list-open')?$('#list'):null,
+    body.classList.contains('card-open')?$('#card'):null];
+}
 function renderMarkers() {
-  const box = $('#markers');
-  box.innerHTML = '';
-  markers = [];
-  markersDirty = true;
-  if (!viewer) return;
-  syncLights();
-  const byPlace = new Map();
-  for (const t of trips) for (const s of t.stops) {
-    if (!byPlace.has(s.place)) byPlace.set(s.place, { trips: [], home: null });
-    byPlace.get(s.place).trips.push(t);
+  if(!viewer)return;
+  if(!mapChooser)mapChooser=createMapChooser({bottom:()=>$('#timeline').getBoundingClientRect().top-8});
+  if(!footprintOverlay)footprintOverlay=createFootprintOverlay(viewer,{container:$('#markers'),
+    groundHeight:(lon,lat)=>cinematic.groundHeight(lon,lat),obstacles:markerObstacles,
+    onSelect:name=>onMarkerClick(name,markerInfo.get(name)),onCluster:showPlaceCluster,
+    onCameraChange:()=>{if(mapChooser.kind==='places')mapChooser.close();}});
+  syncLights();markerInfo=new Map();
+  for(const t of trips)for(const stop of t.stops) {
+    if(!markerInfo.has(stop.place))markerInfo.set(stop.place,{trips:[],homes:[]});
+    markerInfo.get(stop.place).trips.push(t);
   }
-  for (const h of homes) {
-    if (!byPlace.has(h.place)) byPlace.set(h.place, { trips: [], home: null });
-    const e = byPlace.get(h.place);
-    if (!e.home || (h.kind === 'home' && e.home.kind !== 'home')) e.home = h;
+  for(const h of homes) {
+    if(!markerInfo.has(h.place))markerInfo.set(h.place,{trips:[],homes:[]});
+    markerInfo.get(h.place).homes.push(h);
   }
-  for (const [name, info] of byPlace) {
-    const pos = posOf(name);
-    if (!pos) continue;
-    const el = document.createElement('div');
-    const latest = info.trips[info.trips.length - 1];
-    let cls = 'mk', prefix = '';
-    if (info.home) { cls += ' ' + info.home.kind; prefix = info.home.kind === 'home' ? '现居' : '曾居'; }
-    el.className = cls;
-    el.style.setProperty('--c', latest ? typeColors[latest.type] : HOME_COLOR);
-    el.innerHTML = (info.home ? '<span class="mk-ring"></span>' : '<span class="mk-pulse"></span>') +
-      `<span class="mk-core"></span><span class="mk-label">${prefix ? `<em>${prefix}</em>` : ''}${esc(coreName(name))}</span>`;
-    el.addEventListener('click', e => { e.stopPropagation(); onMarkerClick(name, info); });
-    box.appendChild(el);
-    markers.push({ name, el, pos, trips: info.trips, home: info.home, vis: null, filtered: false });
-  }
-  lastNear = null;
   updateMarkerClasses();
 }
-
-function onMarkerClick(name, info) {
-  const sel = byId(state.sel);
-  if (sel && (sel.kind === 'trip' ? sel.stops.some(s => s.place === name) : sel.place === name)) {
-    flyToPoints([posOf(name)], { close: true, placeName:name });
-    return;
-  }
-  const candidates = info.trips.filter(inYear);
-  const target = candidates[candidates.length - 1] || info.home || info.trips[info.trips.length - 1];
-  if (target) select(target.id);
+function markerTarget(info) {
+  return info?.trips.filter(inYear).at(-1)||info?.homes.filter(inYear).find(h=>h.kind==='home')||info?.homes.find(inYear);
 }
-
+function onMarkerClick(name,info) {
+  const target=markerTarget(info);if(!target)return;
+  const sel=byId(state.sel);
+  if(sel&&(sel.kind==='trip'?sel.stops.some(s=>s.place===name):sel.place===name)) {
+    flyToPoints([posOf(name)],{close:true,placeName:name});return;
+  }
+  select(target.id);
+}
+function showPlaceCluster(names,anchor,element) {
+  pauseOverviewMotion();
+  mapChooser.open({title:`这一带 · ${names.length} 个地点`,subtitle:'放大地图展开足迹，或直接选择地点',anchor,element,
+    items:names.map(name=>{const info=markerInfo.get(name),target=markerTarget(info),count=info.trips.filter(inYear).length,st=statusOf(state.places[name]);
+      return {title:name,meta:(count?`${count} 次旅行`:(target?.kind==='home'?'现居地':'曾居地'))+(st.pending?` · ${st.text}`:''),select:()=>{
+        if(target)select(target.id,{fly:false});flyToPoints([posOf(name)],{placeName:name});
+      }};}),primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
+}
 function updateMarkerClasses() {
-  markersDirty = true;
-  const sel = byId(state.sel);
-  const selPlaces = new Set();
-  if (sel) {
-    if (sel.kind === 'trip') { sel.stops.forEach(s => selPlaces.add(s.place)); if (sel.origin) selPlaces.add(sel.origin.place); }
-    else selPlaces.add(sel.place);
+  if(!footprintOverlay)return;
+  const sel=byId(state.sel),selected=new Set(sel?(sel.kind==='trip'?[...sel.stops.map(s=>s.place),...(sel.origin?[sel.origin.place]:[])]:[sel.place]):[]);
+  const data=[];
+  for(const [name,info]of markerInfo) {
+    const p=state.places[name],position=posOf(name);if(!position)continue;
+    const activeTrips=info.trips.filter(inYear),activeHomes=info.homes.filter(inYear);
+    const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name);
+    data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.kind,
+      active:!!(activeTrips.length||home||chosen),selected:chosen,dim:!!sel&&!chosen,
+      color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:home?300:0)+(latest?.date?.start||0)/1e13});
   }
-  for (const m of markers) {
-    m.filtered = !!state.year && !m.home && !m.trips.some(inYear);
-    m.el.classList.toggle('sel', selPlaces.has(m.name));
-    m.el.classList.toggle('dim', !!sel && !selPlaces.has(m.name));
-  }
-  if (scene) scene.requestRender();
+  footprintOverlay.setItems(data);
 }
-
-function updateMarkers() {
-  if (!markers.length) return;
-  const cam = viewer.camera;
-  const width = viewer.canvas.clientWidth, height = viewer.canvas.clientHeight;
-  const mix = +(viewer.canvas.dataset.earthMix || 0), relief = viewer.canvas.dataset.worldRelief === 'true';
-  if (!markersDirty && mix === markerMix && relief === markerRelief && width === markerWidth && height === markerHeight && Cesium.Matrix4.equals(cam.viewMatrix, markerView)) return;
-  markerMix = mix; markerRelief = relief;
-  markersDirty = false; markerWidth = width; markerHeight = height;
-  Cesium.Matrix4.clone(cam.viewMatrix, markerView);
-  const camPos = cam.positionWC;
-  markerOccluder.cameraPosition = camPos;
-  const near = cam.positionCartographic.height < 1.8e6;
-  const toWin = Cesium.SceneTransforms.worldToWindowCoordinates || Cesium.SceneTransforms.wgs84ToWindowCoordinates;
-  const dir = cam.directionWC;
-  for (const m of markers) {
-    const place = state.places[m.name];
-    if (relief && !m.globalPos) m.globalPos = Cesium.Cartesian3.fromDegrees(place.lon,place.lat,cinematic.groundHeight(place.lon,place.lat)+18000);
-    const position = m.globalPos ? Cesium.Cartesian3.lerp(m.pos,m.globalPos,mix,markerPosition) : m.pos;
-    let vis = !m.filtered && markerOccluder.isPointVisible(position) &&
-      Cesium.Cartesian3.dot(dir, Cesium.Cartesian3.subtract(position, camPos, markerScratch)) > 0;
-    if (vis) {
-      const w=toWin(scene,position,markerWindow);
-      if (w && w.x > -120 && w.x < width + 120 && w.y > -80 && w.y < height + 80)
-        m.nextTransform = `translate3d(${w.x.toFixed(1)}px, ${w.y.toFixed(1)}px, 0)`;
-      else vis = false;
-    }
-    m.nextVisible = vis;
-  }
-  // Finish every projection before writing any DOM style.
-  if (near !== lastNear) { body.classList.toggle('near', near); lastNear = near; }
-  for(const m of markers) {
-    if(m.nextVisible && m.nextTransform !== m.transform) {m.el.style.transform=m.nextTransform;m.transform=m.nextTransform;}
-    if(m.nextVisible !== m.vis) {m.el.style.display=m.nextVisible?'':'none';m.vis=m.nextVisible;}
-  }
+function updateMarkers(){footprintOverlay?.update();}
+function pauseOverviewMotion() {
+  stopPlay();orbit=null;globalSpinUntil=0;lastInput=performance.now();
+  if(flying){flightGeneration=cameraDirector.begin(viewer.camera.positionCartographic.height>2400000?'global':'place');viewer.camera.cancelFlight();flying=false;}
 }
 
 /* ---------- arcs ---------- */
@@ -1271,29 +1235,22 @@ function arcPositions(a, b, n = 72) {
   return out;
 }
 
-function renderArcs() {
-  if (!arcSource) return;
-  arcSource.entities.removeAll();
-  arcEntities = [];
-  originEntity = null;
-  for (const t of trips) {
-    const pts = t.stops.map(s => posOf(s.place)).filter(Boolean);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const e = arcSource.entities.add({
-        polyline: { positions: arcPositions(pts[i], pts[i + 1]), width: 4, arcType: Cesium.ArcType.NONE,
-          material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.22, color: Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(0.8) }) },
-      });
-      arcEntities.push({ trip: t, e });
-    }
-  }
-  updateArcs();
-}
-
+function renderArcs(){arcSignature=null;updateArcs();}
 function updateArcs() {
-  const sel = byId(state.sel);
-  for (const { trip, e } of arcEntities) {
-    e.show = inYear(trip);
-    e.polyline.width = sel && sel.id === trip.id ? 7 : 4;
+  if(!arcSource)return;
+  const sel=byId(state.sel),list=visibleTrips();
+  const wanted=sel?.kind==='trip'?[sel]:state.year!=null&&list.length<=12?list:[];
+  const signature=wanted.map(t=>t.id).join('\u0001');
+  if(signature!==arcSignature) {
+    arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
+    for(const t of wanted) {
+      const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
+      for(let i=1;i<points.length;i++) {
+        const e=arcSource.entities.add({polyline:{positions:arcPositions(points[i-1],points[i]),width:sel?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
+          material:new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
+        arcEntities.push({trip:t,e});
+      }
+    }
   }
   // Dashed arc from where the person lived at the time to the selected trip.
   if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
@@ -1313,11 +1270,13 @@ function updateArcs() {
 
 function refresh() {
   buildModel();
+  if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
   renderStats();
   renderChips();
   renderList();
   renderTimeline();
+  renderYears();
   renderCard();
   renderMarkers();
   renderArcs();
@@ -1326,19 +1285,27 @@ function refresh() {
 }
 
 function renderStats() {
-  const days = trips.reduce((s, t) => s + (t.date && t.date.days || 0), 0);
-  const tripPlaces = new Set(trips.flatMap(t => t.stops.map(s => s.place)));
-  const years = trips.filter(t => t.year).map(t => t.year);
-  const parts = [];
-  if (trips.length) parts.push(`<b>${trips.length}</b> 次旅行`, `<b>${tripPlaces.size}</b> 个地点`);
-  if (days) parts.push(`<b>${days}</b> 天在路上`);
-  if (years.length) {
-    const a = Math.min(...years), b = Math.max(...years);
-    parts.push(a === b ? `<b>${a}</b>` : `<b>${a}</b>–<b>${b}</b>`);
+  const list=visibleTrips(),days=list.reduce((n,t)=>n+scopedDays(t,state.year),0);
+  const places=new Set(list.flatMap(t=>t.stops.map(s=>s.place))),years=yearOptions(list),parts=[];
+  if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
+  parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
+  if(days)parts.push(`<b>${days}</b> 天在路上`);
+  if(state.year==null&&years.length)parts.push(years.length===1?`<b>${years[0]}</b>`:`<b>${years[0]}</b>–<b>${years.at(-1)}</b>`);
+  const current=state.year==null?homes.find(h=>h.kind==='home'):visibleHomes().find(h=>h.kind==='home')||visibleHomes()[0];
+  if(current)parts.push(`<span class="home-stat">${state.year==null?'现居':'当时居住'} <b>${esc(coreName(current.place))}</b></span>`);
+  $('#stats').innerHTML=parts.map(part=>`<span class="stat-item">${part}</span>`).join('<i>·</i>');
+}
+let yearSignature='';
+function renderYears() {
+  const options=yearOptions(trips),signature=options.map(y=>`${y}:${trips.filter(t=>matchesYear(t,y)).length}`).join('|');
+  const el=$('#year-filter');
+  if(signature!==yearSignature||!el.children.length) {
+    const scroll=el.scrollLeft;yearSignature=signature;
+    el.innerHTML=`<button class="year-option" data-act="all-years" aria-label="全部年份，${trips.length} 次旅行" aria-pressed="false">全部<span>${trips.length}</span></button>`+
+      options.map(y=>{const count=trips.filter(t=>matchesYear(t,y)).length;return `<button class="year-option" data-year="${y}" aria-label="按 ${y} 年显示，${count} 次旅行" aria-pressed="false">${y}<span>${count}</span></button>`;}).join('');
+    el.scrollLeft=scroll;
   }
-  const current = homes.find(h => h.kind === 'home');
-  if (current) parts.push(`<span class="home-stat">现居 <b>${esc(coreName(current.place))}</b></span>`);
-  $('#stats').innerHTML = parts.map(part => `<span class="stat-item">${part}</span>`).join('<i>·</i>');
+  for(const button of el.children){const on=button.dataset.year?+button.dataset.year===state.year:state.year==null;button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));}
 }
 
 function statusOf(p) {
@@ -1381,10 +1348,11 @@ function renderList() {
   $('#list-count').textContent = list.length;
   $('#list-filter').innerHTML = state.year
     ? `<span class="filter-chip">仅看 ${state.year}<button data-act="clear-year" aria-label="取消筛选">${ICON.close}</button></span>` : '';
-  const types = Object.keys(typeColors);
+  const types = Object.keys(typeColors).filter(type=>list.some(t=>t.type===type));
   $('#legend').innerHTML = types.length > 1 ? types.map(t => `<span style="--c:${typeColors[t]}"><i></i>${esc(t)}</span>`).join('') : '';
   let html = '<div class="grp"><div class="grp-label">常驻地</div>';
-  html += homes.length ? homes.map(itemHTML).join('')
+  html += visibleHomes().length ? visibleHomes().map(itemHTML).join('')
+    : homes.length&&state.year!=null?'<p class="hint">这一年没有填写居住记录。</p>'
     : '<p class="hint">在表格的「类型」列填 <b>现居地</b> 或 <b>曾居地</b>，日期写居住时段（如 2022-07~至今），就能在地图上标出来。</p>';
   html += '</div>';
   const groups = new Map();
@@ -1398,31 +1366,44 @@ function renderList() {
 }
 
 function renderTimeline() {
-  const dated = trips.filter(t => t.date);
-  $('#timeline').classList.toggle('empty', !dated.length);
-  if (!dated.length) { $('#tl-track').innerHTML = ''; return; }
-  const y0 = Math.min(...dated.map(t => t.year)), y1 = Math.max(...dated.map(t => t.endYear));
-  const T0 = new Date(y0, 0, 1).getTime(), T1 = new Date(y1 + 1, 0, 1).getTime();
-  const P = d => Math.min(100, Math.max(0, (d - T0) / (T1 - T0) * 100));
-  const span = y1 - y0 + 1, step = span > 12 ? Math.ceil(span / 8) : 1;
-  let html = '<div class="tl-rail"></div>';
-  for (const h of homes) {
-    if (!h.date || h.date.end < T0 || h.date.start > T1) continue;
-    const l = P(h.date.start), r = P(h.date.end);
-    html += `<button class="tl-band ${h.kind}${state.sel === h.id ? ' on' : ''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r - l, .6)}%" title="${h.kind === 'home' ? '现居' : '曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
+  const dated=trips.filter(t=>t.date),track=$('#tl-track');timelineGroups=new Map();
+  $('#timeline').classList.toggle('empty',!dated.length);
+  if(!dated.length){track.innerHTML='';return;}
+  const years=yearOptions(dated),y0=state.year??years[0],y1=state.year??years.at(-1);
+  const T0=new Date(y0,0,1).getTime(),T1=new Date(y1+1,0,1).getTime();
+  const P=d=>Math.min(100,Math.max(0,(d-T0)/(T1-T0)*100));
+  const dense=state.year!=null||dated.length>16;track.classList.toggle('dense',dense);
+  track.style.setProperty('--timeline-slots',state.year!=null?12:Math.min(12,years.length));
+  let html='<div class="tl-rail"></div>';
+  for(const h of visibleHomes()) {
+    if(!h.date||h.date.end<T0||h.date.start>T1)continue;
+    const l=P(h.date.start),r=P(h.date.end);
+    html+=`<button class="tl-band ${h.kind}${state.sel===h.id?' on':''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${h.kind==='home'?'现居':'曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
   }
-  for (let y = y0; y <= y1; y++) {
-    if (y > y0) html += `<span class="tl-sep" style="left:${P(new Date(y, 0, 1).getTime())}%"></span>`;
-    if ((y - y0) % step === 0) {
-      const has = dated.some(t => t.year === y);
-      html += `<button class="tl-year${has ? ' has' : ''}${state.year === y ? ' on' : ''}" data-year="${y}" style="left:${P(new Date(y, 6, 1).getTime())}%">${y}</button>`;
+  if(!dense) {
+    for(const y of years)html+=`<button class="tl-year has" data-year="${y}" style="left:${P(new Date(y,6,1).getTime())}%">${y}</button>`;
+    for(const t of dated)html+=`<button class="tl-dot${state.sel===t.id?' on':''}" data-id="${esc(t.id)}" style="left:${P(t.date.start)}%;--c:${typeColors[t.type]}" aria-label="${esc(t.title)}"><span class="tl-tip">${esc(t.title)} · ${esc(t.date.short)}</span></button>`;
+  } else if(state.year==null) {
+    for(const {key,items}of timelineBuckets(dated)) {
+      const x=P(new Date(key,6,1).getTime());
+      html+=`<button class="tl-bucket" data-year="${key}" style="left:${x}%" aria-label="${key} 年，${items.length} 次旅行，按年查看"><span>${items.length}</span></button><button class="tl-year has" data-year="${key}" style="left:${x}%">${key}</button>`;
+    }
+  } else {
+    for(let month=1;month<=12;month++)html+=`<span class="tl-month" style="left:${(month-.5)/12*100}%">${month}月</span>`;
+    for(const {key,items}of timelineBuckets(dated,state.year)) {
+      const id=String(key),on=items.some(t=>t.id===state.sel);timelineGroups.set(id,items);
+      const action=items.length===1?`data-id="${esc(items[0].id)}"`:`data-act="timeline-group" data-group="${id}"`;
+      html+=`<button class="tl-bucket${on?' on':''}" ${action} style="left:${(key-.5)/12*100}%" aria-label="${state.year} 年 ${key} 月，${items.length} 次旅行"><span>${items.length}</span></button>`;
     }
   }
-  for (const t of dated) {
-    const edge = P(t.date.start) > 82 ? ' at-end' : P(t.date.start) < 18 ? ' at-start' : '';
-    html += `<button class="tl-dot${edge}${state.sel === t.id ? ' on' : ''}${inYear(t) ? '' : ' off'}" data-id="${esc(t.id)}" style="left:${P(t.date.start)}%;--c:${typeColors[t.type]}" aria-label="${esc(t.title)}"><span class="tl-tip">${esc(t.title)} · ${esc(t.date.short)}</span></button>`;
-  }
-  $('#tl-track').innerHTML = html;
+  track.innerHTML=html;
+}
+function showTimelineGroup(button) {
+  pauseOverviewMotion();
+  const list=timelineGroups.get(button.dataset.group);if(!list?.length)return;
+  const r=button.getBoundingClientRect();
+  mapChooser.open({title:`${state.year} 年 ${button.dataset.group} 月`,subtitle:`${list.length} 次旅行`,anchor:{x:r.left+r.width/2,y:r.top},element:button,type:'trips',
+    items:list.map(t=>({title:t.title,meta:`${t.date.short} · ${t.stops.length} 个地点`,select:()=>select(t.id)}))});
 }
 
 function stopHTML(place, note, color) {
@@ -1499,15 +1480,14 @@ function step(dir) {
 }
 
 function setYear(y) {
-  state.year = state.year === y ? null : y;
-  const x = byId(state.sel);
-  if (x && x.kind === 'trip' && !inYear(x)) { state.sel = null; renderCard(); }
-  renderList();
-  renderTimeline();
-  updateSelectionUI();
-  if (!state.year) { homeView(); return; }
-  const pts = [...new Set(visibleTrips().flatMap(t => t.stops.map(s => s.place)))].map(n => posOf(n)).filter(Boolean);
-  if (pts.length) flyToPoints(pts, { duration: 2.6 });
+  const next=y==null?null:Number(y);if(next===state.year&&!state.sel&&!flying&&!orbit&&!scenery.name)return;
+  if(next!=null&&!yearOptions(trips).includes(next))return;
+  stopPlay();mapChooser?.close();state.year=next;
+  state.sel=null;renderCard();
+  renderStats();renderYears();renderList();renderTimeline();updateSelectionUI();
+  lightsAnimating=true;scene?.requestRender();
+  // A year is an overview filter. Do not dive into a dense group each time it changes.
+  if(viewer&&(flying||orbit||scenery.name||viewer.camera.positionCartographic.height<4000000))homeView(1.8);
 }
 
 /* ---------- replay ---------- */
@@ -1730,7 +1710,8 @@ function bindEvents() {
       case 'next': step(1); return;
       case 'fix': openModal('places'); return;
       case 'retry': geo.failed = false; geocodeMissing(); return;
-      case 'clear-year': setYear(state.year); return;
+      case 'clear-year': case 'all-years': setYear(null); return;
+      case 'timeline-group': showTimelineGroup(t); return;
       case 'cancel-pick': endPick(); return;
       case 'import': doImport(); return;
       case 'template': download('足迹模板.csv', TEMPLATE_CSV); return;
@@ -1763,7 +1744,13 @@ function bindEvents() {
       if (e.key === 'Enter' && e.target.closest('.search-box')) e.target.closest('.search-row').querySelector('[data-act=do-search]').click();
       return;
     }
+    if(e.target.closest('#year-filter')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
+      const buttons=[...$('#year-filter').children],i=buttons.indexOf(e.target);
+      const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:Math.max(0,Math.min(buttons.length-1,i+(e.key==='ArrowRight'?1:-1)));
+      buttons[next]?.focus();e.preventDefault();return;
+    }
     if (e.key === 'Escape') {
+      if (mapChooser?.close(true)) return;
       if (pickName) endPick();
       else if (body.classList.contains('modal-open')) closeModal();
       else if (state.playing) stopPlay();
@@ -1775,8 +1762,8 @@ function bindEvents() {
 
   $('#btn-home').addEventListener('click', () => { stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
-  $('#btn-list').addEventListener('click', () => body.classList.toggle('list-open'));
-  $('#list-close').addEventListener('click', () => body.classList.remove('list-open'));
+  $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
+  $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
   $('#btn-data').addEventListener('click', () => openModal(pendingPlaces().length ? 'places' : 'import'));
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });

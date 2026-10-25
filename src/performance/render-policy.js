@@ -89,3 +89,5 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
       cadenceClock:Number.isFinite(document.timeline?.currentTime)?'animation':'performance' }),
   };
 }
+// Small journals retain the original rhythm; large imports finish within one intro.
+export const footprintIntroDelay=(index,count)=>Math.max(0,index)*Math.min(420,3200/Math.max(1,count-1));
