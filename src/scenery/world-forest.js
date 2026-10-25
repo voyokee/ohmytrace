@@ -1,4 +1,4 @@
-import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-landscape';
+import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-groves';
 export function createWorldForest(viewer,forest,{constrained=false,createModel=makeVegetationModel,loadAssets=preloadVegetation}={}) {
   const shader=vegetationShader({world:true}),live=new Map(),staging=new Map(),pending=new Map(),retries=new Map();
   const controller=new AbortController(),maxChunks=constrained?12:28,maxDetailed=constrained?0:4;
@@ -92,7 +92,7 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
     },
     details:()=>({worldTrees:[...live.values()].reduce((n,e)=>n+(e.model.ready?e.chunk.plants.length:0),0),
       worldReady:settled,worldChunks:live.size,worldStaging:staging.size,worldDetailed:[...live.values()].filter(e=>!e.low).length,
-      worldPending:pending.size,worldCandidates:forest.count,worldBiomes:forest.biomes,worldFailures:failures}),
+      worldPending:pending.size,worldCandidates:forest.count,worldBiomes:forest.biomes,worldCanopy:forest.canopy,worldFailures:failures}),
     dispose(){disposed=true;controller.abort();clear();shader.destroy();},
   };
 }

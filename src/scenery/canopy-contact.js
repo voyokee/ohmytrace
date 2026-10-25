@@ -1,5 +1,5 @@
 import {steppeWeight} from './world-biomes.js';
-import {mapPixel,elevationAt} from './world-elevation.js';
+import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-groves';
 // Once-per-world CPU bake, normally in the Worker. One small texture sample replaces thousands
 // of dynamic shadow casters. Geographic radius follows the actual instanced crown footprint.
 export function makeCanopyContact(forest,{constrained=false,dayMap,heightMap}={}) {

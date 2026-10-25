@@ -1,6 +1,7 @@
 export const WORLD_RELIEF = 30;
 export const WORLD_BASE = 12000;
-export const WORLD_RIDGE_RELIEF = 36;
+export const WORLD_RIDGE_RELIEF = 72;
+export const WORLD_RIDGE_MAX = 150000;
 const RAD = Math.PI / 180, R = 6378137, E2 = 0.00669437999014;
 export function geographicPosition(lon, lat, height = 0) {
   const a = lon * RAD, b = lat * RAD, c = Math.cos(b), s = Math.sin(b);
@@ -26,5 +27,5 @@ export function worldHeight(map,lon,lat) {
   const mean=(elevationAt(map,lon-step,lat)+elevationAt(map,lon+step,lat)+
     elevationAt(map,lon,lat-step)+elevationAt(map,lon,lat+step))*.25;
   const upland=Math.min(1,Math.max(0,(h-250)/800));
-  return WORLD_BASE+h*WORLD_RELIEF+Math.max(0,h-mean)*WORLD_RIDGE_RELIEF*upland;
+  return WORLD_BASE+h*WORLD_RELIEF+Math.min(WORLD_RIDGE_MAX,Math.max(0,h-mean)*WORLD_RIDGE_RELIEF*upland);
 }

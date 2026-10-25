@@ -1,4 +1,4 @@
-import {preloadVegetation,makeVegetationModel,vegetationShader,vegetationDistanceBands} from './instanced-vegetation.js?v=20261025-landscape';
+import {preloadVegetation,makeVegetationModel,vegetationShader,vegetationDistanceBands} from './instanced-vegetation.js?v=20261025-groves';
 import {EffectManager} from './effect-manager.js';
 import {sceneTemplateFor} from './scene-templates.js';
 export class SceneryManager {

@@ -1,11 +1,11 @@
 import {syncCameraSun} from './sunlight.js';
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-landscape';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-groves';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-landscape';
-import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, random } from '../scenery/world-data.js?v=20261025-landscape';
-import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-landscape';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-groves';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261025-groves';
+import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-groves';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-landscape';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-groves';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -126,7 +126,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }catch(error){reject(error);}
     },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-landscape',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-groves',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
       worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
@@ -196,7 +196,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     toggleTerrain() {terrainEnabled=!terrainEnabled;},
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
-      worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF, worldContactMap:textures?.contact.width||0,
+      worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF,worldRidgeMax:WORLD_RIDGE_MAX, worldContactMap:textures?.contact.width||0,
       ...worldSurfaceStats,...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {

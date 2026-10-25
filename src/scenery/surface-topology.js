@@ -1,4 +1,4 @@
-import {elevationAt} from './world-elevation.js';
+import {elevationAt} from './world-elevation.js?v=20261025-groves';
 export const worldSurfacePlan=constrained=>constrained?{rows:128,columns:256}:{rows:320,columns:640};
 
 // Spend vertices on DEM relief rather than uniformly subdividing oceans and flat plateaus.

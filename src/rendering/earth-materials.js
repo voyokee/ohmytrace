@@ -60,15 +60,17 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   relief = normalize(mix(relief, meshNormal, 0.76 * (1.0 - ocean)));
   vec3 face=normalize(cross(dFdx(pos*0.000001),dFdy(pos*0.000001)));
   face*=sign(dot(face,up));
-  relief=normalize(mix(relief,face,ridge*0.22*(1.0-ocean)));
+  float alpineMass=smoothstep(snowLine-0.20,snowLine,elevation);
+  relief=normalize(mix(relief,face,ridge*(0.18+alpineMass*0.46)*(1.0-ocean)));
   // A clear cap and a separate rock band read at orbital scale. Latitude, altitude, source snow
   // and actual slope still gate coverage; dry plateaus do not receive a uniform white blanket.
   float resting = smoothstep(0.40, 0.90, dot(relief,up));
   // At world-map resolution narrow peaks are averaged down. Lower only rugged snow caps a little,
   // retaining the latitude band and the source-snow gate rather than whitening entire plateaus.
-  float resolvedSnowLine=snowLine-ridge*0.07;
+  float resolvedSnowLine=snowLine-ridge*0.10;
   float snow = smoothstep(resolvedSnowLine-0.035,resolvedSnowLine+0.055,elevation) *
-    (0.08+existingSnow*0.82+ridge*0.42) * (0.38+resting*0.62) * (1.0-ocean);
+    (0.08+existingSnow*0.82+ridge*0.68) * (0.38+resting*0.62) * (1.0-ocean);
+  snow=clamp(snow*(1.0+alpineMass*0.35),0.0,0.98);
   float alpine = smoothstep(snowLine-0.20,snowLine-0.015,elevation) * ridge * (1.0-ocean);
   albedo=mix(albedo,mix(albedo,vec3(0.31,0.35,0.38),0.70),alpine*(1.0-snow));
   albedo = mix(albedo, vec3(0.96, 0.98, 1.0), clamp(snow,0.0,0.98));

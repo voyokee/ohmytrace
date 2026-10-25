@@ -1,10 +1,10 @@
 import {worldCanopyVertexShader} from './canopy-shader.js';
-import { instantiateVegetation } from './vegetation-assets.js?v=20261025-landscape';
-import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-landscape';
+import { instantiateVegetation } from './vegetation-assets.js?v=20261025-groves';
+import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-groves';
 const libraries = new Map();
 export function preloadVegetation(low=false) {
   const key=low?'vegetation-low.glb':'vegetation.glb';
-  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-landscape',import.meta.url))
+  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-groves',import.meta.url))
     .then(r=>{if(!r.ok)throw new Error('Vegetation asset HTTP '+r.status);return r.arrayBuffer();})
     .then(buffer=>new Uint8Array(buffer)).catch(error=>{libraries.delete(key);throw error;}));
   return libraries.get(key);
@@ -41,9 +41,10 @@ export function vegetationShader({wind=false,world=false}={}) {
       material.diffuse=mix(material.diffuse,vec3(0.46,0.29,0.035),autumn*0.68);
       material.diffuse*=0.90+0.17*(canopyVariation*.5+.5);`:''}
       float sun=max(0.0,dot(normalize(fsInput.attributes.normalEC),u_sun));
-      float light=0.44+sun*0.94;
+      float light=0.44+sun*${world?'1.30':'0.94'};
       vec3 leafLight=mix(vec3(0.83,0.94,1.02),vec3(1.16,1.09,0.86),sun);
       float tips=fsInput.attributes.texCoord_1.y*smoothstep(0.42,0.97,fsInput.attributes.texCoord_0.x)*sun;
+      ${world?'material.diffuse+=vec3(0.035,0.020,0.002)*tips*sun;':''}
       material.diffuse *= leafLight*light*(1.0+tips*0.16)*mix(0.12,1.0,u_day);
       material.emissive=vec3(0.0);
     }`});

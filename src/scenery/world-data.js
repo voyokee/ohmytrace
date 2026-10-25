@@ -1,7 +1,8 @@
-import {surfaceGround} from './world-surface.js?v=20261025-landscape';
-import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-landscape';
-import {mapPixel,elevationAt} from './world-elevation.js';
-export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js';
+import {surfaceGround} from './world-surface.js?v=20261025-groves';
+import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-groves';
+import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-groves';
+import {shapeWorldPlant} from './forest-form.js';
+export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-groves';
 const RAD=Math.PI/180;
 export function random(seed) {
   return () => { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);
@@ -19,10 +20,11 @@ export function urbanCore(nightMap,lon,lat) {
   // Only the bright cores of the existing city-light map, not every rural light.
   return r>.48 && g>.30 && b>.13;
 }
-export function makeWorldForest(dayMap, heightMap, { constrained = false, maxInstances = constrained ? 6000 : 20000, nightMap } = {}) {
+export function makeWorldForest(dayMap, heightMap, { constrained = false, maxInstances = constrained ? 6000 : 20000, nightMap,canopy=true } = {}) {
   const rnd = random(47193), chunks = new Map();
   const step = constrained ? .96 : .48;
   const biomes={};
+  const canopyStats={enabled:canopy,clearings:0,upper:0,coastal:0,exposed:0};
   let count = 0;
   for (let lat = -58; lat < 73; lat += step) {
     const lonStep = step / Math.max(0.4, Math.cos(lat * RAD));
@@ -38,13 +40,20 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
       else if(species==='broadleaf'&&Math.abs(y)>26&&h>450&&rnd()<.30)species='spruce';
       const cx = Math.floor((x + 180) / 24) * 24 - 168, cy = Math.floor((y + 90) / 18) * 18 - 81;
       const key = `${cx}:${cy}`;
-      if (!chunks.has(key)) chunks.set(key, { key, lon: cx, lat: cy, plants: [] });
-      chunks.get(key).plants.push({ lon: x, lat: y, ground: surfaceGround(heightMap,x,y,constrained),
+      const original={ lon: x, lat: y,
         species, height: biome.height * (.64 + patch*.30 + rnd()*.48),
         width: biome.width * (.82 + rnd()*.36) * (species==='spruce'&&biome.species!=='spruce'?.74:1),
-        angle: rnd() * Math.PI * 2, aspect:.80+rnd()*.40 });
+        angle: rnd() * Math.PI * 2, aspect:.80+rnd()*.40 };
+      // Consume the same placement randoms even for clearings, so later cells do not relocate.
+      const shaped=canopy?shapeWorldPlant(original,biome,heightMap):{plant:original};
+      if(!shaped.plant){canopyStats.clearings++;continue;}
+      if(shaped.layer==='upper')canopyStats.upper++;
+      if(shaped.coastal)canopyStats.coastal++;
+      if(shaped.exposed)canopyStats.exposed++;
+      if (!chunks.has(key)) chunks.set(key, { key, lon: cx, lat: cy, plants: [] });
+      chunks.get(key).plants.push({...shaped.plant,ground:surfaceGround(heightMap,x,y,constrained)});
       count++;biomes[biome.id]=(biomes[biome.id]||0)+1;
     }
   }
-  return { chunks: [...chunks.values()], count, biomes };
+  return { chunks: [...chunks.values()], count, biomes,canopy:canopyStats };
 }
