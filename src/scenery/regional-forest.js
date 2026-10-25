@@ -1,5 +1,5 @@
-import {regionalState,regionalAnchor,regionalPlants} from './regional-forest-data.js?v=20261025-ridges';
-import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261025-ridges';
+import {regionalState,regionalAnchor,regionalPlants,REGIONAL_MAX_HEIGHT} from './regional-forest-data.js?v=20261025-handoff';
+import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261025-handoff';
 const aborted=()=>new DOMException('Regional forest cancelled','AbortError');
 function waitReady(model,signal) {
   if(model.ready)return Promise.resolve();
@@ -34,6 +34,20 @@ export class RegionalForest {
   start() {
     if(this.wanted.key!==this.key&&!this.pending&&this.sets.length<2&&this.now>=(this.retryAfter||0))this.build(this.wanted);
   }
+  target(focus,now,altitude) {
+    if(focus)return focus;
+    // Manual zooms have no destination height. Use the loaded native terrain, at the
+    // same bounded cadence as placement, instead of treating the ellipsoid as ground.
+    if(now-(this.pickNow??-Infinity)>=600) {
+      this.pickNow=now;
+      const cam=this.viewer.camera,screen=new Cesium.Cartesian2(this.viewer.canvas.clientWidth/2,this.viewer.canvas.clientHeight/2);
+      // Orbital-scale roots do not need metre-level ground correction. Avoid indexing
+      // large terrain tiles just for the tiny angular change at hundreds of kilometres.
+      const ray=altitude<20000?cam.getPickRay?.(screen):undefined;
+      this.picked=(ray&&this.viewer.scene.globe?.pick(ray,this.viewer.scene))||cam.pickEllipsoid(screen);
+    }
+    return this.picked;
+  }
   update({altitude,day,now,focus,month=8,localReady=false}) {
     if(this.disposed||!this.supported)return;this.now=now;
     if(altitude>=4000000){
@@ -41,7 +55,7 @@ export class RegionalForest {
       if(focus){this.preload(focus,month,now);for(const set of this.sets)for(const m of set.models)m.show=false;}
       else this.clear();return;
     }
-    const cam=this.viewer.camera,picked=focus||cam.pickEllipsoid(new Cesium.Cartesian2(this.viewer.canvas.clientWidth/2,this.viewer.canvas.clientHeight/2));
+    const picked=this.target(focus,now,altitude);
     if(!picked){this.clear();return;}
     const ground=Math.max(0,Cesium.Cartographic.fromCartesian(picked).height);
     const state=this.state=regionalState(altitude,{localReady,ground});
@@ -50,7 +64,7 @@ export class RegionalForest {
     if(now-this.lastCheck>600){this.lastCheck=now;this.want(this.request(picked,state.radius,month));this.start();}
     const elapsed=Math.max(0,Math.min(1000,now-(this.previousNow??now)));this.previousNow=now;
     this.opacity=(this.opacity||0)+(state.opacity-(this.opacity||0))*(1-Math.exp(-elapsed/180));
-    this.shader.setUniform('u_day',day);this.shader.setUniform('u_canopyScale',state.treeHeight/6000);
+    this.shader.setUniform('u_day',day);this.shader.setUniform('u_canopyScale',state.treeHeight/REGIONAL_MAX_HEIGHT);
     this.shader.setUniform('u_autumn',Math.abs(this.wanted.anchor.lat)>40&&(month===9||month===10)?1:0);
     let changed=false;
     for(const set of this.sets) {
@@ -74,11 +88,11 @@ export class RegionalForest {
     try {
       const candidates=regionalPlants(this.maps,request.anchor,request.radius,{limit:this.limit});
       const points=candidates.map(p=>Cesium.Cartographic.fromDegrees(p.lon,p.lat));
-      const level=request.radius>200000?8:request.radius>50000?10:12;
+      const level=request.radius>800000?6:request.radius>200000?8:request.radius>50000?10:request.radius>10000?12:14;
       if(points.length)await this.survey(level,points);
       if(this.disposed||generation!==this.generation||this.wanted?.key!==request.key)throw aborted();
       const plants=candidates.flatMap((p,i)=>Number.isFinite(points[i].height)&&points[i].height>15&&points[i].height<p.treeline?
-        [{...p,ground:points[i].height*request.exaggeration+.3,height:6000*p.variation,width:.8,angle:p.variation*19}]:[]);
+        [{...p,ground:points[i].height*request.exaggeration+.3,height:REGIONAL_MAX_HEIGHT*p.variation,width:.8,angle:p.variation*19}]:[]);
       const chunks=new Map();
       for(const p of plants) {
         const dx=((p.lon-request.anchor.lon+540)%360)-180,key=`${dx>0}:${p.lat>request.anchor.lat}`;
@@ -115,6 +129,7 @@ export class RegionalForest {
     regionalModels:this.sets.reduce((n,e)=>n+e.models.length,0),regionalStaging:this.building.length,
     regionalPending:!!this.pending,regionalReady:!!this.key&&this.key===this.wanted?.key&&!this.pending,
     regionalOpacity:+(this.opacity||0).toFixed(3),regionalRadius:this.wanted?.radius||0,regionalFailures:this.failures,
+    regionalTreeHeight:this.state?.active?Math.round(this.state.treeHeight):0,
     regionalLayers:this.sets.map(e=>({radius:e.radius,level:e.level,instances:e.plants.length,retiring:!!e.retiring}))};}
   dispose(){this.disposed=true;this.clear();this.shader.destroy();}
 }

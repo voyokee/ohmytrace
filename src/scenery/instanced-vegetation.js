@@ -10,6 +10,7 @@ export function preloadVegetation(low=false) {
   return libraries.get(key);
 }
 export function vegetationShader({wind=false,world=false,regional=false}={}) {
+  const miniature=world||regional;
   const shapeVariation=(world||regional)&&Cesium.VERSION==='1.120';
   const direction=new Cesium.Cartesian3(...SUN_EC);Cesium.Cartesian3.normalize(direction,direction);
   return new Cesium.CustomShader({lightingModel:Cesium.LightingModel.UNLIT,
@@ -42,10 +43,10 @@ export function vegetationShader({wind=false,world=false,regional=false}={}) {
       material.diffuse=mix(material.diffuse,vec3(0.46,0.29,0.035),autumn*0.68);
       material.diffuse*=0.90+0.17*(canopyVariation*.5+.5);`:''}
       float sun=max(0.0,dot(normalize(fsInput.attributes.normalEC),u_sun));
-      float light=${world?'0.35+sun*1.65':'0.44+sun*0.94'};
+      float light=${miniature?'0.35+sun*1.65':'0.44+sun*0.94'};
       vec3 leafLight=mix(vec3(0.83,0.94,1.02),vec3(1.16,1.09,0.86),sun);
       float tips=fsInput.attributes.texCoord_1.y*smoothstep(0.42,0.97,fsInput.attributes.texCoord_0.x)*sun;
-      ${world?'material.diffuse+=vec3(0.035,0.020,0.002)*tips*sun;':''}
+      ${miniature?'material.diffuse+=vec3(0.035,0.020,0.002)*tips*sun;':''}
       material.diffuse *= leafLight*light*(1.0+tips*0.16)*mix(0.12,1.0,u_day);
       material.emissive=vec3(0.0);
     }`});

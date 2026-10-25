@@ -2,13 +2,13 @@
 'use strict';
 const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-ridges');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
-const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-ridges');
+const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
 const benchmark=visualBenchmark(location.search);
 const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-ridges');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-ridges');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-ridges');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-handoff');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-handoff');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -748,7 +748,7 @@ function homeView(duration = 2.4) {
   const altitude = benchmark.altitude??earthRadius * (Math.sqrt(1 + (focal / Math.max(1, screenRadius)) ** 2) - 1);
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(comparisonView?.lon??c.lon-30, comparisonView?.lat??c.lat-4, altitude),
-    orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    orientation: { heading: 0, pitch: benchmark.pitch, roll: 0 },
     duration,
     complete: () => { if (flight === flightGeneration) { flying = false; cameraDirector.finish(flight,'global'); globalSpinUntil = benchmark.enabled?0:performance.now() + 8000; } },
     cancel: () => { if (flight === flightGeneration) flying = false; },

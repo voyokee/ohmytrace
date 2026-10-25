@@ -1,4 +1,4 @@
-import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-ridges';
+import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-handoff';
 export function createWorldForest(viewer,forest,{constrained=false,createModel=makeVegetationModel,loadAssets=preloadVegetation}={}) {
   const shader=vegetationShader({world:true}),live=new Map(),staging=new Map(),pending=new Map(),retries=new Map();
   const controller=new AbortController(),maxChunks=constrained?12:28,maxDetailed=constrained?0:4;

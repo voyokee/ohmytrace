@@ -5,8 +5,9 @@ import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=202
 import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261025-ridges';
 import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-ridges';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-ridges';
-import {RegionalForest} from '../scenery/regional-forest.js?v=20261025-ridges';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-handoff';
+import {RegionalForest} from '../scenery/regional-forest.js?v=20261025-handoff';
+import {regionalWorldScale} from '../scenery/regional-forest-data.js?v=20261025-handoff';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -225,7 +226,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       viewer.canvas.dataset.worldDataSource=worldDataSource;
       viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
       if(worldForest) {
-        worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? .08+.92*state.mix : 1});
+        worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? regionalWorldScale(altitude) : 1});
         if(materials)materials.surface.uniforms.canopyMix=Math.min(1,worldForest.details().worldTrees/1000);
         viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
         viewer.canvas.dataset.worldReady=String(worldForest.details().worldReady);
