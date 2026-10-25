@@ -1,8 +1,8 @@
-import {surfaceGround} from './world-surface.js?v=20261025-boughs';
-import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-boughs';
-import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-boughs';
+import {surfaceGround} from './world-surface.js?v=20261025-horizon';
+import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-horizon';
+import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-horizon';
 import {shapeWorldPlant} from './forest-form.js';
-export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-boughs';
+export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-horizon';
 const RAD=Math.PI/180;
 export function random(seed) {
   return () => { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);

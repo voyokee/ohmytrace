@@ -1,5 +1,5 @@
-import {habitatNoise} from './world-biomes.js?v=20261025-boughs';
-import {elevationAt} from './world-elevation.js?v=20261025-boughs';
+import {habitatNoise} from './world-biomes.js?v=20261025-horizon';
+import {elevationAt} from './world-elevation.js?v=20261025-horizon';
 // Regional crown architecture: a lower canopy, occasional emergents, and coherent openings.
 // The eligibility map still owns where a forest may exist. No new candidates or mesh copies.
 export const FOREST_FORMS=Object.freeze({

@@ -17,7 +17,11 @@ void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
   float band=0.5+0.5*sin(h*11.0+seed*6.2831853);
   float width=1.0-(0.10+seed*0.22)*band*flexibility*smoothstep(0.18,0.65,h);
   float height=0.90+seed*0.10;
-  vsOutput.positionMC=root+(offset-up*z)*width+up*z*height;
+  // A far-side root can be hidden by Earth while its exaggerated crown pokes into space.
+  // Collapse towards that same root near the geodetic horizon; front-facing trees stay full.
+  vec3 toEye=czm_inverseModelView[3].xyz-root;
+  float horizon=smoothstep(0.02,0.18,dot(up,toEye)/max(length(toEye),0.0001));
+  vsOutput.positionMC=root+((offset-up*z)*width+up*z*height)*horizon;
   v_canopySeed=seed;
   #endif
 }`;

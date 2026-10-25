@@ -1,4 +1,4 @@
-import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-boughs';
+import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-horizon';
 // Opt-in, local diagnostics. No telemetry leaves the browser.
 export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
   if (!new URLSearchParams(location.search).has('perf')) return;
