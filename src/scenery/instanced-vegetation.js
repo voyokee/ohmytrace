@@ -1,22 +1,23 @@
-import {worldCanopyVertexShader} from './canopy-shader.js?v=20261025-horizon';
-import { instantiateVegetation } from './vegetation-assets.js?v=20261025-horizon';
-import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-horizon';
+import {worldCanopyVertexShader,regionalCanopyVertexShader} from './canopy-shader.js?v=20261025-regional';
+import { instantiateVegetation } from './vegetation-assets.js?v=20261025-regional';
+import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-regional';
 const libraries = new Map();
 export function preloadVegetation(low=false) {
   const key=low?'vegetation-low.glb':'vegetation.glb';
-  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-horizon',import.meta.url))
+  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-regional',import.meta.url))
     .then(r=>{if(!r.ok)throw new Error('Vegetation asset HTTP '+r.status);return r.arrayBuffer();})
     .then(buffer=>new Uint8Array(buffer)).catch(error=>{libraries.delete(key);throw error;}));
   return libraries.get(key);
 }
-export function vegetationShader({wind=false,world=false}={}) {
-  const shapeVariation=world&&Cesium.VERSION==='1.120';
+export function vegetationShader({wind=false,world=false,regional=false}={}) {
+  const shapeVariation=(world||regional)&&Cesium.VERSION==='1.120';
   const direction=new Cesium.Cartesian3(...SUN_EC);Cesium.Cartesian3.normalize(direction,direction);
   return new Cesium.CustomShader({lightingModel:Cesium.LightingModel.UNLIT,
     uniforms:{u_sun:{type:Cesium.UniformType.VEC3,value:direction},u_day:{type:Cesium.UniformType.FLOAT,value:1},
+      u_canopyScale:{type:Cesium.UniformType.FLOAT,value:1},
       u_autumn:{type:Cesium.UniformType.FLOAT,value:0},u_snow:{type:Cesium.UniformType.FLOAT,value:0},
       u_time:{type:Cesium.UniformType.FLOAT,value:0}},
-    ...(shapeVariation?{varyings:{v_canopySeed:Cesium.VaryingType.FLOAT},vertexShaderText:worldCanopyVertexShader}:wind?{vertexShaderText:`void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+    ...(shapeVariation?{varyings:{v_canopySeed:Cesium.VaryingType.FLOAT},vertexShaderText:regional?regionalCanopyVertexShader:worldCanopyVertexShader}:wind?{vertexShaderText:`void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
       float h=clamp(vsInput.attributes.texCoord_0.x,0.0,1.0);
       float phase=dot(vsInput.attributes.positionMC.xy,vec2(0.001,0.0015));
       vsOutput.positionMC.xy += vec2(0.35,0.18)*h*h*sin(u_time*0.8+phase);
@@ -41,7 +42,7 @@ export function vegetationShader({wind=false,world=false}={}) {
       material.diffuse=mix(material.diffuse,vec3(0.46,0.29,0.035),autumn*0.68);
       material.diffuse*=0.90+0.17*(canopyVariation*.5+.5);`:''}
       float sun=max(0.0,dot(normalize(fsInput.attributes.normalEC),u_sun));
-      float light=0.44+sun*${world?'1.30':'0.94'};
+      float light=${world?'0.35+sun*1.65':'0.44+sun*0.94'};
       vec3 leafLight=mix(vec3(0.83,0.94,1.02),vec3(1.16,1.09,0.86),sun);
       float tips=fsInput.attributes.texCoord_1.y*smoothstep(0.42,0.97,fsInput.attributes.texCoord_0.x)*sun;
       ${world?'material.diffuse+=vec3(0.035,0.020,0.002)*tips*sun;':''}
@@ -51,7 +52,7 @@ export function vegetationShader({wind=false,world=false}={}) {
 }
 export const vegetationDistanceBands=constrained=>constrained?[{low:true,near:0,far:9000}]:
   [{low:false,near:0,far:2800},{low:true,near:2800,far:9000}];
-export async function makeVegetationModel(viewer,chunk,{low=false,shader,signal,near=0,far}={}) {
+export async function makeVegetationModel(viewer,chunk,{low=false,shader,signal,near=0,far,regional=false}={}) {
   const library=await preloadVegetation(low);signal?.throwIfAborted();
   const origin=Cesium.Cartesian3.fromDegrees(chunk.lon,chunk.lat,chunk.height||0);
   const matrix=Cesium.Transforms.eastNorthUpToFixedFrame(origin),inverse=Cesium.Matrix4.inverseTransformation(matrix,new Cesium.Matrix4());
@@ -73,7 +74,7 @@ export async function makeVegetationModel(viewer,chunk,{low=false,shader,signal,
     rotations:new Float32Array(g.r),scales:new Float32Array(g.s)}));
   // A unique resource identity is essential: Cesium caches buffer views by resource URL. Passing
   // different in-memory GLBs with the same empty basePath can reuse another chunk's instance buffers.
-  const url=URL.createObjectURL(new Blob([instantiateVegetation(library,groups)],{type:'model/gltf-binary'}));
+  const url=URL.createObjectURL(new Blob([instantiateVegetation(library,groups,{sourcePosition:regional})],{type:'model/gltf-binary'}));
   let model;
   try {model=await Cesium.Model.fromGltfAsync({url,modelMatrix:matrix,
     upAxis:Cesium.Axis.Z,forwardAxis:Cesium.Axis.X,customShader:shader,allowPicking:false,

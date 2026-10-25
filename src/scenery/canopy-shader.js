@@ -21,7 +21,22 @@ void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
   // Collapse towards that same root near the geodetic horizon; front-facing trees stay full.
   vec3 toEye=czm_inverseModelView[3].xyz-root;
   float horizon=smoothstep(0.02,0.18,dot(up,toEye)/max(length(toEye),0.0001));
-  vsOutput.positionMC=root+((offset-up*z)*width+up*z*height)*horizon;
+  vsOutput.positionMC=root+((offset-up*z)*width+up*z*height)*horizon*u_canopyScale;
   v_canopySeed=seed;
+  #endif
+}`;
+
+// The alias shares the existing POSITION accessor, so it adds no vertex buffer. Cesium 1.120
+// runs its approximate vertical-exaggeration stage before custom shaders. Reconstruct regional
+// instances from their original local coordinates; sampled root heights are exaggerated on CPU.
+export const regionalCanopyVertexShader=`
+void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+  v_canopySeed=0.5;
+  #ifdef HAS_INSTANCING
+  mat4 frame=getInstancingTransform();
+  vec3 root=frame[3].xyz;
+  vec3 point=(frame*vec4(vsInput.attributes.source_position,1.0)).xyz;
+  vsOutput.positionMC=root+(point-root)*u_canopyScale;
+  v_canopySeed=fract(length(frame[2].xyz)*0.000173);
   #endif
 }`;

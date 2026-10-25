@@ -8,7 +8,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
   let still = false, near = false;
   let samples = [], costs = [], lastFrame = 0, lastChange = performance.now(), goodWindows = 0;
   let wasRunning = true;
-  let lastTick = 0;
+  let tickOrigin, lastSlot = 0;
   const applyScale = () => {
     const pixels = benchmark?1:still ? stillScale : scale;
     viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
@@ -51,11 +51,15 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
       // The document timeline shares RAF's timestamp, unaffected by CPU work before preUpdate.
       // https://www.w3.org/TR/web-animations-1/#document-timelines
       const stamp=document.timeline?.currentTime,clock=Number.isFinite(stamp)?stamp:now;
-      const interval=1000/targetFps,elapsed=clock-lastTick;
-      if(elapsed<interval-1)return false;
-      // Keep the cadence anchored across RAF jitter. Resetting the origin to each accepted
-      // frame slowly lost 30 Hz slots; skip missed slots without scheduling catch-up frames.
-      lastTick+=Math.max(1,Math.floor((elapsed+1)/interval))*interval;
+      const interval=1000/targetFps;
+      // Anchor to an observed update rather than the document's arbitrary zero phase.
+      // A quarter-slot allowance keeps 1–3 ms RAF jitter away from the acceptance edge;
+      // otherwise a 30 Hz schedule can alternate 50/16 ms while still averaging 30 FPS.
+      if(tickOrigin===undefined){tickOrigin=clock;return true;}
+      const slot=Math.floor((clock-tickOrigin+interval*.25)/interval);
+      if(slot<=lastSlot)return false;
+      // Skip missed slots after a long task; never render a burst to catch up.
+      lastSlot=slot;
       return true;
     },
     // Only sample during continuous animation. An intentional idle gap is not a slow frame.

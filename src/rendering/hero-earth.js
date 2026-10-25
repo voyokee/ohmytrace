@@ -1,11 +1,12 @@
 import {syncCameraSun} from './sunlight.js';
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-horizon';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-regional';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-horizon';
-import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261025-horizon';
-import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-horizon';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-regional';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261025-regional';
+import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-regional';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-horizon';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261025-regional';
+import {RegionalForest} from '../scenery/regional-forest.js?v=20261025-regional';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -70,6 +71,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   let detail = 'preview', upgradeJob;
   let worldWorker,worldForest,heightPixels,reliefReady=false,worldError,worldTimeout,worldDataSource='pending';
   let worldSurfaceStats={};
+  let regional,focus,focusMonth=8;
   let state = presentationState(0, false), previousHalo = '';
   let surfaceIsolated = false, atmosphereEnabled = true, terrainEnabled=true;
   const handoffs = [];
@@ -113,6 +115,9 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     layers.push(shell(viewer, materials.clouds, 170000));
     layers.push(shell(viewer, materials.atmosphere, 120000));
     const dayPixels=pixels(textures.day),nightPixels=pixels(textures.night);heightPixels=pixels(textures.height,plan.constrained?1024:2048);
+    // Regional placement is a development preview until its visual handoff is calibrated.
+    if(new URLSearchParams(location.search).get('regional')==='1')
+      regional=new RegionalForest(viewer,{day:dayPixels,height:heightPixels,night:nightPixels},{constrained:plan.constrained});
     const fallback=()=>new Promise((resolve,reject)=>setTimeout(async()=>{
       try {
         worldDataSource='fallback';
@@ -126,7 +131,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }catch(error){reject(error);}
     },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-horizon',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-regional',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
       worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};
@@ -189,6 +194,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
   const start = performance.now();
   return {
     ready, isReady: () => !!materials,
+    setFocus(point,month=8){focus=point?Cesium.Cartesian3.clone(point):undefined;focusMonth=month;if(focus)regional?.preload(focus,month);},
     groundHeight:(lon,lat)=>reliefReady?surfaceGround(heightPixels,lon,lat,plan.constrained):12000,
     toggleForestDetail(){worldForest?.toggleDetail();},
     toggleSurface() { surfaceIsolated = !surfaceIsolated; },
@@ -197,14 +203,15 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
       worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF,worldRidgeMax:WORLD_RIDGE_MAX, worldContactMap:textures?.contact.width||0,
-      ...worldSurfaceStats,...(worldForest?.details()||{}),...(worldError?{worldError}:{}),
+      ...worldSurfaceStats,...(worldForest?.details()||{}),...(regional?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
-    update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now() }) {
+    update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now(),terrainReady=true,localReady=false }) {
       if (disposed) return;
       state = presentationState(altitude, !!materials);
       // Cesium 1.120 also exaggerates glTF models with a local-curvature approximation. At orbital
       // distances this displaces entire forests. The miniature layer already contains its own relief.
       scene.verticalExaggeration = state.surface ? 1 : terrainExaggeration;
+      if(terrainReady)regional?.update({altitude,day,now,mix:state.mix,focus,month:focusMonth,localReady});
       if (handoffs[handoffs.length - 1]?.phase !== state.phase) {
         handoffs.push({ phase: state.phase, altitude: Math.round(altitude), mix: +state.mix.toFixed(3) });
         if (handoffs.length > 12) handoffs.shift();
@@ -218,7 +225,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       viewer.canvas.dataset.worldDataSource=worldDataSource;
       viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
       if(worldForest) {
-        worldForest.update({mix:state.mix,day,altitude,now});
+        worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? .08+.92*state.mix : 1});
         if(materials)materials.surface.uniforms.canopyMix=Math.min(1,worldForest.details().worldTrees/1000);
         viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
         viewer.canvas.dataset.worldReady=String(worldForest.details().worldReady);
@@ -268,7 +275,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
         if (upgradeJob.idle) cancelIdleCallback(upgradeJob.id); else clearTimeout(upgradeJob.id);
       }
       disposed = true; layers.forEach(layer => scene.primitives.remove(layer));
-      clearTimeout(worldTimeout);worldWorker?.terminate();worldForest?.dispose();
+      clearTimeout(worldTimeout);worldWorker?.terminate();worldForest?.dispose();regional?.dispose();
       if (materials) [materials.surface, materials.clouds, materials.atmosphere].forEach(material => material.destroy());
       window.removeEventListener('resize', paint); canvas.remove(); halo.remove();rim.remove();
       scene.globe.show = true; scene.skyAtmosphere.show = true;

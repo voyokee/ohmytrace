@@ -1,5 +1,5 @@
-import {makeWorldSurface} from './world-surface.js?v=20261025-horizon';
-import {makeWorldForest} from './world-data.js?v=20261025-horizon';
+import {makeWorldSurface} from './world-surface.js?v=20261025-regional';
+import {makeWorldForest} from './world-data.js?v=20261025-regional';
 import {makeCanopyContact} from './canopy-contact.js';
 self.onmessage=async({data})=>{
   try {

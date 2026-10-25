@@ -1,13 +1,13 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-horizon');
-const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-regional');
+const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-regional');
 const benchmark=visualBenchmark(location.search);
-const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-horizon');
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-regional');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-horizon');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-horizon');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-regional');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-regional');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -18,7 +18,7 @@ const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
 const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
-const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-horizon'):null;
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-regional'):null;
 
 /* ================= constants ================= */
 
@@ -590,6 +590,7 @@ function initGlobe() {
   const markInput = () => {
     lastInput = performance.now();
     orbit = null;
+    cinematic.setFocus(null);
     if (state.playing && !pickName) stopPlay();
   };
   for (const ev of ['pointerdown', 'wheel', 'touchstart']) viewer.canvas.addEventListener(ev, markInput, { passive: true });
@@ -625,7 +626,7 @@ function initGlobe() {
     const now = performance.now();
     frameStart = now;
     cinematic.update({ altitude: viewer.camera.positionCartographic.height, day: dayMix,
-      lightUniforms: nightMaterial.uniforms, reducedMotion, now });
+      lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:sceneryManager.details().sceneryPhase==='ready' });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
     renderPolicy.still(!cameraMoving && !flying && !state.sel && !pickName && now >= globalSpinUntil &&
@@ -730,6 +731,7 @@ function posOf(name, lift = 0) {
 function homeView(duration = 2.4) {
   if (!viewer) return;
   renderPolicy.home();
+  cinematic.setFocus(null);
   if (scenery.name) clearScenery();
   orbit = null;
   const c = centroid(),comparisonView=benchmark.view;
@@ -739,7 +741,7 @@ function homeView(duration = 2.4) {
   const screenRadius = Math.min(viewer.canvas.clientWidth * (benchmark.enabled ? 0.44 : 0.45),
     viewer.canvas.clientHeight * (benchmark.enabled ? 0.435 : 0.48));
   const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
-  const altitude = earthRadius * (Math.sqrt(1 + (focal / Math.max(1, screenRadius)) ** 2) - 1);
+  const altitude = benchmark.altitude??earthRadius * (Math.sqrt(1 + (focal / Math.max(1, screenRadius)) ** 2) - 1);
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(comparisonView?.lon??c.lon-30, comparisonView?.lat??c.lat-4, altitude),
     orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -756,6 +758,7 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   orbit = null;
   sceneryManager.preload().catch(() => {});
   const sphere = Cesium.BoundingSphere.fromPoints(positions);
+  cinematic.setFocus(sphere.center,placeName?seasonFor(placeName,state.places[placeName].lat).month:8);
   const r = sphere.radius;
   const framing=close&&placeName?sceneTemplateFor({name:placeName,...state.places[placeName],height:state.places[placeName]?.h||0}).camera:null;
   const range = close ? framing?.range||1900 : Math.max(30000, r * 3.4);
@@ -782,7 +785,7 @@ function flyToItem(item, opts) {
   const names = item.kind === 'trip' ? item.stops.map(s => s.place) : [item.place];
   const pts = names.map(n => posOf(n)).filter(Boolean);
   if (!pts.length) { toast('这里的地点还没有定位，可以在「地点校正」里设置'); return Promise.resolve(false); }
-  return flyToPoints(pts, opts);
+  return flyToPoints(pts, {placeName:names.length===1?names[0]:undefined,...opts});
 }
 
 let sampling = false;
@@ -858,7 +861,7 @@ function updateLights(now, dt) {
   dayMix += (targetDay - dayMix) * Math.min(1, dt * 3);
   if (Math.abs(targetDay - dayMix) < .002) dayMix = targetDay;
   u.fpSpace = space * space * (3 - 2 * space) * dayMix;
-  const nearDay=Math.min(1,Math.max(0,(160000-camH)/70000));
+  const nearDay=Math.min(1,Math.max(0,(2400000-camH)/1750000));
   u.fpTerrainDay=nearDay*nearDay*(3-2*nearDay)*dayMix;
   u.fpDark = NIGHT_DARKNESS * (1 - u.fpSpace) + 0.025 * u.fpSpace;
   u.fpRelief = 0.55 * (1 - u.fpSpace) + 0.12 * u.fpSpace;

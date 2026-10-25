@@ -1,4 +1,4 @@
-import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-horizon';
+import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-regional';
 export function createWorldForest(viewer,forest,{constrained=false,createModel=makeVegetationModel,loadAssets=preloadVegetation}={}) {
   const shader=vegetationShader({world:true}),live=new Map(),staging=new Map(),pending=new Map(),retries=new Map();
   const controller=new AbortController(),maxChunks=constrained?12:28,maxDetailed=constrained?0:4;
@@ -56,8 +56,9 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
   }
   return {
     toggleDetail(){inspectDetail=!inspectDetail;lastCheck=-Infinity;viewer.scene.requestRender();},
-    update({mix,day,now=performance.now(),altitude}) {
+    update({mix,day,now=performance.now(),altitude,canopyScale=1}) {
       if(disposed)return;currentMix=mix;currentNow=now;shader.setUniform('u_day',day);
+      shader.setUniform('u_canopyScale',canopyScale);
       if(mix<.01){clear();return;}
       if(altitude>5200000)lowView=true;else if(altitude<4800000)lowView=false;
       detailKeys=new Set((!lowView||inspectDetail?wantedOrder.slice(0,maxDetailed):[]).map(x=>x.chunk.key));

@@ -36,9 +36,11 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   vec3 albedo = texture(dayMap, uv).rgb;
   float ocean = smoothstep(0.015, 0.075, albedo.b - max(albedo.r, albedo.g));
   float depth = texture(depthMap, uv).r;
-  float shelf = smoothstep(0.83,0.995,depth);
-  vec3 water = mix(vec3(0.012,0.12,0.29),vec3(0.025,0.32,0.49),smoothstep(0.25,0.86,depth));
-  water = mix(water,vec3(0.045,0.55,0.60),shelf);
+  float shelf = smoothstep(0.96,0.999,depth);
+  // Reserve bathymetric contrast for shelves. Low-resolution deep-sea values otherwise
+  // turn missing-data/JPEG blocks into large, distracting blue patches at orbital scale.
+  vec3 water = vec3(0.010,0.13,0.28)*(0.93+0.07*smoothstep(0.20,0.90,depth));
+  water = mix(water,vec3(0.022,0.31,0.39),shelf*0.90);
   // Keep geographic bathymetry, without amplifying the JPEG's baked hillshade into dark blocks.
   water += albedo * 0.035;
   albedo = mix(albedo * 1.38, water, ocean * 0.98);
@@ -67,10 +69,10 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float resting = smoothstep(0.40, 0.90, dot(relief,up));
   // At world-map resolution narrow peaks are averaged down. Lower only rugged snow caps a little,
   // retaining the latitude band and the source-snow gate rather than whitening entire plateaus.
-  float resolvedSnowLine=snowLine-ridge*0.10;
-  float snow = smoothstep(resolvedSnowLine-0.035,resolvedSnowLine+0.055,elevation) *
-    (0.08+existingSnow*0.82+ridge*0.68) * (0.38+resting*0.62) * (1.0-ocean);
-  snow=clamp(snow*(1.0+alpineMass*0.35),0.0,0.98);
+  float resolvedSnowLine=snowLine-ridge*0.04;
+  float snow = smoothstep(resolvedSnowLine+0.005,resolvedSnowLine+0.10,elevation) *
+    (0.08+existingSnow*0.90+ridge*0.42) * (0.18+resting*0.82) * (1.0-ocean);
+  snow=clamp(snow*(1.0+alpineMass*0.15),0.0,0.98);
   float alpine = smoothstep(snowLine-0.20,snowLine-0.015,elevation) * ridge * (1.0-ocean);
   albedo=mix(albedo,mix(albedo,vec3(0.31,0.35,0.38),0.70),alpine*(1.0-snow));
   albedo = mix(albedo, vec3(0.96, 0.98, 1.0), clamp(snow,0.0,0.98));

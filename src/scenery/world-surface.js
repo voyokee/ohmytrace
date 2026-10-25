@@ -1,4 +1,4 @@
-import {geographicPosition,worldHeight} from './world-elevation.js?v=20261025-horizon';
+import {geographicPosition,worldHeight} from './world-elevation.js?v=20261025-regional';
 import {worldSurfacePlan,mountainRefinements,visitSurfaceTriangles} from './surface-topology.js';
 export {worldSurfacePlan} from './surface-topology.js';
 const samplers=new WeakMap(),clamp=(x,a,b)=>Math.max(a,Math.min(b,x));

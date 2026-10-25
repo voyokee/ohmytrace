@@ -1,4 +1,4 @@
-import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-horizon';
+import {attachGpuMetrics} from './gpu-metrics.js?v=20261025-regional';
 // Opt-in, local diagnostics. No telemetry leaves the browser.
 export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
   if (!new URLSearchParams(location.search).has('perf')) return;
@@ -56,7 +56,7 @@ export function attachFrameMetrics(viewer, details = () => ({}), actions = []) {
       ...details(),
     };
     panel.textContent = JSON.stringify(snapshot, null, 2);
-    summary.textContent=`${snapshot.fps?snapshot.fps+' FPS':'静止 · 按需渲染'} · ${snapshot.renderPixels} · ${snapshot.instances||snapshot.worldTrees||0} 植物`;
+    summary.textContent=`${snapshot.fps?snapshot.fps+' FPS':'静止 · 按需渲染'} · ${snapshot.renderPixels} · ${snapshot.instances||snapshot.worldTrees||snapshot.regionalInstances||0} 植物`;
     history.push(snapshot);
     if (history.length > 60) history.shift();
     panel.dataset.samples = JSON.stringify(history);

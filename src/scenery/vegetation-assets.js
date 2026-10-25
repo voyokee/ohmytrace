@@ -163,9 +163,11 @@ export function makeVegetationLibrary(low=false) {
   }
   return out.finish();
 }
-export function instantiateVegetation(library, groups) {
+export function instantiateVegetation(library, groups,{sourcePosition=false}={}) {
   const {json,bin}=decodeGlb(library);json.nodes=[];json.scenes=[{nodes:[]}];json.scene=0;
   json.extensionsUsed=['EXT_mesh_gpu_instancing'];json.extensionsRequired=['EXT_mesh_gpu_instancing'];
+  if(sourcePosition)for(const mesh of json.meshes)for(const primitive of mesh.primitives)
+    primitive.attributes._SOURCE_POSITION=primitive.attributes.POSITION;
   const out=writer(json,bin);
   for(const group of groups) {
     if(!group.translations.length)continue;

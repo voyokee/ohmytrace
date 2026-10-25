@@ -118,4 +118,15 @@ document.timeline.currentTime=null;
 assert.equal(animationClock.tick(8000),true,'An unavailable animation timeline must fall back to the monotonic CPU clock');
 assert.equal(animationClock.details().cadenceClock,'performance');
 delete document.timeline;
+const jitteredClock=createRenderPolicy({scene:{globe:{},requestRender(){}}},{mobile:true,reducedMotion:false});
+document.timeline={currentTime:0};const jitterFrames=[];
+for(let i=1;i<=360;i++) {
+ document.timeline.currentTime=i*1000/60+.2+[-2,1.7,1,-1.5][i%4];
+ if(jitteredClock.tick(document.timeline.currentTime+4))jitterFrames.push(i);
+ assert.equal(jitteredClock.tick(document.timeline.currentTime+8),false);
+}
+assert.ok(Math.abs(jitterFrames.length-180)<=1);
+assert.ok(jitterFrames.slice(1).every((n,i)=>n-jitterFrames[i]===2),
+ 'A few milliseconds of animation-clock jitter must preserve two-update spacing, regardless of document phase');
+delete document.timeline;
 console.log('PASS: RAF-aligned document clock, CPU-offset independence, same-frame deduplication and inactive-timeline fallback');
