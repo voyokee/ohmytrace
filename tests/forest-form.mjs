@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {shapeWorldPlant} from '../src/scenery/forest-form.js';
 import {worldBiome} from '../src/scenery/world-biomes.js';
-import {makeWorldForest} from '../src/scenery/world-data.js';
+import {makeWorldForest,canopyHeights} from '../src/scenery/world-data.js';
 import {worldHeight,elevationAt,WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_MAX} from '../src/scenery/world-elevation.js';
 const flat=value=>({width:1,height:1,data:new Uint8ClampedArray([value,value,value,255])});
 const heights=flat(40),plants=[],layers=new Set();let clearings=0;
@@ -14,7 +14,7 @@ for(let lat=26;lat<52;lat+=.35)for(let lon=90;lon<135;lon+=.35) {
  const q=result.plant;layers.add(result.layer);plants.push(q);
  assert.equal(q.lon,p.lon);assert.equal(q.lat,p.lat);assert.equal(q.ground,p.ground,'Canopy shaping must not move tree roots');
  assert.equal(q.angle,p.angle);assert.equal(q.aspect,p.aspect);
- assert.ok(q.height>10000&&q.height<=420000&&q.width>0&&q.width<2,'GPU bounds and orbital distance classification must remain valid');
+ assert.ok(q.height>10000&&q.height<=300000&&q.width>0&&q.width<2,'GPU bounds and orbital distance classification must remain valid');
 }
 assert.ok(clearings>20&&clearings<plants.length*.40,'Openings must form a minority rather than erase most forests');
 assert.deepEqual([...layers].sort(),['lower','upper']);
@@ -40,12 +40,17 @@ for(let value=30;value<=86;value++) {
   'The upper mountain canopy must lower continuously rather than jump to a flat cap');
  previous=result;
 }
-assert.ok(previous.height<shapeWorldPlant(p,alpineBiome,flat(30)).plant.height*.60,
+assert.ok(previous.height<65000&&previous.height<shapeWorldPlant(p,alpineBiome,flat(30)).plant.height*.40,
  'Mountaintops must emerge above the nearby upper forest instead of being hidden by giant crowns');
 const giant={...p,height:2000000},wideCrown=shapeWorldPlant({...giant,species:'broadleaf'},biome,heights).plant,
  needleCrown=shapeWorldPlant({...giant,species:'spruce'},biome,heights).plant;
 assert.ok(wideCrown.height<300000&&needleCrown.height>wideCrown.height*1.1,
  'Oversized broad crowns must compress before hiding the surrounding forest; needles retain a taller silhouette');
+const statistics=canopyHeights([{plants}]);
+assert.equal(Object.values(statistics).reduce((n,s)=>n+s.count,0),plants.length);
+for(const s of Object.values(statistics))assert.ok(s.p10<=s.median&&s.median<=s.p90&&s.p90<=s.max&&s.max<=300000);
+const ordinary=plants.filter(p=>p.species==='broadleaf').map(p=>p.height).sort((a,b)=>a-b);
+assert.ok(ordinary[Math.floor(ordinary.length*.1)]>80000,'The lower story must remain visibly substantial');
 // A finite forest island keeps the full population below the global hard cap, allowing an
 // independent subset comparison with the exact original placement stream.
 const day={width:72,height:36,data:new Uint8ClampedArray(72*36*4)};

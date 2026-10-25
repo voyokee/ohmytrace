@@ -1,7 +1,7 @@
 import {surfaceGround} from './world-surface.js?v=20261025-ridges';
 import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-ridges';
 import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-ridges';
-import {shapeWorldPlant} from './forest-form.js';
+import {shapeWorldPlant} from './forest-form.js?v=20261026-canopy';
 export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-ridges';
 const RAD=Math.PI/180;
 export function random(seed) {
@@ -19,6 +19,16 @@ export function urbanCore(nightMap,lon,lat) {
   const [r,g,b]=mapPixel(nightMap,lon,lat);
   // Only the bright cores of the existing city-light map, not every rural light.
   return r>.48 && g>.30 && b>.13;
+}
+export function canopyHeights(chunks) {
+  const values=new Map();
+  for(const chunk of chunks)for(const p of chunk.plants){
+    if(!values.has(p.species))values.set(p.species,[]);values.get(p.species).push(p.height);
+  }
+  return Object.fromEntries([...values].map(([kind,a])=>{
+    a.sort((x,y)=>x-y);const percentile=f=>Math.round(a[Math.floor((a.length-1)*f)]);
+    return [kind,{count:a.length,p10:percentile(.1),median:percentile(.5),p90:percentile(.9),max:Math.round(a.at(-1))}];
+  }));
 }
 export function makeWorldForest(dayMap, heightMap, { constrained = false, maxInstances = constrained ? 6000 : 20000, nightMap,canopy=true } = {}) {
   const rnd = random(47193), chunks = new Map();
@@ -57,5 +67,6 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
       count++;biomes[biome.id]=(biomes[biome.id]||0)+1;
     }
   }
-  return { chunks: [...chunks.values()], count, biomes,canopy:canopyStats,samplingStep:step };
+  const result=[...chunks.values()];
+  return { chunks: result, count, biomes,canopy:canopyStats,samplingStep:step,heightStats:canopyHeights(result) };
 }

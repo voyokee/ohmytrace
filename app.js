@@ -7,7 +7,7 @@ const benchmark=visualBenchmark(location.search);
 const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-ridges');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-handoff');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261026-canopy');
 const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-handoff');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');

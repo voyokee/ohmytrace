@@ -2,10 +2,10 @@ import {syncCameraSun} from './sunlight.js';
 import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261025-ridges';
 import { presentationState } from './presentation-state.js';
 import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-ridges';
-import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261025-ridges';
+import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261026-canopy';
 import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-ridges';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261025-handoff';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261026-canopy';
 import {RegionalForest} from '../scenery/regional-forest.js?v=20261025-handoff';
 import {regionalWorldScale} from '../scenery/regional-forest-data.js?v=20261025-handoff';
 
@@ -132,7 +132,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }catch(error){reject(error);}
     },0));
     const worldData=typeof Worker==='function'?new Promise((resolve,reject)=>{
-      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261025-ridges',import.meta.url),{type:'module'});
+      worldWorker=new Worker(new URL('../scenery/world-worker.js?v=20261026-canopy',import.meta.url),{type:'module'});
       worldTimeout=setTimeout(()=>{worldWorker?.terminate();reject(new Error('World worker timed out'));},12000);
       worldWorker.onmessage=({data})=>{worldDataSource='worker';clearTimeout(worldTimeout);if(data.error)reject(new Error(data.error));else resolve(data);};
       worldWorker.onerror=error=>{clearTimeout(worldTimeout);reject(new Error(error.message));};

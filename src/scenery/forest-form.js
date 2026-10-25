@@ -10,6 +10,9 @@ export const FOREST_FORMS=Object.freeze({
   mountain:{base:.86,spread:.64,width:.83,emergent:.38},
   steppe:{base:.68,spread:.30,width:1.0,emergent:0},
 });
+export const CANOPY_CEILINGS=Object.freeze({
+  spruce:{knee:230000,tail:70000},wide:{knee:190000,tail:65000},
+});
 const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 function canopyNoise(lon,lat,scale) {
   const x=((lon+180)%360+360)%360-180,a=habitatNoise(x,lat,scale);
@@ -26,16 +29,21 @@ export function shapeWorldPlant(plant,biome,heightMap) {
   const exposed=smooth(.65,1,h/biome.treeline);
   let species=plant.species;
   if(biome.id==='temperate'&&Math.abs(lat)>26&&h>200&&upper>.55)species='spruce';
+  // One emergent gain is enough. The old second upper-story multiplier compressed low
+  // crowns while driving many high crowns into the ceiling, creating gaps and tall spikes.
   const heightScale=(form.base+smooth(.28,.70,story)*form.spread)*(.62+smooth(.28,.60,grove)*.38)*
-    (1+upper*form.emergent)*(1-exposed*.28)*(.68+upper*(species==='spruce'?1.0:1.45));
+    (1+upper*form.emergent)*(1-exposed*.28);
   const rawHeight=plant.height*heightScale;
   // A soft ceiling keeps emergents bounded without giving every tall tree an identical top.
-  const knee=species==='spruce'?300000:200000,tail=species==='spruce'?120000:90000;
+  const {knee,tail}=CANOPY_CEILINGS[species==='spruce'?'spruce':'wide'];
   let height=Math.max(25000,rawHeight<knee?rawHeight:knee+tail*(1-Math.exp(-(rawHeight-knee)/tail)));
   // Keep the lowland miniature forest large, but let ridgelines rise above its upper edge.
   // Blend continuously by each biome's treeline instead of cutting every mountain tree flat.
   const alpine=smooth(.40,.95,h/biome.treeline),ceiling=220000-(biome.id==='mountain'?100000:60000)*alpine;
   height+=(ceiling*(1-Math.exp(-height/ceiling))-height)*alpine;
+  // Near the treeline, a giant lowland crown can still exceed the range's art relief.
+  // Contract its whole footprint continuously so rock faces remain readable above the forest.
+  height*=1-alpine*(biome.id==='mountain'?.55:.30);
   let width=plant.width*(species==='spruce'?1.16:form.width)/Math.pow(Math.max(.72,heightScale),.35);
   // Compact exposed coastal crowns instead of letting an emergent umbrella cover an island's sea.
   // Four height samples are a conservative art adjustment, not a new coastline dataset.

@@ -94,7 +94,7 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
     details:()=>({worldTrees:[...live.values()].reduce((n,e)=>n+(e.model.ready?e.chunk.plants.length:0),0),
       worldReady:settled,worldChunks:live.size,worldStaging:staging.size,worldDetailed:[...live.values()].filter(e=>!e.low).length,
       worldPending:pending.size,worldCandidates:forest.count,worldSamplingStep:forest.samplingStep,
-      worldBiomes:forest.biomes,worldCanopy:forest.canopy,worldFailures:failures}),
+      worldBiomes:forest.biomes,worldCanopy:forest.canopy,worldCanopyHeights:forest.heightStats,worldFailures:failures}),
     dispose(){disposed=true;controller.abort();clear();shader.destroy();},
   };
 }
