@@ -1,5 +1,5 @@
-import {forestSpecies,urbanCore,random,elevationAt,mapPixel} from './world-data.js?v=20261025-regional';
-import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-regional';
+import {forestSpecies,urbanCore,random,elevationAt,mapPixel} from './world-data.js?v=20261025-ridges';
+import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-ridges';
 import {smoothstep} from '../rendering/presentation-state.js';
 const METRES=111320;
 export function regionalState(altitude,{localReady=false,ground=0}={}) {

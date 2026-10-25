@@ -1,10 +1,10 @@
-import {worldCanopyVertexShader,regionalCanopyVertexShader} from './canopy-shader.js?v=20261025-regional';
-import { instantiateVegetation } from './vegetation-assets.js?v=20261025-regional';
-import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-regional';
+import {worldCanopyVertexShader,regionalCanopyVertexShader} from './canopy-shader.js?v=20261025-ridges';
+import { instantiateVegetation } from './vegetation-assets.js?v=20261025-ridges';
+import { SUN_EC } from '../rendering/earth-materials.js?v=20261025-ridges';
 const libraries = new Map();
 export function preloadVegetation(low=false) {
   const key=low?'vegetation-low.glb':'vegetation.glb';
-  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-regional',import.meta.url))
+  if(!libraries.has(key)) libraries.set(key,fetch(new URL('../../assets/models/'+key+'?v=20261025-ridges',import.meta.url))
     .then(r=>{if(!r.ok)throw new Error('Vegetation asset HTTP '+r.status);return r.arrayBuffer();})
     .then(buffer=>new Uint8Array(buffer)).catch(error=>{libraries.delete(key);throw error;}));
   return libraries.get(key);

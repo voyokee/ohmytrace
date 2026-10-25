@@ -1,5 +1,5 @@
-import {regionalState,regionalAnchor,regionalPlants} from './regional-forest-data.js?v=20261025-regional';
-import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261025-regional';
+import {regionalState,regionalAnchor,regionalPlants} from './regional-forest-data.js?v=20261025-ridges';
+import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261025-ridges';
 const aborted=()=>new DOMException('Regional forest cancelled','AbortError');
 function waitReady(model,signal) {
   if(model.ready)return Promise.resolve();

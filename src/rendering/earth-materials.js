@@ -54,6 +54,7 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float hS=texture(heightMap,wrappedUV(uv-vec2(0.0,texel.y))).r;
   float dx=hE-hW,dy=hN-hS;
   float elevation = texture(heightMap, uv).r;
+  float localRelief=elevation-(hE+hW+hN+hS)*0.25;
   float snowLine = mix(0.79,0.18,smoothstep(0.40,1.12,abs(asin(up.z))));
   float ridge = smoothstep(0.004, 0.055, length(vec2(dx, dy)));
   float existingSnow=smoothstep(0.36,0.78,luminance)*(1.0-smoothstep(0.04,0.19,abs(albedo.r-albedo.b)));
@@ -73,6 +74,11 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float snow = smoothstep(resolvedSnowLine+0.005,resolvedSnowLine+0.10,elevation) *
     (0.08+existingSnow*0.90+ridge*0.42) * (0.18+resting*0.82) * (1.0-ocean);
   snow=clamp(snow*(1.0+alpineMass*0.15),0.0,0.98);
+  // A convex DEM crest can retain a cap even where the source image averages away narrow snow.
+  // Flat high plateaus get no extra coverage; latitude, elevation and resting slopes still gate it.
+  float crestSnow=smoothstep(0.002,0.025,localRelief)*
+    smoothstep(snowLine-0.06,snowLine+0.04,elevation)*(0.35+resting*0.65)*(1.0-ocean);
+  snow=max(snow,crestSnow*0.86);
   float alpine = smoothstep(snowLine-0.20,snowLine-0.015,elevation) * ridge * (1.0-ocean);
   albedo=mix(albedo,mix(albedo,vec3(0.31,0.35,0.38),0.70),alpine*(1.0-snow));
   albedo = mix(albedo, vec3(0.96, 0.98, 1.0), clamp(snow,0.0,0.98));
@@ -84,7 +90,7 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float cloudShadow = cloudCover(texture(cloudMap, wrappedUV(cloudUV + shadowOffset)).r);
   vec3 slopeTint=mix(vec3(0.78,0.86,1.04),vec3(1.07,1.025,0.94),smoothstep(-0.1,0.8,dot(relief,L)));
   vec3 natural = albedo * (0.36 + daylight * 0.83) * mix(slopeTint*reliefLight,vec3(1.0),ocean);
-  float valley=clamp(((hE+hW+hN+hS)*0.25-elevation)*8.0,0.0,0.20);
+  float valley=clamp(-localRelief*8.0,0.0,0.20);
   natural*=1.0-valley*(1.0-ocean);
   vec2 habitat=texture(contactMap,uv).rg;
   float contact=habitat.r*canopyMix*(1.0-ocean);

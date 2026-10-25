@@ -1,13 +1,14 @@
 (async () => {
 'use strict';
-const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-regional');
-const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-regional');
+const { createRenderPolicy } = await import('./src/performance/render-policy.js?v=20261025-ridges');
+const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
+const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-ridges');
 const benchmark=visualBenchmark(location.search);
-const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-regional');
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-ridges');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-regional');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-regional');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261025-ridges');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-ridges');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -18,7 +19,7 @@ const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
 const { createTerrainDaylight, syncTerrainDaylight } = await import('./src/rendering/terrain-daylight.js');
-const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-regional'):null;
+const metricTools=new URLSearchParams(location.search).has('perf')?await import('./src/performance/metrics.js?v=20261025-ridges'):null;
 
 /* ================= constants ================= */
 
@@ -619,24 +620,26 @@ function initGlobe() {
   // Idle motion: slow spin from space, gentle orbit around a selected place.
   let lastT = performance.now();
   let frameStart = 0, drawStart = 0;
-  let cameraMoving = false;
-  viewer.camera.moveStart.addEventListener(() => { cameraMoving = true; });
-  viewer.camera.moveEnd.addEventListener(() => { cameraMoving = false; });
+  const cameraMotion=createCameraMotionTracker();
+  let cameraMoving = false,nativeCameraMoving=false;
+  viewer.camera.moveStart.addEventListener(() => { nativeCameraMoving = true; });
+  viewer.camera.moveEnd.addEventListener(() => { nativeCameraMoving = false; });
   scene.preUpdate.addEventListener(() => {
     const now = performance.now();
     frameStart = now;
+    cameraMoving=cameraMotion.update(viewer.camera,now);
     cinematic.update({ altitude: viewer.camera.positionCartographic.height, day: dayMix,
       lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:sceneryManager.details().sceneryPhase==='ready' });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
-    renderPolicy.still(!cameraMoving && !flying && !state.sel && !pickName && now >= globalSpinUntil &&
+    renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !state.sel && !pickName && now >= globalSpinUntil &&
       now - lastInput > 800 && viewer.camera.positionCartographic.height > 4e6);
     if (!renderPolicy.tick(now)) return;
     if(benchmark.enabled)scene.requestRender();
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
     const animatedScenery = scenery.name && !reducedMotion && !body.classList.contains('modal-open');
-    const moving = flying || !!orbit || !!animatedScenery || cameraMoving;
+    const moving = flying || !!orbit || !!animatedScenery || cameraMoving || lightsAnimating;
     if(body.classList.contains('scene-active') !== moving) body.classList.toggle('scene-active',moving);
     if (lightsAnimating || animatedScenery || flying) scene.requestRender();
     if (flying || pickName || body.classList.contains('modal-open') || now - lastInput < 4000 || reducedMotion) return;
@@ -664,7 +667,8 @@ function initGlobe() {
     scene.debugCommandFilter = () => { drawCommands++; return true; };
       removeFrameMetrics=metricTools.attachFrameMetrics(viewer, () => ({ trees: scenery.plants.filter(p=>p.species!=='grass'&&p.species!=='shrub').length, lightSlots: lightCapacity,
         ...frameTimings, drawCommands, terrainVisible:scene.globe.show,logDepth:scene.logarithmicDepthBuffer,
-        orbiting:!!orbit,collision:scene.screenSpaceCameraController.enableCollisionDetection,
+        orbiting:!!orbit,cameraMoving,nativeCameraMoving,...cameraMotion.details(),lightsAnimating,selected:!!state.sel,
+        collision:scene.screenSpaceCameraController.enableCollisionDetection,
         terrainMaterial:materialIsolated?'off':scene.globe.material===terrainDaylight?'daylight':'footprint',imageryAnisotropy:mobile?2:4,
         ...cinematic.details(), ...sceneryManager.details(), ...cameraDirector.details(),...terrainPicking.details(),
         ...renderPolicy.details(), qualityProfile:mobile?'mobile':'desktop', ...(benchmark.enabled?benchmarkDetails(viewer):{}), mode: flying ? 'flight' : scenery.name ? 'scenery' : orbit ? 'orbit' :

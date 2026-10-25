@@ -27,5 +27,9 @@ export function worldHeight(map,lon,lat) {
   const mean=(elevationAt(map,lon-step,lat)+elevationAt(map,lon+step,lat)+
     elevationAt(map,lon,lat-step)+elevationAt(map,lon,lat+step))*.25;
   const upland=Math.min(1,Math.max(0,(h-250)/800));
-  return WORLD_BASE+h*WORLD_RELIEF+Math.min(WORLD_RIDGE_MAX,Math.max(0,h-mean)*WORLD_RIDGE_RELIEF*upland);
+  // Relative prominence separates a narrow range above low foothills from small ripples
+  // on an already-high plateau. Both keep the same DEM and absolute displacement cap.
+  const prominence=Math.max(0,h-mean),relative=prominence/Math.max(600,h);
+  const t=Math.min(1,Math.max(0,(relative-.06)/.34)),gain=.55+1.05*t*t*(3-2*t);
+  return WORLD_BASE+h*WORLD_RELIEF+Math.min(WORLD_RIDGE_MAX,prominence*WORLD_RIDGE_RELIEF*upland*gain);
 }

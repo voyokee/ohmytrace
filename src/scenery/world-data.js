@@ -1,8 +1,8 @@
-import {surfaceGround} from './world-surface.js?v=20261025-regional';
-import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-regional';
-import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-regional';
+import {surfaceGround} from './world-surface.js?v=20261025-ridges';
+import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-ridges';
+import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-ridges';
 import {shapeWorldPlant} from './forest-form.js';
-export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-regional';
+export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-ridges';
 const RAD=Math.PI/180;
 export function random(seed) {
   return () => { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);
@@ -22,7 +22,9 @@ export function urbanCore(nightMap,lon,lat) {
 }
 export function makeWorldForest(dayMap, heightMap, { constrained = false, maxInstances = constrained ? 6000 : 20000, nightMap,canopy=true } = {}) {
   const rnd = random(47193), chunks = new Map();
-  const step = constrained ? .96 : .48;
+  // Keep the mobile canopy connected: 1.5x spacing instead of 2x. The same 6,000-candidate
+  // hard cap, low-detail models and 12 resident chunks still bound the constrained path.
+  const step = constrained ? .72 : .48;
   const biomes={};
   const canopyStats={enabled:canopy,clearings:0,upper:0,coastal:0,exposed:0};
   let count = 0;
@@ -43,7 +45,7 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
       const original={ lon: x, lat: y,
         species, height: biome.height * (.64 + patch*.30 + rnd()*.48),
         width: biome.width * (.82 + rnd()*.36) * (species==='spruce'&&biome.species!=='spruce'?.74:1),
-        angle: rnd() * Math.PI * 2, aspect:.80+rnd()*.40 };
+        angle: rnd() * Math.PI * 2, aspect:species==='spruce' ? .80+rnd()*.40 : .65+rnd()*.80 };
       // Consume the same placement randoms even for clearings, so later cells do not relocate.
       const shaped=canopy?shapeWorldPlant(original,biome,heightMap):{plant:original};
       if(!shaped.plant){canopyStats.clearings++;continue;}
@@ -55,5 +57,5 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
       count++;biomes[biome.id]=(biomes[biome.id]||0)+1;
     }
   }
-  return { chunks: [...chunks.values()], count, biomes,canopy:canopyStats };
+  return { chunks: [...chunks.values()], count, biomes,canopy:canopyStats,samplingStep:step };
 }

@@ -40,9 +40,9 @@ function assetMesh(kind, low) {
     const normal=p=>{const d=sub(p,center).map((x,i)=>x/(radii[i]*radii[i])),l=Math.hypot(...d)||1;return d.map(x=>x/l);};
     const point=(j,i) => {const a=(i%sides)/sides*Math.PI*2,b=j/levels*Math.PI;
       // Uneven branch tips break the smooth balloon silhouette, including in the orbital LOD.
-      const r=bough?1+.23*Math.sin(a*3+seed*7)+.08*Math.cos(a*5-seed*3):
+      const r=bough?1+.13*Math.sin(a*3+seed*7)+.05*Math.cos(a*5-seed*3):
         1+.19*Math.sin(a*3+seed*7+j*2.1)+.09*Math.cos(a*5-seed*3+j);
-      const profile=Math.sin(b)*(bough?1-.22*Math.cos(b):1),lean=bough?Math.cos(b)*.18:0;
+      const profile=Math.sin(b)*(bough?1+.12*Math.cos(b):1),lean=bough?Math.cos(b)*.18:0;
       return add(center,[(profile*Math.cos(a)*r+lean*Math.sin(seed*4))*radii[0],
         (profile*Math.sin(a)*r+lean*Math.cos(seed*4))*radii[1],
         (Math.cos(b)+(bough?Math.sin(b)*.08*Math.sin(a*2+seed):0))*radii[2]]);};
@@ -79,11 +79,11 @@ function assetMesh(kind, low) {
     } else if(kind==='tropical') {
       // Spend the same orbital triangles on six connected, lobed branch volumes instead
       // of twelve tiny pods. Low/detail assets share the complete crown architecture.
-      crown([-.025,.02,.86],[.20,.17,.14],leaf,0,true,true);
+      crown([-.025,.02,.86],[.24,.20,.14],leaf,0,true,true);
       for(let i=0;i<5;i++) {
-        const a=i*2.399,r=.20+(i%2)*.05,p=[Math.cos(a)*r,Math.sin(a)*r,.58+(i%3)*.09];
+        const a=i*2.399,r=.13+(i%2)*.05,p=[Math.cos(a)*r,Math.sin(a)*r,.58+(i%3)*.09];
         if(!low)branch([0,0,.32],p,.016,[.28,.23,.12]);
-        crown(p,[.22,.16,.14],leaf.map(x=>x*(.78+i*.055)),i+.3,true,true);
+        crown(p,[.26,.20,.14],leaf.map(x=>x*(.78+i*.055)),i+.3,true,true);
       }
     } else if(kind==='birch') {
       crown([.02,0,.83],[.11,.10,.17],leaf,0,true,true);
@@ -96,11 +96,11 @@ function assetMesh(kind, low) {
     } else if(kind==='shrub') {
       crown([0,0,.25],[.38,.31,.25],leaf);
     } else if(kind==='broadleaf') {
-      crown([.035,-.01,.84],[.15,.13,.16],leaf,0,true,true);
+      crown([.035,-.01,.84],[.20,.16,.16],leaf,0,true,true);
       for(let i=0;i<5;i++) {
-        const a=i*2.399,r=.14+(i%2)*.04,p=[Math.cos(a)*r,Math.sin(a)*r,.55+(i%3)*.085];
+        const a=i*2.399,r=.08+(i%2)*.04,p=[Math.cos(a)*r,Math.sin(a)*r,.55+(i%3)*.085];
         if(!low)branch([0,0,.24+(i%3)*.07],p,.013,bark);
-        crown(p,[.17,.13,.20],leaf.map(x=>x*(.78+i*.06)),i+.7,true,true);
+        crown(p,[.23,.17,.20],leaf.map(x=>x*(.78+i*.06)),i+.7,true,true);
       }
     } else {
       crown([0,.02,.88],[.14,.12,.12],leaf,0,true);

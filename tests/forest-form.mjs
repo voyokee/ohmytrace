@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {shapeWorldPlant} from '../src/scenery/forest-form.js';
 import {worldBiome} from '../src/scenery/world-biomes.js';
 import {makeWorldForest} from '../src/scenery/world-data.js';
-import {worldHeight,WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_MAX} from '../src/scenery/world-elevation.js';
+import {worldHeight,elevationAt,WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_MAX} from '../src/scenery/world-elevation.js';
 const flat=value=>({width:1,height:1,data:new Uint8ClampedArray([value,value,value,255])});
 const heights=flat(40),plants=[],layers=new Set();let clearings=0;
 for(let lat=26;lat<52;lat+=.35)for(let lon=90;lon<135;lon+=.35) {
@@ -32,6 +32,20 @@ const inland=shapeWorldPlant(p,biome,heights),coast=shapeWorldPlant(p,biome,isla
 assert.ok(inland.plant&&coast.plant&&exposed.plant);
 assert.ok(coast.coastal&&coast.plant.height<inland.plant.height&&coast.plant.width<inland.plant.width,'Exposed island crowns must contract rather than cover surrounding sea');
 assert.ok(exposed.plant.height<inland.plant.height,'High exposed slopes must carry a lower canopy');
+const alpineBiome={...biome,id:'mountain',treeline:2200};let previous;
+for(let value=30;value<=86;value++) {
+ const result=shapeWorldPlant(p,alpineBiome,flat(value)).plant;
+ assert.ok(result&&result.ground===p.ground);
+ if(previous)assert.ok(result.height<=previous.height&&result.height>previous.height*.94,
+  'The upper mountain canopy must lower continuously rather than jump to a flat cap');
+ previous=result;
+}
+assert.ok(previous.height<shapeWorldPlant(p,alpineBiome,flat(30)).plant.height*.60,
+ 'Mountaintops must emerge above the nearby upper forest instead of being hidden by giant crowns');
+const giant={...p,height:2000000},wideCrown=shapeWorldPlant({...giant,species:'broadleaf'},biome,heights).plant,
+ needleCrown=shapeWorldPlant({...giant,species:'spruce'},biome,heights).plant;
+assert.ok(wideCrown.height<300000&&needleCrown.height>wideCrown.height*1.1,
+ 'Oversized broad crowns must compress before hiding the surrounding forest; needles retain a taller silhouette');
 // A finite forest island keeps the full population below the global hard cap, allowing an
 // independent subset comparison with the exact original placement stream.
 const day={width:72,height:36,data:new Uint8ClampedArray(72*36*4)};
@@ -53,4 +67,12 @@ peak.data.set([255,255,255,255],(179*720+360)*4);
 assert.ok(Math.abs(worldHeight(peak,.25,.25)-(WORLD_BASE+6400*WORLD_RELIEF+WORLD_RIDGE_MAX))<1e-6,'A narrow peak must obey the explicit ridge-height cap');
 assert.equal(worldHeight(flat(100),0,40),WORLD_BASE+100/255*6400*WORLD_RELIEF,'Flat plateaus must retain the original base exaggeration');
 assert.equal(worldHeight(flat(0),0,0),WORLD_BASE,'Sea level must remain unchanged');
+const summit=(base,top)=>{
+ const data=new Uint8ClampedArray(720*360*4);for(let i=0;i<data.length;i+=4)data.set([base,base,base,255],i);
+ data.set([top,top,top,255],(179*720+360)*4);return {width:720,height:360,data};
+};
+const foothills=summit(40,80),plateau=summit(160,200),displacement=map=>worldHeight(map,.25,.25)-WORLD_BASE-elevationAt(map,.25,.25)*WORLD_RELIEF;
+assert.ok(displacement(foothills)>displacement(plateau)*1.2,
+ 'The same local height difference must read more strongly above low foothills than as a ripple on a high plateau');
+assert.ok(displacement(foothills)<=WORLD_RIDGE_MAX&&displacement(plateau)<=WORLD_RIDGE_MAX);
 console.log('PASS: coherent canopy levels/openings, immutable roots, coastal/exposure contraction, original candidate subsets, non-increasing triangles and bounded ridge relief');

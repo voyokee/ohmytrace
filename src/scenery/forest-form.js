@@ -1,5 +1,5 @@
-import {habitatNoise} from './world-biomes.js?v=20261025-regional';
-import {elevationAt} from './world-elevation.js?v=20261025-regional';
+import {habitatNoise} from './world-biomes.js?v=20261025-ridges';
+import {elevationAt} from './world-elevation.js?v=20261025-ridges';
 // Regional crown architecture: a lower canopy, occasional emergents, and coherent openings.
 // The eligibility map still owns where a forest may exist. No new candidates or mesh copies.
 export const FOREST_FORMS=Object.freeze({
@@ -30,7 +30,12 @@ export function shapeWorldPlant(plant,biome,heightMap) {
     (1+upper*form.emergent)*(1-exposed*.28)*(.68+upper*(species==='spruce'?1.0:1.45));
   const rawHeight=plant.height*heightScale;
   // A soft ceiling keeps emergents bounded without giving every tall tree an identical top.
-  let height=Math.max(25000,rawHeight<300000?rawHeight:300000+120000*(1-Math.exp(-(rawHeight-300000)/120000)));
+  const knee=species==='spruce'?300000:200000,tail=species==='spruce'?120000:90000;
+  let height=Math.max(25000,rawHeight<knee?rawHeight:knee+tail*(1-Math.exp(-(rawHeight-knee)/tail)));
+  // Keep the lowland miniature forest large, but let ridgelines rise above its upper edge.
+  // Blend continuously by each biome's treeline instead of cutting every mountain tree flat.
+  const alpine=smooth(.40,.95,h/biome.treeline),ceiling=220000-(biome.id==='mountain'?100000:60000)*alpine;
+  height+=(ceiling*(1-Math.exp(-height/ceiling))-height)*alpine;
   let width=plant.width*(species==='spruce'?1.16:form.width)/Math.pow(Math.max(.72,heightScale),.35);
   // Compact exposed coastal crowns instead of letting an emergent umbrella cover an island's sea.
   // Four height samples are a conservative art adjustment, not a new coastline dataset.
