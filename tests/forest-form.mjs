@@ -14,7 +14,7 @@ for(let lat=26;lat<52;lat+=.35)for(let lon=90;lon<135;lon+=.35) {
  const q=result.plant;layers.add(result.layer);plants.push(q);
  assert.equal(q.lon,p.lon);assert.equal(q.lat,p.lat);assert.equal(q.ground,p.ground,'Canopy shaping must not move tree roots');
  assert.equal(q.angle,p.angle);assert.equal(q.aspect,p.aspect);
- assert.ok(q.height>10000&&q.height<=300000&&q.width>0&&q.width<2,'GPU bounds and orbital distance classification must remain valid');
+ assert.ok(q.height>10000&&q.height<=420000&&q.width>0&&q.width<2,'GPU bounds and orbital distance classification must remain valid');
 }
 assert.ok(clearings>20&&clearings<plants.length*.40,'Openings must form a minority rather than erase most forests');
 assert.deepEqual([...layers].sort(),['lower','upper']);

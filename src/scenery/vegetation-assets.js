@@ -8,10 +8,13 @@ const cross = (a,b) => [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b
 function assetMesh(kind, low) {
   const positions=[],normals=[],colors=[],indices=[],canopy=[];
   const flexibility={spruce:.18,broadleaf:1,birch:.55,tropical:1,shrub:.65,sakura:.85,grass:0}[kind];
-  const tri=(a,b,c,color,smooth,foliage=false) => {
+  const tri=(a,b,c,color,smooth,foliage=false,facets=0) => {
     const n=cross(sub(b,a),sub(c,a)), length=Math.hypot(...n)||1, base=positions.length/3;
     for(const p of [a,b,c]) { positions.push(...p);
-      const normal=smooth?smooth(p):n.map(x=>x/length);normals.push(...normal);
+      let normal=smooth?smooth(p):n.map(x=>x/length);
+      if(facets){normal=normal.map((v,i)=>v*(1-facets)+n[i]/length*facets);
+        const l=Math.hypot(...normal)||1;normal=normal.map(v=>v/l);}
+      normals.push(...normal);
       // glTF vertex colours are linear. Authoring sRGB directly made the old crowns chalky.
       const fleck=.94+.06*Math.sin(p[0]*139+p[1]*173+p[2]*97);
       const ambient=foliage ? .66+.34*Math.sqrt(Math.max(0,.5+.5*normal[2])) : 1;
@@ -32,17 +35,21 @@ function assetMesh(kind, low) {
       tri(center,q,p,color,undefined,foliage);
     }
   };
-  const crown=(center,radii,color,seed=0,tuft=false) => {
-    const sides=low?7:tuft?9:10, levels=low?(tuft?2:3):tuft?4:5;
+  const crown=(center,radii,color,seed=0,tuft=false,bough=false) => {
+    const sides=low?7:bough?11:tuft?9:10, levels=low?(bough?3:tuft?2:3):bough?5:tuft?4:5;
     const normal=p=>{const d=sub(p,center).map((x,i)=>x/(radii[i]*radii[i])),l=Math.hypot(...d)||1;return d.map(x=>x/l);};
     const point=(j,i) => {const a=(i%sides)/sides*Math.PI*2,b=j/levels*Math.PI;
       // Uneven branch tips break the smooth balloon silhouette, including in the orbital LOD.
-      const r=1+.19*Math.sin(a*3+seed*7+j*2.1)+.09*Math.cos(a*5-seed*3+j);
-      return add(center,[Math.sin(b)*Math.cos(a)*radii[0]*r,Math.sin(b)*Math.sin(a)*radii[1]*r,Math.cos(b)*radii[2]]);};
+      const r=bough?1+.23*Math.sin(a*3+seed*7)+.08*Math.cos(a*5-seed*3):
+        1+.19*Math.sin(a*3+seed*7+j*2.1)+.09*Math.cos(a*5-seed*3+j);
+      const profile=Math.sin(b)*(bough?1-.22*Math.cos(b):1),lean=bough?Math.cos(b)*.18:0;
+      return add(center,[(profile*Math.cos(a)*r+lean*Math.sin(seed*4))*radii[0],
+        (profile*Math.sin(a)*r+lean*Math.cos(seed*4))*radii[1],
+        (Math.cos(b)+(bough?Math.sin(b)*.08*Math.sin(a*2+seed):0))*radii[2]]);};
     for(let j=0;j<levels;j++)for(let i=0;i<sides;i++) {
       const p=point(j,i),q=point(j+1,i),r=point(j+1,i+1),s=point(j,i+1);
-      if(j<levels-1)tri(p,q,r,color,normal,true);
-      if(j>0)tri(p,r,s,color,normal,true);
+      if(j<levels-1)tri(p,q,r,color,normal,true,bough?.28:0);
+      if(j>0)tri(p,r,s,color,normal,true,bough?.28:0);
     }
   };
   const branch=(a,b,radius,color)=>{
@@ -70,24 +77,31 @@ function assetMesh(kind, low) {
           leaf.map((x,i)=>x*(.79+t*.34)+(i===0?t*.035:0)),low?7:10,0,true);}
       cone([0,0,.83],.07,.17,leaf.map(x=>x*1.12),low?5:7,0,true);
     } else if(kind==='tropical') {
-      // Twelve small, tiered umbrella tufts replace six large pods. The orbital model keeps
-      // exactly the same 180-triangle budget; close/far models share all tuft centres.
-      crown([-.025,.02,.88],[.15,.13,.12],leaf,0,true);
-      for(let i=0;i<11;i++) {
-        const a=i*2.399,r=i<5?.23:.29,p=[Math.cos(a)*r,Math.sin(a)*r,i<5?.77+(i%2)*.055:.57+(i%3)*.065];
-        if(!low&&i%2===0)branch([0,0,.32],p,.016,[.28,.23,.12]);
-        crown(p,[i<5?.17:.15,.13,.11],leaf.map(x=>x*(.80+(i%5)*.06)),i+.3,true);
+      // Spend the same orbital triangles on six connected, lobed branch volumes instead
+      // of twelve tiny pods. Low/detail assets share the complete crown architecture.
+      crown([-.025,.02,.86],[.20,.17,.14],leaf,0,true,true);
+      for(let i=0;i<5;i++) {
+        const a=i*2.399,r=.20+(i%2)*.05,p=[Math.cos(a)*r,Math.sin(a)*r,.58+(i%3)*.09];
+        if(!low)branch([0,0,.32],p,.016,[.28,.23,.12]);
+        crown(p,[.22,.16,.14],leaf.map(x=>x*(.78+i*.055)),i+.3,true,true);
       }
     } else if(kind==='birch') {
-      crown([0,0,.87],[.13,.11,.13],leaf,0,true);
-      for(let i=0;i<7;i++) {
-        const a=i*2.399,r=.10+(i%2)*.035,p=[Math.cos(a)*r,Math.sin(a)*r,.40+i*.062];
+      crown([.02,0,.83],[.11,.10,.17],leaf,0,true,true);
+      for(let i=0;i<3;i++) {
+        const a=i*2.399,r=.07+i*.02,p=[Math.cos(a)*r,Math.sin(a)*r,.46+i*.12];
         if(!low)branch([0,0,.23+i*.04],p,.010,bark);
-        crown(p,[.10,.085,.13],leaf.map(x=>x*(.82+i*.035)),i+.1,true);
+        crown(p,[.13,.10,.20],leaf.map(x=>x*(.83+i*.06)),i+.1,true,true);
       }
       if(!low)for(let i=0;i<4;i++)cone([0,0,.12+i*.12],.036,.014,[.14,.15,.13],6,.034);
     } else if(kind==='shrub') {
       crown([0,0,.25],[.38,.31,.25],leaf);
+    } else if(kind==='broadleaf') {
+      crown([.035,-.01,.84],[.15,.13,.16],leaf,0,true,true);
+      for(let i=0;i<5;i++) {
+        const a=i*2.399,r=.14+(i%2)*.04,p=[Math.cos(a)*r,Math.sin(a)*r,.55+(i%3)*.085];
+        if(!low)branch([0,0,.24+(i%3)*.07],p,.013,bark);
+        crown(p,[.17,.13,.20],leaf.map(x=>x*(.78+i*.06)),i+.7,true,true);
+      }
     } else {
       crown([0,.02,.88],[.14,.12,.12],leaf,0,true);
       for(let i=0;i<11;i++) {

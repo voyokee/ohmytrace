@@ -1,5 +1,5 @@
-import {habitatNoise} from './world-biomes.js?v=20261025-groves';
-import {elevationAt} from './world-elevation.js?v=20261025-groves';
+import {habitatNoise} from './world-biomes.js?v=20261025-boughs';
+import {elevationAt} from './world-elevation.js?v=20261025-boughs';
 // Regional crown architecture: a lower canopy, occasional emergents, and coherent openings.
 // The eligibility map still owns where a forest may exist. No new candidates or mesh copies.
 export const FOREST_FORMS=Object.freeze({
@@ -27,11 +27,11 @@ export function shapeWorldPlant(plant,biome,heightMap) {
   let species=plant.species;
   if(biome.id==='temperate'&&Math.abs(lat)>26&&h>200&&upper>.55)species='spruce';
   const heightScale=(form.base+smooth(.28,.70,story)*form.spread)*(.62+smooth(.28,.60,grove)*.38)*
-    (1+upper*form.emergent)*(1-exposed*.28);
+    (1+upper*form.emergent)*(1-exposed*.28)*(.68+upper*(species==='spruce'?1.0:1.45));
   const rawHeight=plant.height*heightScale;
   // A soft ceiling keeps emergents bounded without giving every tall tree an identical top.
-  let height=Math.max(25000,rawHeight<250000?rawHeight:250000+50000*(1-Math.exp(-(rawHeight-250000)/50000)));
-  let width=plant.width*(species==='spruce'?.98:form.width)/Math.pow(Math.max(.72,heightScale),.35);
+  let height=Math.max(25000,rawHeight<300000?rawHeight:300000+120000*(1-Math.exp(-(rawHeight-300000)/120000)));
+  let width=plant.width*(species==='spruce'?1.16:form.width)/Math.pow(Math.max(.72,heightScale),.35);
   // Compact exposed coastal crowns instead of letting an emergent umbrella cover an island's sea.
   // Four height samples are a conservative art adjustment, not a new coastline dataset.
   const radius=height*width*.52*Math.max(plant.aspect,1/plant.aspect),dy=radius/111320,
