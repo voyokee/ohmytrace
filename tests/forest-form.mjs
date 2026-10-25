@@ -32,6 +32,21 @@ const inland=shapeWorldPlant(p,biome,heights),coast=shapeWorldPlant(p,biome,isla
 assert.ok(inland.plant&&coast.plant&&exposed.plant);
 assert.ok(coast.coastal&&coast.plant.height<inland.plant.height&&coast.plant.width<inland.plant.width,'Exposed island crowns must contract rather than cover surrounding sea');
 assert.ok(exposed.plant.height<inland.plant.height,'High exposed slopes must carry a lower canopy');
+// A low foothill root is unchanged, but an oversized crown must leave space for an
+// adjacent range. A flat high plateau and lower water neighbours are different cases.
+const range={width:720,height:360,data:new Uint8ClampedArray(720*360*4)};
+for(let j=0;j<range.height;j++)for(let i=0;i<range.width;i++){
+ const value=(i+.5)/range.width*360-180>p.lon+.5?160:40;
+ range.data.set([value,value,value,255],(j*range.width+i)*4);
+}
+const fitted=shapeWorldPlant(p,biome,range);
+assert.ok(fitted.reliefFitted&&fitted.plant.height<inland.plant.height*.75&&fitted.plant.width<inland.plant.width,
+ 'A broad foothill crown must contract where its footprint reaches higher mountain mass');
+for(const key of ['lon','lat','ground','species','aspect','angle'])assert.equal(fitted.plant[key],inland.plant[key]);
+assert.equal(shapeWorldPlant(p,biome,flat(80)).reliefFitted,false,'A flat plateau must not be treated as an adjacent range');
+assert.equal(coast.reliefFitted,false,'Water around a root must not be treated as an uphill ridge');
+const slight=shapeWorldPlant({...p,lon:p.lon+.001},biome,range);
+assert.ok(Math.abs(slight.plant.height/fitted.plant.height-1)<.01,'Small coordinate changes must not create a new crown-size step');
 const alpineBiome={...biome,id:'mountain',treeline:2200};let previous;
 for(let value=30;value<=86;value++) {
  const result=shapeWorldPlant(p,alpineBiome,flat(value)).plant;

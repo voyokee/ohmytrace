@@ -79,6 +79,12 @@ czm_material czm_getMaterial(czm_materialInput inputData) {
   float crestSnow=smoothstep(0.002,0.025,localRelief)*
     smoothstep(snowLine-0.06,snowLine+0.04,elevation)*(0.35+resting*0.65)*(1.0-ocean);
   snow=max(snow,crestSnow*0.86);
+  // A narrow glacier can be visible in the albedo but averaged below the DEM snowline.
+  // Recover only bright neutral source snow on convex, rugged, elevated ground. Squaring
+  // the source gate leaves ordinary grey rock/dry plateaus largely unchanged.
+  float sourceCrestSnow=existingSnow*existingSnow*ridge*smoothstep(0.001,0.015,localRelief)*
+    smoothstep(snowLine-0.18,snowLine-0.05,elevation)*(0.25+resting*0.75)*(1.0-ocean);
+  snow=max(snow,sourceCrestSnow*0.84);
   float alpine = smoothstep(snowLine-0.20,snowLine-0.015,elevation) * ridge * (1.0-ocean);
   albedo=mix(albedo,mix(albedo,vec3(0.31,0.35,0.38),0.70),alpine*(1.0-snow));
   albedo = mix(albedo, vec3(0.96, 0.98, 1.0), clamp(snow,0.0,0.98));

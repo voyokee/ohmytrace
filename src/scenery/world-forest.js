@@ -19,7 +19,9 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
     console.warn('World forest:',error.stack||error.message);
   }
   function add(chunk,low) {
-    const task=createModel(viewer,chunk,{low,shader,signal:controller.signal}).then(model=>{
+    // A terrain-fitted orbital tree may be shorter than 10 km. Its display band belongs
+    // to the global layer, independent of the local-tree size heuristic in the loader.
+    const task=createModel(viewer,chunk,{low,shader,signal:controller.signal,far:100000000}).then(model=>{
       if(disposed||currentMix<.01||!wantedKeys.has(chunk.key)){model.destroy();return;}
       const previous=live.get(chunk.key),entry={model,chunk,low,lastSeen:currentNow,listeners:[]};
       if(!previous&&live.size>=maxChunks) {

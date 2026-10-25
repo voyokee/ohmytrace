@@ -10,8 +10,9 @@ function fixture(constrained=false) {
  const items=new Set(),created=[];let requests=0;
  const viewer={camera:{positionWC:C.Cartesian3.fromDegrees(0,0,10000000)},scene:{requestRender(){requests++;},
   primitives:{add(model){items.add(model);return model;},remove(model){if(!items.delete(model))return false;model.destroy();return true;}}}};
- const forest={count:40,chunks:Array.from({length:40},(_,i)=>({key:String(i),lon:-50+i*2.5,lat:0,plants:[{species:'spruce'}]}))};
+ const forest={count:40,chunks:Array.from({length:40},(_,i)=>({key:String(i),lon:-50+i*2.5,lat:0,plants:[{species:'spruce',height:5000}]}))};
  const manager=createWorldForest(viewer,forest,{constrained,loadAssets:async()=>{},createModel:async(_viewer,chunk,options)=>{
+  assert.equal(options.far,100000000,'Short mountain crowns must retain the global distance band through LOD replacements');
   const model={key:chunk.key,low:options.low,ready:false,readyEvent:new C.Event(),errorEvent:new C.Event(),destroyed:false,
    destroy(){assert.equal(this.destroyed,false,'Each model must be destroyed once');this.destroyed=true;}};
   created.push(model);return model;

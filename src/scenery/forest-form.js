@@ -49,9 +49,15 @@ export function shapeWorldPlant(plant,biome,heightMap) {
   // Four height samples are a conservative art adjustment, not a new coastline dataset.
   const radius=height*width*.52*Math.max(plant.aspect,1/plant.aspect),dy=radius/111320,
     dx=dy/Math.max(.3,Math.cos(lat*Math.PI/180));
-  const land=[[lon-dx,lat],[lon+dx,lat],[lon,lat-dy],[lon,lat+dy]]
-    .filter(([x,y])=>elevationAt(heightMap,x,y)>=35).length/4;
+  const neighbours=[[lon-dx,lat],[lon+dx,lat],[lon,lat-dy],[lon,lat+dy]]
+    .map(([x,y])=>elevationAt(heightMap,x,y));
+  const land=neighbours.filter(h=>h>=35).length/4;
   height*=.70+land*.30;width*=.46+land*.54;
+  // A foothill root may be low even when its exaggerated crown reaches into a high ridge.
+  // Reuse the footprint's DEM probes to fit those crowns to nearby mountain mass. Flat
+  // lowland forests retain their volume; no roots, candidates or terrain are moved.
+  const peak=Math.max(h,...neighbours),relief=smooth(250,900,peak-h)*smooth(900,1800,peak);
+  height*=1-relief*.55;width*=1-relief*.20;
   return {plant:{...plant,species,height,width},layer:upper>.55?'upper':'lower',
-    coastal:land<1,exposed:exposed>.5};
+    coastal:land<1,exposed:exposed>.5,reliefFitted:relief>.05};
 }

@@ -1,7 +1,7 @@
 import {surfaceGround} from './world-surface.js?v=20261025-ridges';
 import {worldBiome,habitatNoise} from './world-biomes.js?v=20261025-ridges';
 import {mapPixel,elevationAt} from './world-elevation.js?v=20261025-ridges';
-import {shapeWorldPlant} from './forest-form.js?v=20261026-canopy';
+import {shapeWorldPlant} from './forest-form.js?v=20261026-relief-fit';
 export {WORLD_BASE,WORLD_RELIEF,WORLD_RIDGE_RELIEF,WORLD_RIDGE_MAX,mapPixel,elevationAt,worldHeight,geographicPosition} from './world-elevation.js?v=20261025-ridges';
 const RAD=Math.PI/180;
 export function random(seed) {
@@ -36,7 +36,7 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
   // hard cap, low-detail models and 12 resident chunks still bound the constrained path.
   const step = constrained ? .72 : .48;
   const biomes={};
-  const canopyStats={enabled:canopy,clearings:0,upper:0,coastal:0,exposed:0};
+  const canopyStats={enabled:canopy,clearings:0,upper:0,coastal:0,exposed:0,reliefFitted:0};
   let count = 0;
   for (let lat = -58; lat < 73; lat += step) {
     const lonStep = step / Math.max(0.4, Math.cos(lat * RAD));
@@ -62,6 +62,7 @@ export function makeWorldForest(dayMap, heightMap, { constrained = false, maxIns
       if(shaped.layer==='upper')canopyStats.upper++;
       if(shaped.coastal)canopyStats.coastal++;
       if(shaped.exposed)canopyStats.exposed++;
+      if(shaped.reliefFitted)canopyStats.reliefFitted++;
       if (!chunks.has(key)) chunks.set(key, { key, lon: cx, lat: cy, plants: [] });
       chunks.get(key).plants.push({...shaped.plant,ground:surfaceGround(heightMap,x,y,constrained)});
       count++;biomes[biome.id]=(biomes[biome.id]||0)+1;
