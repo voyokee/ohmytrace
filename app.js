@@ -1253,14 +1253,16 @@ function renderList() {
 
 function renderTimeline() {
   const dated=visibleTrips().filter(t=>t.date),track=$('#tl-track');timelineGroups=new Map();
-  $('#timeline').classList.toggle('empty',!dated.length);
-  if(!dated.length){track.innerHTML='';return;}
-  const years=yearOptions(dated),y0=state.year??years[0],y1=state.year??years.at(-1);
+  const periods=[...dated,...visibleHomes().filter(h=>h.date),...(lifeSnapshot?.chapterPeriod?[{date:lifeSnapshot.chapterPeriod}]:[])];
+  $('#timeline').classList.toggle('empty',!periods.length&&$('#chapter-filter').hidden);
+  if(!periods.length){track.innerHTML='<span class="tl-month">日期未知</span>';return;}
+  const years=yearOptions(periods),y0=state.year??years[0],y1=state.year??years.at(-1);
   const T0=new Date(y0,0,1).getTime(),T1=new Date(y1+1,0,1).getTime();
   const P=d=>Math.min(100,Math.max(0,(d-T0)/(T1-T0)*100));
   const dense=state.year!=null||dated.length>16;track.classList.toggle('dense',dense);
   track.style.setProperty('--timeline-slots',state.year!=null?12:Math.min(12,years.length));
   let html='<div class="tl-rail"></div>';
+  if(lifeSnapshot?.chapterPeriod){const d=lifeSnapshot.chapterPeriod,l=P(d.start),r=P(d.end);html+=`<span class="tl-band life-band" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${esc(lifeSnapshot.chapter.title)} · ${esc(d.label)}"></span>`;}
   for(const h of visibleHomes()) {
     if(!h.date||h.date.end<T0||h.date.start>T1)continue;
     const l=P(h.date.start),r=P(h.date.end);

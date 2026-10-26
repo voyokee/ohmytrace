@@ -46,7 +46,7 @@ export function projectDataset(data,scope={type:'all'}) {
     t.origin=dated.sort((a,b)=>b.date.start-a.date.start)[0]||(undated.length===1?undated[0]:null);
   });
   const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)}));
-  return {rows,places,placeIds,trips,homes,chapter:clone(chapter),scope:clone(scope)};
+  return {rows,places,placeIds,trips,homes,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter.start,chapter.end):null,scope:clone(scope)};
 }
 export class RendererAdapter {
   constructor(repository) {

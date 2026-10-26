@@ -459,6 +459,7 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
 #life-storage-error[hidden], #chapter-filter[hidden] { display:none; }
 #chapter-filter { display:flex; align-items:center; gap:6px; overflow-x:auto; min-height:34px; flex:none; scrollbar-width:none; }
 #timeline.has-chapters { height:158px; }
+.tl-band.life-band { top:41px; height:4px; background:#ffc66680; border:0; pointer-events:none; }
 body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { bottom:190px; }
 @media(max-width:720px) {
   .life-dates { grid-template-columns:1fr; gap:0; }
