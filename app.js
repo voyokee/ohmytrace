@@ -20,7 +20,7 @@ const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=2026
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
-const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-continuity');
+const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-touch');
 const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
 const {GEOCODER_VERSION,needsGeocoding:legacyNeedsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -508,6 +508,7 @@ async function initGlobe() {
 
   const markInput = () => {
     storyExperience?.pauseForInteraction();
+    if(mapChooser?.kind==='places')mapChooser.close();
     lastInput = performance.now();
     orbit = null;
     cinematic.setFocus(null);
@@ -1084,7 +1085,7 @@ function renderMarkers() {
   if(!footprintOverlay)footprintOverlay=createFootprintOverlay(viewer,{container:$('#markers'),
     groundHeight:(lon,lat)=>cinematic.groundHeight(lon,lat),obstacles:markerObstacles,
     onSelect:name=>onMarkerClick(name,markerInfo.get(name)),onCluster:showPlaceCluster,
-    onCameraChange:()=>{if(mapChooser.kind==='places')mapChooser.close();}});
+    onInteract:()=>{storyExperience?.pauseForInteraction();pauseOverviewMotion();}});
   syncLights();markerInfo=new Map();
   for(const t of trips)for(const stop of t.stops) {
     if(!markerInfo.has(stop.place))markerInfo.set(stop.place,{trips:[],homes:[]});

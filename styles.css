@@ -534,6 +534,8 @@ body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { 
   #card .card-from { margin-top:6px; font-size:11px; }
   #card .card-nav { margin-top:6px; padding-top:5px; font-size:11px; }
   #list,body:has(#timeline.has-chapters) #list { bottom:calc(var(--mobile-timeline-height) + 24px + env(safe-area-inset-bottom)); }
+  .mk,.mk-cluster { width:44px; height:44px; margin:-22px 0 0 -22px; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .mk::before,.mk-cluster::before { width:44px; height:44px; }
 }
 @media(max-width:380px) {
   #brand h1 { font-size:19px; max-width:calc(100vw - 234px); }
