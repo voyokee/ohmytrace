@@ -31,6 +31,7 @@ test('malformed EXIF offsets, segments, excessive entries and zero denominators 
 test('content hash deduplicates renamed files; unsupported and oversized formats remain diagnostic records',async()=>{
   const a=await analyzePhotoFile(photoFile({},'a.jpg')),b=await analyzePhotoFile(photoFile({},'b.jpeg'));
   assert.deepEqual(a.coordinates,{latitude:39.9,longitude:116.4});
+  assert.deepEqual(a.dimensions,{width:64,height:48});
   assert.equal(a.assetId,b.assetId);assert.equal(a.originalFile.name,'a.jpg');assert.equal(a.metadataEvidence.state,'observed');
   const heic=await analyzePhotoFile(new File(['not a jpeg'],'a.heic',{type:'image/heic'}));assert.equal(heic.processingStatus,'unsupported');assert.equal(heic.coordinates,null);
   const huge=await analyzePhotoFile(photoFile(),{limits:{...MEDIA_LIMITS,maxFileBytes:1}});assert.equal(huge.processingStatus,'oversize');assert.equal(huge.deduplicationKey,null);

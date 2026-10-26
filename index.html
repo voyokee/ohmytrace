@@ -6,10 +6,10 @@
 <meta name="theme-color" content="#04060b">
 <title>我的足迹</title>
 <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
-<link rel="stylesheet" href="styles.css?v=20261026-life">
+<link rel="stylesheet" href="styles.css?v=20261026-photos">
 <script>window.CESIUM_BASE_URL = 'vendor/cesium/';</script>
 <script src="vendor/cesium/Cesium.js" defer></script>
-<script src="app.js?v=20261026-life-years" defer></script>
+<script src="app.js?v=20261026-photos" defer></script>
 </head>
 <body>
 <div id="globe"></div>
@@ -25,6 +25,7 @@
 
 <nav id="toolbar">
   <button id="btn-life" class="tb" title="Life Atlas · 人生阶段" aria-label="人生阶段">章</button>
+  <button id="btn-photos" class="tb" title="本地照片历史" aria-label="照片历史">照</button>
   <button id="btn-tone" class="tb" title="切换足迹夜景（N）" aria-label="切换足迹夜景" aria-pressed="false">
     <svg viewBox="0 0 24 24"><path d="M20.5 13.2A8.7 8.7 0 0110.8 3.5a8.7 8.7 0 109.7 9.7z"/></svg>
   </button>
@@ -91,6 +92,7 @@
 <div id="toast"></div>
 <p id="life-storage-error" class="glass" role="alert" hidden></p>
 <dialog id="life-dialog" class="dialog glass" aria-label="人生阶段管理"></dialog>
+<dialog id="photo-dialog" class="dialog glass" aria-label="本地照片历史重建"></dialog>
 <div id="credits"><span>全球素材 NASA/GSFC · GEBCO</span></div>
 
 <div id="loader">

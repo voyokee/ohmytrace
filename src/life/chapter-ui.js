@@ -21,7 +21,7 @@ export function mountChapterUI({repository,adapter,onScope,onError,onBackup,onRe
     const d=data(),chapter=d.chapters.find(c=>c.id===editing),demo=d.meta.origin==='demo';
     dialog.innerHTML=`<div class="dlg-head"><h3>Life Atlas · 人生阶段</h3><button class="x" data-life-close aria-label="关闭人生阶段">×</button></div>
       <div class="dlg-body scroll"><p class="muted">${esc(status())}</p>
-      <div class="row-actions"><button class="btn" data-life-backup>JSON 备份</button><label class="btn">恢复 JSON<input type="file" data-life-restore accept=".json,application/json" hidden></label></div>
+      <div class="row-actions"><button class="btn" data-life-backup>人生数据 JSON 备份</button><label class="btn">恢复 JSON<input type="file" data-life-restore accept=".json,application/json" hidden></label></div><p class="hint">此 JSON 含人生记录和照片关联，不含独立媒体索引或原图。媒体索引请在照片历史中另行备份。</p>
       <p class="hint">阶段可以重叠，同一次旅行可以属于多个阶段。先导入 CSV，再组织你的人生阶段。</p>
       <div class="life-chapters">${d.chapters.map(c=>`<div class="life-chapter"><button class="mini" data-life-view="${esc(c.id)}"><strong>${esc(c.title)}</strong><span>${esc(period(c))} · ${c.relatedTripIds.length} 次旅行</span></button><button class="btn sm" data-life-edit="${esc(c.id)}">编辑</button><button class="btn sm danger" data-life-delete="${esc(c.id)}">删除</button></div>`).join('')||'<p class="muted">还没有人生阶段。</p>'}</div>
       <form id="chapter-form"><h4>${chapter?'编辑阶段':'新建阶段'}</h4>

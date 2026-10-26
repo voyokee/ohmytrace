@@ -47,3 +47,12 @@ test('manual merge/split/edit preserves immutable photo evidence and revision hi
   editCandidate(r,r.candidates[0].id,{title:'我的旅行',chapterIds:[]});splitCandidate(r,r.candidates[0].id);assert.equal(r.candidates.length,2);
   assert.deepEqual(a,original);assert.deepEqual(r.manualRevisions.map(v=>v.action),['merge','edit','split']);
 });
+test('spatial grouping and residence thresholds distinguish exact boundary from just outside',async()=>{
+  const a=await assets([{lat:0,lon:0,time:'2025:05:01 08:00:00'},{lat:0,lon:0.01,time:'2025:05:01 09:00:00'}]);
+  const distance=distanceKm(a[0].coordinates,a[1].coordinates),d=emptyDataset();
+  assert.equal(reconstructPhotos(a,d,{rules:{...RECONSTRUCTION_RULES,placeRadiusKm:distance}}).candidates[0].visits.length,1);
+  assert.equal(reconstructPhotos(a,d,{rules:{...RECONSTRUCTION_RULES,placeRadiusKm:distance-1e-6}}).candidates[0].visits.length,2);
+  importCSVInto(d,'日期,地点,类型,坐标\n2025,家,现居地,"0,0"');
+  assert.equal(reconstructPhotos([a[1]],d,{rules:{...RECONSTRUCTION_RULES,homeRadiusKm:distance}}).candidates[0].action,'memory');
+  assert.equal(reconstructPhotos([a[1]],d,{rules:{...RECONSTRUCTION_RULES,homeRadiusKm:distance-1e-6}}).candidates[0].action,'create');
+});

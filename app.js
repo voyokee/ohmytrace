@@ -2,6 +2,8 @@
 'use strict';
 const {createLifeBridge}=await import('./src/life/app-bridge.js');
 const {mountChapterUI}=await import('./src/life/chapter-ui.js');
+const {PhotoHistoryService}=await import('./src/life/media/integration.js');
+const {mountPhotoUI}=await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-places');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
@@ -215,6 +217,9 @@ async function load() {
       onRestore:async file=>{const text=await file.text();if(!confirm('用此 JSON 备份替换当前 Life Atlas？建议先下载当前 JSON 备份。'))return;
         stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('JSON 备份已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
+    const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
+    mountPhotoUI({service:photos,download,onError:error=>toast('照片处理失败：'+error.message,6000),
+      onCommitted:result=>{stopPlay();state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
 async function importCsvText(text,mode) {
@@ -1132,7 +1137,7 @@ function updateArcs() {
       const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
       for(let i=1;i<points.length;i++) {
         const e=arcSource.entities.add({polyline:{positions:arcPositions(points[i-1],points[i]),width:sel?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
-          material:new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
+          material:t.inferredConnections?new Cesium.PolylineDashMaterialProperty({dashLength:12,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)}):new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
         arcEntities.push({trip:t,e});
       }
     }
@@ -1315,6 +1320,7 @@ function renderCard() {
     html += `<div class="card-kicker"><span class="dot"></span>${esc(x.type)} · 第 ${x.n} 次</div>
       <h2>${esc(x.title)}</h2>
       <div class="card-date">${esc(x.date ? x.date.label : '日期未知')}${x.date && x.date.days ? ` <span>· ${x.date.days} 天</span>` : ''}</div>
+      ${x.inferredConnections?`<p class="hint">${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，虚线为推测连接，交通方式未知。</p>`:''}
       ${x.origin ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
       <ol class="stops">${x.stops.map(s => stopHTML(s.place, s.note, color)).join('')}</ol>
       <div class="card-nav"><button data-act="prev"${idx <= 0 ? ' disabled' : ''}>‹ 上一次</button>

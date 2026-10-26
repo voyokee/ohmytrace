@@ -70,6 +70,12 @@ export function reconstructPhotos(input,data,{rules=RECONSTRUCTION_RULES}={}) {
     if(previous&&(gap.hours===null||gap.hours<0||gap.hours>rules.visitGapHours||distanceKm(group[0].coordinates,asset.coordinates,rules)>rules.placeRadiusKm||residenceFor(previous,data,rules)?.id!==residenceFor(asset,data,rules)?.id))flush();
     group.push(asset);
   }flush();
+  const clock=a=>a?.extractedTime?{localDateTime:a.extractedTime.localDateTime,offsetMinutes:a.extractedTime.offsetMinutes,utcEpochMs:a.extractedTime.utcEpochMs}:null;
+  const ordered=new Map(located.map((a,i)=>[a.assetId,i]));
+  for(const visit of visits){const first=ordered.get(visit.assetIds[0]),last=ordered.get(visit.assetIds.at(-1));
+    visit.arrivalWindow={state:'inferred',after:clock(located[first-1]),before:clock(located[first]),context:'original-photo-order; not proof of continuous stay'};
+    visit.departureWindow={state:'inferred',after:clock(located[last]),before:clock(located[last+1]),context:'original-photo-order; not proof of continuous stay'};
+  }
   const assetMap=new Map(assets.map(a=>[a.assetId,a])),candidates=[];let trip=[];
   const flushTrip=()=>{if(trip.length){candidates.push(candidateFor(trip,data,rules));trip=[];}};
   for(const visit of visits) {

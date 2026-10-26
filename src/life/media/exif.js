@@ -82,7 +82,7 @@ export function parseJpegExif(input,limits=MEDIA_LIMITS) {
       if(marker===0xda||marker===0xd9)break;
       if(marker===0x01||marker>=0xd0&&marker<=0xd8)continue;
       ensure(offset,2);const length=view.getUint16(offset);if(length<2)throw new Error('JPEG_INVALID_SEGMENT');ensure(offset,length);
-      if(marker===0xe1&&length>=8&&ascii(offset+2,6)==='Exif'){parseTiff(offset+8,offset+length);break;}
+      if(marker===0xe1&&result.metadataStatus==='missing'&&length>=8&&ascii(offset+2,6)==='Exif')parseTiff(offset+8,offset+length);
       if([0xc0,0xc1,0xc2].includes(marker)&&length>=7)result.dimensions={width:view.getUint16(offset+5),height:view.getUint16(offset+3)};
       offset+=length;
     }
@@ -101,7 +101,7 @@ function coordinate(values,reference,positive,negative,max) {
 export async function analyzePhotoFile(file,{limits=MEDIA_LIMITS}={}) {
   const originalFile={name:file.name||'未命名',type:file.type||'',size:file.size,lastModified:file.lastModified??null};
   if(file.size>limits.maxFileBytes)return {assetId:`diagnostic_${crypto.randomUUID()}`,deduplicationKey:null,originalFile,
-    processingStatus:'oversize',metadataStatus:'unsupported',extractedTime:null,coordinates:null,orientation:null,altitude:null,rawTags:{},diagnostics:['FILE_SIZE_LIMIT'],linkedMemoryId:null,thumbnailReference:null};
+    processingStatus:'oversize',metadataStatus:'unsupported',extractedTime:null,coordinates:null,orientation:null,altitude:null,rawTags:{},metadataEvidence:{state:'unknown',source:{kind:'file-diagnostic',reason:'FILE_SIZE_LIMIT'}},diagnostics:['FILE_SIZE_LIMIT'],linkedMemoryId:null,thumbnailReference:null};
   const buffer=await file.arrayBuffer(),hash=await crypto.subtle.digest('SHA-256',buffer);
   const deduplicationKey=[...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');
   let metadata;

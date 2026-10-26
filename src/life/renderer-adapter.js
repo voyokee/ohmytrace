@@ -25,8 +25,16 @@ export function projectDataset(data,scope={type:'all'}) {
   const places=Object.create(null),placeIds=Object.create(null);
   for(const p of data.places){const key=keys.get(p.id);placeIds[key]=p.id;places[key]={...clone(p.location),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
   const visits=new Map(data.visits.map(v=>[v.id,v]));
-  let trips=data.trips.map(t=>({id:t.id,kind:'trip',title:t.title,type:t.type,date:renderDate(t.start,t.end),
-    stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note};})}));
+  const photoTrips=new Set(data.memories.filter(m=>m.kind==='photo').flatMap(m=>m.tripIds));
+  let trips=data.trips.map(t=>{
+    const inferredConnections=photoTrips.has(t.id);let date=renderDate(t.start,t.end);
+    if(inferredConnections&&(t.start.precision==='unknown'||t.end.precision==='unknown')){
+      const stops=t.visitIds.map(id=>visits.get(id)),starts=stops.filter(v=>dateBound(v.start)!==null).sort((a,b)=>dateBound(a.start)-dateBound(b.start)),ends=stops.filter(v=>dateBound(v.end,true)!==null).sort((a,b)=>dateBound(a.end,true)-dateBound(b.end,true));
+      if(starts.length&&ends.length){date=renderDate(t.start.precision==='unknown'?starts[0].start:t.start,t.end.precision==='unknown'?ends.at(-1).end:t.end);date={...date,days:null,label:`照片观测 ${date.label} · 旅行起止未完全确认`,short:`照片观测 ${date.short}`};}
+    }
+    return {id:t.id,kind:'trip',title:t.title,type:t.type,date,inferredConnections,originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
+      stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note};})};
+  });
   let homes=data.residences.map(r=>({id:r.id,kind:r.kind,title:r.title,place:keys.get(r.placeId),placeId:r.placeId,type:r.type,note:r.note,date:renderDate(r.start,r.end)}));
   const chapter=scope.type==='chapter'?data.chapters.find(c=>c.id===scope.id):null;
   if(scope.type==='chapter') {
@@ -43,7 +51,7 @@ export function projectDataset(data,scope={type:'all'}) {
     t.n=i+1;t.year=t.date?new Date(t.date.start).getUTCFullYear():null;t.endYear=t.date?new Date(t.date.end).getUTCFullYear():null;
     const dated=homes.filter(h=>!h.anchor&&h.date&&t.date&&h.date.start<=t.date.start&&t.date.start<=h.date.end);
     const undated=homes.filter(h=>!h.anchor&&h.kind==='home'&&!h.date);
-    t.origin=dated.sort((a,b)=>b.date.start-a.date.start)[0]||(undated.length===1?undated[0]:null);
+    t.origin=t.originUncertain?null:dated.sort((a,b)=>b.date.start-a.date.start)[0]||(undated.length===1?undated[0]:null);
   });
   const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)}));
   return {rows,places,placeIds,trips,homes,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter.start,chapter.end):null,scope:clone(scope)};

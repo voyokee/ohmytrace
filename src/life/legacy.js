@@ -102,7 +102,7 @@ export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual
       const hint=JSON.stringify([row.trip||row.place,row.date]);
       const priorTrip=old?.tripId || raw._lifeTripId;
       let trip=priorTrip?groups.get(priorTrip):hints.get(hint)?.length===1?hints.get(hint)[0]:null;
-      if(!trip){const prior=previous.trips.find(t=>t.id===priorTrip);trip={id:prior?.id||priorTrip||newId('trip'),title:row.trip||row.place,type:row.type||'旅行',start:clone(visit.start),end:clone(visit.end),visitIds:[],evidenceIds:prior?.evidenceIds||addEvidence(data,'observed',source)};groups.set(trip.id,trip);nextTrips.push(trip);}
+      if(!trip){const prior=previous.trips.find(t=>t.id===priorTrip),unchanged=prior&&old&&['date','trip','type'].every(k=>old.legacy[k]===row[k]);trip={id:prior?.id||priorTrip||newId('trip'),title:row.trip||row.place,type:row.type||'旅行',start:clone(unchanged?prior.start:visit.start),end:clone(unchanged?prior.end:visit.end),visitIds:[],evidenceIds:prior?.evidenceIds||addEvidence(data,'observed',source)};groups.set(trip.id,trip);nextTrips.push(trip);}
       if(!hints.has(hint))hints.set(hint,[]);
       if(!hints.get(hint).includes(trip))hints.get(hint).push(trip);
       trip.visitIds.push(id);visit.tripId=trip.id;

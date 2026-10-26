@@ -33,7 +33,7 @@ export class PhotoScanner {
         peakBufferEstimateBytes=Math.max(peakBufferEstimateBytes,Math.min(file.size,this.limits.maxFileBytes)*2+65536);
         try{asset=await this.extract(file);}catch(error){
           if(this.cancelled)break;
-          asset={assetId:newId('diagnostic'),deduplicationKey:null,originalFile:{name:file.name,type:file.type,size:file.size,lastModified:file.lastModified??null},processingStatus:'error',metadataStatus:'error',extractedTime:null,coordinates:null,diagnostics:[error.message],linkedMemoryId:null,thumbnailReference:null};
+          asset={assetId:newId('diagnostic'),deduplicationKey:null,originalFile:{name:file.name,type:file.type,size:file.size,lastModified:file.lastModified??null},processingStatus:'error',metadataStatus:'error',extractedTime:null,coordinates:null,metadataEvidence:{state:'unknown',source:{kind:'file-diagnostic',reason:error.message}},diagnostics:[error.message],linkedMemoryId:null,thumbnailReference:null};
         }
         if(this.cancelled)break;
         if(firstResultMs===null)firstResultMs=performance.now()-started;

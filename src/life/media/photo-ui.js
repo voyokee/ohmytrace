@@ -6,13 +6,14 @@ const reasonText={
   'daily-photos-within-residence':'已知居住时段内的日常照片','possible-away-visit':'可能的离家到访',
   'single-photo-boundaries-unknown':'只有一张照片，旅行起止未知','photo-coverage-not-complete-trip':'照片仅覆盖部分时间，旅行起止未知',
   'manual-merge':'用户合并','manual-split':'用户拆分'};
+const statusText={scanning:'正在扫描',review:'待审核',prepared:'待完成确认',committed:'已保存',cancelled:'已取消',interrupted:'已中断，可继续'};
 const diagnosticText={NO_GPS:'无 GPS',NO_CAPTURE_TIME:'无拍摄时间',UNSUPPORTED_FORMAT:'暂不支持此格式（含 HEIC/HEIF）',FILE_SIZE_LIMIT:'超过单文件 64 MiB 限制',INVALID_GPS:'GPS 元数据无效',INVALID_CAPTURE_TIME:'拍摄时间无效'};
 
 export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download}) {
   const dialog=document.querySelector('#photo-dialog');let batch=null,review=null,assets=[],preview=null,busy=false,urls=[];
-  const selected=new Set(),release=()=>{urls.forEach(url=>URL.revokeObjectURL(url));urls=[];};
+  const selected=new Set(),release=()=>{urls.forEach(url=>URL.revokeObjectURL(url));urls=[];};let work=Promise.resolve(),initialized=false;
   function message(error){const el=dialog.querySelector('[data-photo-error]');if(el)el.textContent=error.message;onError(error);}
-  async function run(action){if(busy)return;busy=true;try{await action();}catch(error){message(error);}finally{busy=false;}}
+  function run(action){work=work.then(async()=>{busy=true;try{await action();}catch(error){message(error);}finally{busy=false;}});return work;}
   const currentData=()=>service.repository.getDataset();
   async function loadBatch(id){batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);preview=null;selected.clear();render();}
   async function save(){preview=null;await service.saveReview(batch.id,review);render();}
@@ -28,7 +29,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download
       <div class="dlg-body scroll"><p class="muted">只处理你本次选择的文件，原图不上传、不保存。关闭或刷新后需重新选择原文件才能预览。</p>
       <label class="btn primary">选择照片<input type="file" data-photo-files multiple accept="image/jpeg,.jpg,.jpeg,.heic,.heif,.png,.webp" hidden ${service.scanner.running?'disabled':''}></label>
       <button class="btn" type="button" data-photo-cancel ${!service.scanner.running?'disabled':''}>取消扫描</button>
-      <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${batch.status} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:'JPEG 支持 EXIF 时间、GPS、海拔与方向；其他格式保留诊断，不猜测信息。'}</p>
+      <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${statusText[batch.status]||'待检查'} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:'JPEG 支持 EXIF 时间、GPS、海拔与方向；其他格式保留诊断，不猜测信息。'}</p>
       <div class="row-actions"><button class="btn" type="button" data-photo-backup>备份媒体索引</button><label class="btn">恢复媒体索引<input type="file" data-photo-restore accept=".json,application/json" hidden></label><button class="btn" type="button" data-photo-history>历史批次</button></div>
       <p class="hint">人生数据 JSON 不含媒体索引和原图。媒体索引备份仅含元数据与审核草稿；请同时保留人生 JSON 备份及原始照片。</p>
       <div data-photo-history-list></div>
@@ -47,10 +48,10 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download
       </section>`).join('')}</div>
       <label><input type="checkbox" data-photo-unlocated ${review.includeUnlocated?'checked':''}>保存 ${review.unlocatedAssetIds.length} 张无 GPS 照片为未定位记忆（不会上地图）</label>
       <details><summary>文件诊断（${assets.length}）</summary><div class="photo-diagnostics">${assets.map(a=>`<p>${esc(a.originalFile.name)} · ${a.diagnostics.map(d=>esc(diagnosticText[d]||d)).join(' / ')||'EXIF 已解析'}${a.extractedTime?` · ${esc(a.extractedTime.raw)} ${esc(a.extractedTime.offsetRaw||'时区未知')}`:''} · 方向 ${a.orientation??'未知'}</p>`).join('')}</div></details>
-      <section data-photo-dry-run>${preview?`<h4>确认前预览</h4><pre>${esc(JSON.stringify(preview.summary,null,2))}</pre><button class="btn primary" type="button" data-photo-commit>确认写入人生数据</button><p class="hint">本次确认会原子保存人生记录；照片位置间的连线为推测连接。</p>`:''}</section>`:''}
+      <section data-photo-dry-run>${preview?`<h4>确认前预览</h4><p>将新增 <b>${preview.summary.createPlaces}</b> 个地点、<b>${preview.summary.createVisits}</b> 条到访、<b>${preview.summary.createTrips}</b> 次旅行、<b>${preview.summary.createMemories}</b> 条照片记忆。</p><p>其中 ${preview.summary.unlocatedMemories} 条记忆没有位置；关联 ${preview.summary.chapterAssociations.length} 项人生阶段关系。已有旅行的手动字段与地点坐标保持原值。</p><details><summary>查看完整变更明细</summary><pre>${esc(JSON.stringify(preview.summary,null,2))}</pre></details><button class="btn primary" type="button" data-photo-commit>确认写入人生数据</button><p class="hint">本次确认会原子保存人生记录；照片位置间的连线为推测连接。</p>`:''}</section>`:''}
       <p role="alert" data-photo-error></p></div>`;
   }
-  async function open(){if(!dialog.open)dialog.showModal();if(!batch)render();}
+  async function open(){if(!initialized){await service.recover();initialized=true;}if(!dialog.open)dialog.showModal();if(!batch)render();}
   document.querySelector('#btn-photos').addEventListener('click',()=>run(open));
   dialog.addEventListener('close',()=>{release();if(service.scanner.running)service.scanner.cancel();});
   dialog.addEventListener('cancel',()=>{if(service.scanner.running)service.scanner.cancel();});
@@ -58,7 +59,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download
     const target=event.target;
     if(target.hasAttribute('data-photo-files')){const files=Array.from(target.files);run(async()=>{
       preview=null;review=null;batch=null;render();
-      batch=await service.scanner.scan(files,{resumeBatchId:dialog.dataset.resumeBatch||null,onProgress:p=>{const el=dialog.querySelector('[data-photo-progress]');if(el)el.textContent=`${p.processed} / ${p.total} · 重复 ${p.duplicateCount} · 失败 ${p.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;}});
+      const scanning=service.scanner.scan(files,{resumeBatchId:dialog.dataset.resumeBatch||null,onProgress:p=>{const el=dialog.querySelector('[data-photo-progress]');if(el)el.textContent=`${p.processed} / ${p.total} · 重复 ${p.duplicateCount} · 失败 ${p.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;}});render();batch=await scanning;
       delete dialog.dataset.resumeBatch;await loadBatch(batch.id);
     });return;}
     if(target.hasAttribute('data-photo-restore')){const file=target.files[0];if(file)run(async()=>{const input=JSON.parse(await file.text());if(!confirm('用此媒体索引替换当前媒体索引？人生数据与原图不会被此操作替换。'))return;await service.restoreManifest(input);batch=null;review=null;preview=null;render();});return;}
@@ -82,7 +83,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download
       if(button.hasAttribute('data-photo-preview')){await service.saveReview(batch.id,review);preview=await service.preview(batch.id);render();}
       if(button.hasAttribute('data-photo-commit')){const result=await service.commit(batch.id,preview);preview=null;await onCommitted(result);batch=await service.manifest.getBatch(batch.id);review=null;render();dialog.querySelector('[data-photo-progress]').textContent=result.warning||`已保存 ${result.createdMemories} 条照片记忆；重复照片不会重复生成记录。`;}
       if(button.hasAttribute('data-photo-backup'))download('LifeAtlas-media-index.json',JSON.stringify(await service.manifest.backup(),null,2),'application/json');
-      if(button.hasAttribute('data-photo-history')){const batches=await service.manifest.listBatches();dialog.querySelector('[data-photo-history-list]').innerHTML=batches.sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(b=>`<div class="row-actions"><button class="btn" data-photo-batch="${esc(b.id)}">${esc(b.startedAt)} · ${b.processed}/${b.total} · ${esc(b.status)}</button>${['scanning','interrupted','cancelled'].includes(b.status)?`<button class="btn" data-photo-resume="${esc(b.id)}">重新选择原文件以续扫</button>`:''}</div>`).join('')||'<p class="hint">还没有导入批次。</p>';}
+      if(button.hasAttribute('data-photo-history')){const batches=await service.manifest.listBatches();dialog.querySelector('[data-photo-history-list]').innerHTML=batches.sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(b=>`<div class="row-actions"><button class="btn" data-photo-batch="${esc(b.id)}">${esc(b.startedAt)} · ${b.processed}/${b.total} · ${esc(statusText[b.status]||'待检查')}</button>${['scanning','interrupted','cancelled'].includes(b.status)?`<button class="btn" data-photo-resume="${esc(b.id)}">重新选择原文件以续扫</button>`:''}</div>`).join('')||'<p class="hint">还没有导入批次。</p>';}
       if(button.dataset.photoBatch)await loadBatch(button.dataset.photoBatch);
       if(button.dataset.photoResume){dialog.dataset.resumeBatch=button.dataset.photoResume;dialog.querySelector('[data-photo-files]').click();}
     });
