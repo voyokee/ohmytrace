@@ -1,7 +1,7 @@
 // No Cesium/DOM/storage dependencies. Each transition owns an abortable ticket;
 // late renderer promises can never arm a timer or complete a newer transition.
 export class StoryPlayback {
-  constructor({enter=async()=>{},cancel=()=>{},exit=()=>{},now=()=>performance.now(),setTimer=setTimeout,clearTimer=clearTimeout,reducedMotion=false,transitionTimeout=10000}={}){
+  constructor({enter=async()=>{},cancel=()=>{},exit=()=>{},now=()=>performance.now(),setTimer=(...args)=>setTimeout(...args),clearTimer=id=>clearTimeout(id),reducedMotion=false,transitionTimeout=10000}={}){
     Object.assign(this,{enter,cancel,exit,now,setTimer,clearTimer,reducedMotion,transitionTimeout});
     this.listeners=new Set();this.generation=0;this.status='idle';this.index=0;this.speed=1;this.scenes=[];this.remaining=null;
   }
