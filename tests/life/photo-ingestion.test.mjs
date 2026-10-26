@@ -55,3 +55,8 @@ test('failed chunk persistence never advances the durable resume cursor beyond s
   assert.equal(batch.processed,2,'failed chunk cannot skip unsaved files on resume');assert.equal(batch.assetIds.length,2);
   manifest.saveChunk=real;await scanner.scan(files,{resumeBatchId:batch.id});assert.equal((await manifest.listAssets()).length,5);
 });
+test('invalid media backup cannot replace valid metadata with fabricated UTC semantics or malformed review',async()=>{
+  const manifest=new MemoryManifest(),scanner=new PhotoScanner(manifest,{workerFactory:null});await scanner.scan([photoFile({offset:null})]);const before=await manifest.backup(),bad=structuredClone(before);
+  bad.assets[0].extractedTime.utcEpochMs=Date.now();await assert.rejects(manifest.restore(bad),/时间/);assert.deepEqual(await manifest.backup(),before);
+  const malformed=structuredClone(before);malformed.batches[0].review={version:1,candidates:[{}]};await assert.rejects(manifest.restore(malformed),/审核/);assert.deepEqual(await manifest.backup(),before);
+});

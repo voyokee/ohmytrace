@@ -1,17 +1,25 @@
 import {clone,newId} from '../schema.js';
 import {MEDIA_LIMITS} from './config.js';
+import {extractCaptureTime} from './exif.js';
 
 export function validateAsset(asset) {
   if(!asset||typeof asset.assetId!=='string'||!asset.originalFile||typeof asset.originalFile.name!=='string'||!Number.isSafeInteger(asset.originalFile.size)||asset.originalFile.size<0||!Array.isArray(asset.diagnostics))throw new Error('媒体索引记录损坏');
   if(asset.coordinates&&(!Number.isFinite(asset.coordinates.latitude)||!Number.isFinite(asset.coordinates.longitude)||Math.abs(asset.coordinates.latitude)>90||Math.abs(asset.coordinates.longitude)>180))throw new Error('媒体索引坐标无效');
   if(asset.deduplicationKey!==null&&(!/^[a-f0-9]{64}$/.test(asset.deduplicationKey)||asset.assetId!==`asset_${asset.deduplicationKey}`))throw new Error('媒体内容标识无效');
-  if(asset.extractedTime&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(asset.extractedTime.localDateTime)||!['local-unzoned','offset-instant'].includes(asset.extractedTime.timeBasis)))throw new Error('媒体时间语义无效');
+  if(!['analyzed','error','unsupported','oversize'].includes(asset.processingStatus)||!['parsed','missing','error','unsupported'].includes(asset.metadataStatus)||asset.diagnostics.some(d=>typeof d!=='string'))throw new Error('媒体处理状态无效');
+  if(asset.extractedTime){const t=asset.extractedTime,parsed=extractCaptureTime(t.raw,t.offsetRaw,t.subsecondRaw);
+    if(!parsed||['localDateTime','wallClockOrdinal','offsetMinutes','utcEpochMs','timeBasis'].some(k=>parsed[k]!==t[k]))throw new Error('媒体时间语义无效');
+  }
   return asset;
 }
 export function validateManifest(input) {
   if(input?.kind!=='ohmytrace.media-manifest'||input.version!==MEDIA_LIMITS.manifestVersion||!Array.isArray(input.assets)||!Array.isArray(input.batches))throw new Error('不支持的媒体索引备份版本');
   const ids=new Set();for(const asset of input.assets){validateAsset(asset);if(ids.has(asset.assetId))throw new Error('重复媒体 ID');ids.add(asset.assetId);}
-  const batches=new Set();for(const batch of input.batches){if(typeof batch.id!=='string'||batches.has(batch.id)||!Array.isArray(batch.assetIds)||batch.assetIds.some(id=>!ids.has(id)))throw new Error('媒体批次关系无效');batches.add(batch.id);}
+  const batches=new Set();for(const batch of input.batches){
+    if(typeof batch.id!=='string'||batches.has(batch.id)||!Array.isArray(batch.assetIds)||new Set(batch.assetIds).size!==batch.assetIds.length||batch.assetIds.some(id=>!ids.has(id))||typeof batch.startedAt!=='string'||!Number.isSafeInteger(batch.processed)||!Number.isSafeInteger(batch.total)||batch.processed<0||batch.processed>batch.total||!Array.isArray(batch.filePlan)||batch.filePlan.length!==batch.total||!['scanning','review','prepared','committed','cancelled','interrupted'].includes(batch.status))throw new Error('媒体批次关系无效');
+    if(batch.review&&(batch.review.version!==1||!Array.isArray(batch.review.candidates)||!Array.isArray(batch.review.unlocatedAssetIds)||!Array.isArray(batch.review.manualRevisions)||batch.review.candidates.some(c=>typeof c.id!=='string'||typeof c.title!=='string'||!Array.isArray(c.visits)||!Array.isArray(c.chapterIds)||!Array.isArray(c.matches)||!Array.isArray(c.reasons)||c.visits.some(v=>typeof v.id!=='string'||typeof v.placeName!=='string'||!Array.isArray(v.assetIds)||v.assetIds.some(id=>!batch.assetIds.includes(id))||!v.coordinates||!Number.isFinite(v.coordinates.latitude)||!Number.isFinite(v.coordinates.longitude)))))throw new Error('媒体审核草稿无效');
+    batches.add(batch.id);
+  }
   return input;
 }
 const batchRecord=(files)=>({id:newId('import'),version:1,status:'scanning',startedAt:new Date().toISOString(),
