@@ -23,7 +23,7 @@ export function projectDataset(data,scope={type:'all'}) {
     used.add(key);keys.set(p.id,key);
   }
   const places=Object.create(null),placeIds=Object.create(null);
-  for(const p of data.places){const key=keys.get(p.id);placeIds[key]=p.id;places[key]={...clone(p.location),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id};}
+  for(const p of data.places){const key=keys.get(p.id);placeIds[key]=p.id;places[key]={...clone(p.location),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
   const visits=new Map(data.visits.map(v=>[v.id,v]));
   let trips=data.trips.map(t=>({id:t.id,kind:'trip',title:t.title,type:t.type,date:renderDate(t.start,t.end),
     stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note};})}));

@@ -438,3 +438,31 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
   #card, #list { bottom:calc(134px + env(safe-area-inset-bottom)); }
   #toast { bottom:calc(142px + env(safe-area-inset-bottom)); }
 }
+#life-dialog { color:var(--text); padding:0; border:1px solid #ffffff25; width:min(740px,calc(100vw - 28px)); max-height:85dvh; background:#111b29; }
+#life-dialog::backdrop { background:#02060bb3; backdrop-filter:blur(5px); }
+#life-dialog .dlg-body { max-height:calc(85dvh - 65px); }
+#life-dialog h3 { margin:0; font-size:17px; }
+#life-dialog fieldset { border:0; padding:0; margin:0; min-width:0; }
+#life-dialog fieldset:disabled { opacity:.5; }
+.life-field { display:flex; flex-direction:column; gap:6px; margin:12px 0; font-size:13px; }
+.life-field input,.life-field select { padding:9px 11px; border:1px solid #ffffff24; border-radius:8px; background:#050b14; color:inherit; width:100%; box-sizing:border-box; }
+.life-dates { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.life-options { display:grid; gap:9px; padding:12px 4px; max-height:200px; overflow:auto; }
+.life-options label { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; }
+.life-options small { color:var(--muted); }
+#life-dialog details { margin:14px 0; }
+#life-dialog summary { cursor:pointer; font-size:13px; }
+.life-chapter { display:flex; gap:8px; align-items:center; border-bottom:1px solid #ffffff16; padding:8px 0; }
+.life-chapter .mini { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:5px; text-align:left; }
+#chapter-error { color:#ffad97; }
+#life-storage-error { position:fixed; z-index:80; top:85px; right:20px; max-width:min(420px,80vw); padding:16px; color:#ffd2bc; background:#392220; font-size:13px; }
+#life-storage-error[hidden], #chapter-filter[hidden] { display:none; }
+#chapter-filter { display:flex; align-items:center; gap:6px; overflow-x:auto; min-height:34px; flex:none; scrollbar-width:none; }
+#timeline.has-chapters { height:158px; }
+body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { bottom:190px; }
+@media(max-width:720px) {
+  .life-dates { grid-template-columns:1fr; gap:0; }
+  .life-chapter { flex-wrap:wrap; }
+  #timeline.has-chapters { height:142px; }
+  body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { bottom:calc(168px + env(safe-area-inset-bottom)); }
+}

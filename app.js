@@ -1,5 +1,7 @@
 (async () => {
 'use strict';
+const {createLifeBridge}=await import('./src/life/app-bridge.js');
+const {mountChapterUI}=await import('./src/life/chapter-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-places');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
@@ -14,7 +16,7 @@ const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
 const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-continuity');
 const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
-const {GEOCODER_VERSION,needsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
+const {GEOCODER_VERSION,needsGeocoding:legacyNeedsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
 const demoParams=new URLSearchParams(location.search),demoKey=demoParams.get('demo');
@@ -44,23 +46,13 @@ const TEMPLATE_CSV = `日期,行程,地点,类型,备注,坐标
 2025-04,京都赏樱,日本京都,旅行,,"35.0116,135.7681"
 `;
 
-const STORE_KEY = 'footprints.v1';
+const needsGeocoding=p=>p?.status==='unknown'||legacyNeedsGeocoding(p);
 const PALETTE = ['#ffb547', '#5cc8ff', '#ff7ab0', '#8fe388', '#b69cff', '#ffd76a', '#6ee7d8'];
 const HOME_COLOR = '#ffe9c4';
 // Longer names first so prefix matching is unambiguous.
 const PROVINCES = ['内蒙古', '黑龙江', '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '江苏', '浙江', '安徽', '福建',
   '江西', '山东', '河南', '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海', '台湾', '广西', '西藏',
   '宁夏', '新疆', '香港', '澳门'];
-const ALIASES = {
-  date: ['日期', 'date', '时间', 'time'],
-  trip: ['行程', 'trip', '旅行', '标题', 'title', '名称', 'name'],
-  place: ['地点', 'place', 'location', '地名', '目的地'],
-  type: ['类型', 'type', '分类', 'category'],
-  note: ['备注', 'note', 'notes', '描述', '说明', 'description'],
-  coord: ['坐标', 'coord', 'coords', 'coordinate', 'coordinates', '经纬度'],
-  lat: ['纬度', 'lat', 'latitude'],
-  lon: ['经度', 'lon', 'lng', 'longitude'],
-};
 const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M8.5 5.8v12.4c0 .6.7 1 1.2.6l9.6-6.2c.5-.3.5-1 0-1.3L9.7 5.2c-.5-.3-1.2 0-1.2.6z"/></svg>',
   stop: '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>',
@@ -204,113 +196,36 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function load() {
-  if(sceneDemo){importCsvText(demoCsv(sceneDemo),'replace');return;}
+let life, lifeSnapshot, lifeUI;
+function storageError(error) {
+  const el=$('#life-storage-error');el.hidden=false;
+  el.textContent='Life Atlas：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
+  toast('保存失败：'+error.message,6000);
+}
+async function mutateLife(action) {
+  if(!life){storageError(new Error('数据存储尚不可用'));return false;}
+  try { await action(); $('#life-storage-error').hidden=true;refresh();return true; }
+  catch(error){storageError(error);return false;}
+}
+async function load() {
   try {
-    const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
-    if (d && Array.isArray(d.rows)) { state.rows = d.rows; state.places = d.places || {}; return; }
-  } catch (e) { /* fall through to sample data */ }
-  importCsvText(DEFAULT_CSV, 'replace');
+    life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
+    lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
+      status:()=>life.status(),onBackup:()=>download('LifeAtlas.json',life.repository.backup(),'application/json'),
+      onRestore:async file=>{const text=await file.text();if(!confirm('用此 JSON 备份替换当前 Life Atlas？建议先下载当前 JSON 备份。'))return;
+        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('JSON 备份已恢复');}});
+    life.repository.subscribe(()=>{if(viewer)refresh();});
+  } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
-function save() {
-  if(sceneDemo)return;
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ rows: state.rows, places: state.places })); } catch (e) { /* storage unavailable */ }
+async function importCsvText(text,mode) {
+  if(!life)throw new Error('存储不可用，未导入；请刷新重试');
+  return life.importCSV(text,mode);
 }
-
-/* ================= CSV ================= */
-
-function parseCSV(text) {
-  text = text.replace(/^﻿/, '');
-  const first = text.split(/\r?\n/, 1)[0];
-  const count = ch => first.split(ch).length - 1;
-  let delim = ',';
-  if (count('\t') > count(',')) delim = '\t';
-  else if (!count(',') && count('，')) delim = '，';
-  const rows = [];
-  let row = [], field = '', q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
-      else field += c;
-    } else if (c === '"') q = true;
-    else if (c === delim) { row.push(field); field = ''; }
-    else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(field); rows.push(row); row = []; field = '';
-    } else field += c;
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-  return rows.filter(r => r.some(v => v.trim() !== ''));
+function download(name,text,type='text/csv;charset=utf-8') {
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([type==='application/json'?text:'\uFEFF'+text],{type}));
+  a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
-
-function mapHeader(h) {
-  const k = h.trim().toLowerCase();
-  for (const [key, list] of Object.entries(ALIASES)) if (list.includes(k)) return key;
-  return null;
-}
-
-function parseCoord(s) {
-  const m = String(s || '').match(/(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)/);
-  if (!m) return null;
-  let a = +m[1], b = +m[2];
-  if (Math.abs(a) > 90 && Math.abs(b) <= 90) [a, b] = [b, a];
-  if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
-  return [a, b];
-}
-
-const rowKey = r => [r.date, r.trip, r.place, r.type, r.note].join('\u0001');
-
-function importCsvText(text, mode) {
-  const table = parseCSV(text);
-  if (table.length < 2) throw new Error('没有读到数据行');
-  const cols = table[0].map(mapHeader);
-  if (!cols.includes('place')) throw new Error('缺少「地点」列，请检查表头');
-  const rows = [];
-  for (const r of table.slice(1)) {
-    const o = { date: '', trip: '', place: '', type: '', note: '' };
-    let coord = '', lat = '', lon = '';
-    cols.forEach((k, j) => {
-      const v = (r[j] ?? '').trim();
-      if (k === 'coord') coord = v;
-      else if (k === 'lat') lat = v;
-      else if (k === 'lon') lon = v;
-      else if (k) o[k] = v;
-    });
-    if (!o.place) continue;
-    const c = parseCoord(coord) || (lat && lon ? parseCoord(lat + ',' + lon) : null);
-    if (c) state.places[o.place] = { lat: c[0], lon: c[1], status: 'confirmed', label: '来自表格中的坐标' };
-    rows.push(o);
-  }
-  if (!rows.length) throw new Error('没有读到包含地点的行');
-  if (mode === 'append') {
-    const seen = new Set(state.rows.map(rowKey));
-    for (const r of rows) if (!seen.has(rowKey(r))) { state.rows.push(r); seen.add(rowKey(r)); }
-  } else {
-    state.rows = rows;
-  }
-  save();
-  return rows.length;
-}
-
-const csvCell = v => /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-function coordStr(name) {
-  const p = state.places[name];
-  return p && p.lat != null ? `${p.lat.toFixed(5)},${p.lon.toFixed(5)}` : '';
-}
-function download(name, text) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-}
-function exportCsv() {
-  const lines = [['日期', '行程', '地点', '类型', '备注', '坐标'].join(',')];
-  for (const r of state.rows) lines.push([r.date, r.trip, r.place, r.type, r.note, coordStr(r.place)].map(csvCell).join(','));
-  download('我的足迹.csv', lines.join('\n') + '\n');
-}
+function exportCsv() { if(life)download('我的足迹.csv',life.exportCSV()); }
 
 async function readFileText(file) {
   const buf = await file.arrayBuffer();
@@ -394,44 +309,14 @@ function placeNames() {
 }
 
 function buildModel() {
-  const tripMap = new Map(), homeList = [];
-  for (const r of state.rows) {
-    if (!r.place) continue;
-    const kind = kindOf(r.type);
-    const date = parseDateStr(r.date);
-    if (kind !== 'trip') {
-      homeList.push({ id: 'h:' + r.place + '|' + r.date, kind, title: r.trip || coreName(r.place), place: r.place, note: r.note, date, type: r.type });
-      continue;
-    }
-    const key = 't:' + (r.trip || r.place) + '|' + r.date;
-    if (!tripMap.has(key)) tripMap.set(key, { id: key, kind: 'trip', title: r.trip || coreName(r.place), type: r.type || '旅行', date, stops: [] });
-    const t = tripMap.get(key);
-    const stop = t.stops.find(s => s.place === r.place);
-    if (stop) { if (r.note && !stop.note.includes(r.note)) stop.note += (stop.note ? '；' : '') + r.note; }
-    else t.stops.push({ place: r.place, note: r.note || '' });
+  if(!life)return;
+  const previous=state.places;
+  lifeSnapshot=life.adapter.getRenderSnapshot();state.rows=lifeSnapshot.rows;state.places=lifeSnapshot.places;
+  for(const [key,p]of Object.entries(state.places)){
+    const old=previous[key];if(old?.lat===p.lat&&old?.lon===p.lon&&old?.h!=null)p.h=old.h;
   }
-  const order = x => x.date ? x.date.start : Infinity;
-  trips = [...tripMap.values()].sort((a, b) => order(a) - order(b));
-  homes = homeList.sort((a, b) => (b.kind === 'home') - (a.kind === 'home') || order(b) - order(a));
-  trips.forEach((t, i) => {
-    t.n = i + 1;
-    t.year = t.date ? new Date(t.date.start).getFullYear() : null;
-    t.endYear = t.date ? new Date(t.date.end).getFullYear() : null;
-    t.origin = originOf(t);
-  });
-  typeColors = {};
-  let i = 0;
-  for (const t of trips) if (!(t.type in typeColors)) typeColors[t.type] = PALETTE[i++ % PALETTE.length];
-}
-
-// Where the person lived when the trip started: a dated residence whose period contains the
-// trip date, else the single undated current home (if there is exactly one).
-function originOf(t) {
-  if (!t.date) return null;
-  const dated = homes.filter(h => h.date && h.date.start <= t.date.start && t.date.start <= h.date.end);
-  if (dated.length) return dated.sort((a, b) => b.date.start - a.date.start)[0];
-  const undated = homes.filter(h => h.kind === 'home' && !h.date);
-  return undated.length === 1 ? undated[0] : null;
+  trips=lifeSnapshot.trips;homes=lifeSnapshot.homes;typeColors={};let i=0;
+  for(const t of trips)if(!(t.type in typeColors))typeColors[t.type]=PALETTE[i++%PALETTE.length];
 }
 
 const byId = id => trips.find(t => t.id === id) || homes.find(h => h.id === id) || null;
@@ -477,6 +362,7 @@ function pickBest(results, core, prov) {
 }
 
 async function autoLocate(name) {
+  name=state.places[name]?.sourceName||name;
   const prov = detectProvince(name), core = coreName(name, prov);
   const queries = placeQueries(name,core,PROVINCES),scope=provinceSearchOptions(prov);
   const result=(r,status)=>({lat:+r.lat,lon:+r.lon,status,label:r.display_name,countryCode:r.address?.country_code,geocoderVersion:GEOCODER_VERSION});
@@ -504,7 +390,7 @@ async function geocodeMissing() {
   for (const n of todo) {
     if (!needsGeocoding(state.places[n])) { geo.done++; continue; }
     const r = await autoLocate(n);
-    if (r) { state.places[n] = r; save(); refresh(); } else geo.failed = true;
+    if (r) { if(!await setPlace(n,r,false)){geo.failed=true;break;} } else geo.failed = true;
     geo.done++;
     renderChips();
   }
@@ -513,11 +399,10 @@ async function geocodeMissing() {
   if (!state.sel && !flying && viewer && viewer.camera.positionCartographic.height > 4e6) homeView(2.2);
 }
 
-function setPlace(name, data) {
-  state.places[name] = data;
-  save();
-  refresh();
-  sampleHeights();
+async function setPlace(name,data,manual=true) {
+  const id=lifeSnapshot?.placeIds[name];if(!id)return false;
+  const ok=await mutateLife(()=>life.setPlace(id,data,manual));
+  if(ok)sampleHeights();return ok;
 }
 
 /* ================= globe ================= */
@@ -605,7 +490,7 @@ function initGlobe() {
   for (const ev of ['pointerdown', 'wheel', 'touchstart']) viewer.canvas.addEventListener(ev, markInput, { passive: true });
 
   const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
-  handler.setInputAction(e => {
+  handler.setInputAction(async e => {
     if (!pickName) return;
     const ray = viewer.camera.getPickRay(e.position);
     const p = (ray && scene.globe.pick(ray, scene)) || viewer.camera.pickEllipsoid(e.position);
@@ -613,8 +498,7 @@ function initGlobe() {
     const c = Cesium.Cartographic.fromCartesian(p);
     const name = pickName;
     endPick();
-    setPlace(name, { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude), status: 'confirmed', label: '在地图上手动选点' });
-    toast(`已把「${coreName(name)}」放到这里`);
+    if(await setPlace(name, { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude), status: 'confirmed', label: '在地图上手动选点' }))toast(`已把「${coreName(name)}」放到这里`);
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   lightCapacity = Math.min(MAX_LIGHTS, Math.max(8, 2 ** Math.ceil(Math.log2(placeNames().filter(located).length || 1))));
@@ -811,7 +695,7 @@ async function sampleHeights() {
   catch (e) { try { await Cesium.sampleTerrain(viewer.terrainProvider, 11, cartos); } catch (e2) { /* keep sea level */ } }
   objs.forEach((p, i) => { p.h = Number.isFinite(cartos[i].height) ? cartos[i].height : 0; });
   sampling = false;
-  save();
+  // Sampled terrain heights belong to the disposable render cache.
   renderMarkers();
   renderArcs();
   sampleHeights();
@@ -850,7 +734,7 @@ function syncLights() {
 function lightTarget(name) {
   if (!lightsOn) return 0;
   if (replayLit) return replayLit.has(name) ? 1 : 0;
-  if (state.year) {
+  if (state.year || life?.adapter.scope.type==='chapter') {
     const lit = visibleHomes().some(h => h.place === name) || visibleTrips().some(t => t.stops.some(s => s.place === name));
     return lit ? 1 : 0;
   }
@@ -1239,7 +1123,7 @@ function renderArcs(){arcSignature=null;updateArcs();}
 function updateArcs() {
   if(!arcSource)return;
   const sel=byId(state.sel),list=visibleTrips();
-  const wanted=sel?.kind==='trip'?[sel]:state.year!=null&&list.length<=12?list:[];
+  const wanted=sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
   const signature=wanted.map(t=>t.id).join('\u0001');
   if(signature!==arcSignature) {
     arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
@@ -1270,6 +1154,7 @@ function updateArcs() {
 
 function refresh() {
   buildModel();
+  if(state.sel&&!byId(state.sel))state.sel=null;
   if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
   renderStats();
@@ -1321,6 +1206,7 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 
 function renderChips() {
   const out = [];
+  if(life?.repository.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例 · 导入 CSV 开始记录人生</span>');
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
@@ -1366,7 +1252,7 @@ function renderList() {
 }
 
 function renderTimeline() {
-  const dated=trips.filter(t=>t.date),track=$('#tl-track');timelineGroups=new Map();
+  const dated=visibleTrips().filter(t=>t.date),track=$('#tl-track');timelineGroups=new Map();
   $('#timeline').classList.toggle('empty',!dated.length);
   if(!dated.length){track.innerHTML='';return;}
   const years=yearOptions(dated),y0=state.year??years[0],y1=state.year??years.at(-1);
@@ -1459,6 +1345,7 @@ function select(id, { fly = true } = {}) {
   const x = byId(id);
   if (!x) return;
   state.sel = id;
+  if(x.kind==='trip')life?.adapter.focusTrip(id);
   renderCard();
   updateSelectionUI();
   if (isMobile()) body.classList.remove('list-open');
@@ -1480,14 +1367,21 @@ function step(dir) {
 }
 
 function setYear(y) {
-  const next=y==null?null:Number(y);if(next===state.year&&!state.sel&&!flying&&!orbit&&!scenery.name)return;
+  const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!flying&&!orbit&&!scenery.name)return;
   if(next!=null&&!yearOptions(trips).includes(next))return;
   stopPlay();mapChooser?.close();state.year=next;
-  state.sel=null;renderCard();
-  renderStats();renderYears();renderList();renderTimeline();updateSelectionUI();
+  life?.adapter.setScope({type:'all'});lifeUI?.renderStrip();
+  state.sel=null;refresh();
   lightsAnimating=true;scene?.requestRender();
   // A year is an overview filter. Do not dive into a dense group each time it changes.
   if(viewer&&(flying||orbit||scenery.name||viewer.camera.positionCartographic.height<4000000))homeView(1.8);
+}
+
+function setChapter(id) {
+  stopPlay();mapChooser?.close();state.sel=null;state.year=null;
+  life.adapter.setScope(id?{type:'chapter',id}:{type:'all'});refresh();
+  if(id)body.classList.add('list-open');
+  if(viewer)homeView(1.8);
 }
 
 /* ---------- replay ---------- */
@@ -1572,7 +1466,7 @@ function endPick() {
 let currentTab = 'import', draft = null;
 
 function openModal(tab = 'import') {
-  draft = state.rows.map(r => ({ ...r }));
+  draft = life?.editDraft() || [];
   body.classList.add('modal-open');
   switchTab(tab);
 }
@@ -1647,32 +1541,33 @@ function renderTab() {
 }
 
 async function importFile(file) {
-  try { $('#paste').value = await readFileText(file); doImport(); }
+  try { $('#paste').value = await readFileText(file); await doImport(); }
   catch (e) { toast('读取文件失败：' + e.message); }
 }
 
-function doImport() {
+async function doImport() {
   const text = $('#paste').value.trim();
   if (!text) { toast('先选择文件或粘贴内容'); return; }
   const mode = (document.querySelector('input[name=mode]:checked') || {}).value || 'append';
   try {
-    const n = importCsvText(text, mode);
+    const result = await importCsvText(text, mode);
+    life.adapter.setScope({type:'all'});
     state.sel = null; state.year = null;
     closeModal();
     refresh();
-    toast(`已导入 ${n} 条记录`);
+    toast(`已导入 ${result.count} 条记录${result.swapped?'；'+result.swapped+' 行按旧规则识别经度在前的坐标，已记录转换':''}`,5000);
     sampleHeights();
     geocodeMissing();
     homeView();
   } catch (e) {
-    toast('导入失败：' + e.message, 4000);
+    storageError(e);
   }
 }
 
 async function onPlaceAction(act, card, btn) {
   const name = card.dataset.name;
   if (act === 'view') { closeModal(); flyToPoints([posOf(name)]); }
-  else if (act === 'ok') { setPlace(name, { ...state.places[name], status: 'confirmed' }); toast('已确认'); }
+  else if (act === 'ok') { if(await setPlace(name, { ...state.places[name], status: 'confirmed' }))toast('已确认'); }
   else if (act === 'pick') startPick(name);
   else if (act === 'search') { const box = card.querySelector('.search-box'); box.hidden = !box.hidden; if (!box.hidden) box.querySelector('input').focus(); }
   else if (act === 'do-search') {
@@ -1689,15 +1584,14 @@ async function onPlaceAction(act, card, btn) {
     } catch (e) { out.innerHTML = '<div class="faint" style="padding:6px 10px">搜索服务连接失败，稍后再试</div>'; }
   } else if (act === 'choose') {
     const r = card.querySelector('.results')._results[+btn.dataset.i];
-    setPlace(name, { lat: +r.lat, lon: +r.lon, status: 'confirmed', label: r.display_name });
-    toast(`已更新「${coreName(name)}」的位置`);
+    if(await setPlace(name, { lat: +r.lat, lon: +r.lon, status: 'confirmed', label: r.display_name }))toast(`已更新「${coreName(name)}」的位置`);
   }
 }
 
 /* ================= events ================= */
 
 function bindEvents() {
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const t = e.target.closest('[data-act],[data-id],[data-year],[data-place],[data-tab]');
     if (!t) return;
     if (t.dataset.tab && t.closest('.tabs')) { switchTab(t.dataset.tab); return; }
@@ -1717,17 +1611,17 @@ function bindEvents() {
       case 'template': download('足迹模板.csv', TEMPLATE_CSV); return;
       case 'export': exportCsv(); return;
       case 'clear':
-        if (confirm('确定清空全部足迹数据吗？建议先导出备份。')) { state.rows = []; state.sel = null; save(); closeModal(); refresh(); homeView(); }
+        if (confirm('确定清空全部足迹与人生阶段吗？建议先下载 JSON 备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
         return;
       case 'add-row': draft.push({ date: '', trip: '', place: '', type: '旅行', note: '' }); renderTab(); return;
       case 'del-row': draft.splice(+t.dataset.i, 1); renderTab(); return;
       case 'save-rows':
-        state.rows = draft.filter(r => r.place.trim()).map(r => ({ ...r, place: r.place.trim() }));
-        save(); state.sel = null; closeModal(); refresh(); sampleHeights(); geocodeMissing(); toast('已保存');
+        if(await mutateLife(()=>life.editRows(draft.filter(r=>r.place.trim()).map(r=>({...r,place:r.place.trim()}))))){state.sel=null;closeModal();refresh();sampleHeights();geocodeMissing();toast('已保存');}
         return;
     }
     if (t.dataset.year) { setYear(+t.dataset.year); return; }
     if (t.dataset.place && t.closest('#card')) {
+      life?.adapter.focusPlace(lifeSnapshot.placeIds[t.dataset.place]);
       const pos = posOf(t.dataset.place);
       if (pos) flyToPoints([pos], { close: true,placeName:t.dataset.place }); else openModal('places');
       return;
@@ -1773,8 +1667,8 @@ function bindEvents() {
 
 /* ================= boot ================= */
 
-function boot() {
-  load();
+async function boot() {
+  await load();
   bindEvents();
   updatePlayUI();
   buildModel();
@@ -1787,5 +1681,5 @@ function boot() {
   geocodeMissing();
 }
 
-boot();
-})();
+await boot();
+})().catch(error=>{console.error(error);const el=document.querySelector('#ld-sub');if(el)el.textContent='应用加载失败：'+error.message;});
