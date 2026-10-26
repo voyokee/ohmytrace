@@ -27,8 +27,16 @@ export function mountStandaloneViewer({onLoad,onStop}){
   // No URL-supplied data path, database key or debug bridge. A deployed package
   // always reads its own fixed, minimal story.json, with an optional SHA-256.
   (async()=>{
-    const ticket=begin(),signal=AbortSignal.any([ticket.signal,AbortSignal.timeout(5000)]);
+    const ticket=begin(),signal=AbortSignal.any([ticket.signal,AbortSignal.timeout(30000)]);
     try{
+      const params=new URLSearchParams(globalThis.location?.search||''),publication=params.get('publication');
+      if(publication!==null){
+        if(!/^[a-f0-9]{64}$/.test(publication))throw new Error('故事链接无效');
+        const key=location.hash.match(/^#key=([a-f0-9]{64})$/)?.[1];
+        const response=await fetch('/api/publications/'+publication+'/content',{signal,cache:'no-store',credentials:'same-origin',headers:key?{'X-Story-Key':key}:{}});
+        if(!response.ok){const login=document.createElement('a');login.textContent='所有者登录';login.className='btn';login.target='_top';login.href='/signin-with-chatgpt?return_to='+encodeURIComponent(location.pathname+location.search+location.hash);panel.append(login);throw new Error('故事不存在、已撤销或需要访问凭据');}
+        await load(await response.text(),ticket);if(current(ticket))panel.querySelector('[data-story-demo]').hidden=true;return;
+      }
       const response=await fetch('./story.json',{signal,cache:'no-store'});if(!current(ticket))return;
       if(!response.ok){message('此页面未附带作品，请选择 Story JSON。');return;}
       if(Number(response.headers.get('content-length'))>24*1024*1024)throw new Error('作品过大');

@@ -15,10 +15,11 @@ function origin(value){
   if(url.origin!==value||url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))throw new Error('Deployment URLs must be HTTPS origins (or loopback HTTP)');
   return value;
 }
-export function deploymentConfig({editorOrigin=null,viewerOrigin=null}={}){
+export function deploymentConfig({editorOrigin=null,viewerOrigin=null,publisher=false}={}){
   editorOrigin=origin(editorOrigin);viewerOrigin=origin(viewerOrigin);
   if(editorOrigin&&viewerOrigin&&editorOrigin===viewerOrigin)throw new Error('Editor and Viewer require separate origins, not different paths');
-  return {schemaVersion:1,editorOrigin,viewerOrigin,publisher:null};
+  if(publisher&&(!editorOrigin||!viewerOrigin))throw new Error('Publisher requires both separate origins');
+  return {schemaVersion:1,editorOrigin,viewerOrigin,publisher:publisher?{kind:'sites-popup'}:null};
 }
 
 async function filesIn(folder,prefix=''){
@@ -41,8 +42,8 @@ export async function verifyDistribution(folder){
   return manifest;
 }
 
-export async function buildWeb({root=sourceRoot,outDir=resolve(root,'dist'),editorOrigin=null,viewerOrigin=null}={}){
-  const config=deploymentConfig({editorOrigin,viewerOrigin}),spec=JSON.parse(await readFile(resolve(root,'config/web-runtime.json'),'utf8'));
+export async function buildWeb({root=sourceRoot,outDir=resolve(root,'dist'),editorOrigin=null,viewerOrigin=null,publisher=false}={}){
+  const config=deploymentConfig({editorOrigin,viewerOrigin,publisher}),spec=JSON.parse(await readFile(resolve(root,'config/web-runtime.json'),'utf8'));
   if(spec.schemaVersion!==1)throw new Error('Unknown runtime allowlist');
   root=await realpath(root);outDir=resolve(outDir);
   // Never replace an arbitrary existing directory. Only our verified previous
@@ -98,6 +99,6 @@ export async function buildWeb({root=sourceRoot,outDir=resolve(root,'dist'),edit
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2),options={};
-  for(let i=0;i<args.length;i+=2){const key={'--out':'outDir','--editor-origin':'editorOrigin','--viewer-origin':'viewerOrigin'}[args[i]];if(!key||!args[i+1])throw new Error('Usage: node scripts/build-web.mjs [--out path] [--editor-origin https://...] [--viewer-origin https://...]');options[key]=args[i+1];}
+  for(let i=0;i<args.length;i+=2){const key={'--out':'outDir','--editor-origin':'editorOrigin','--viewer-origin':'viewerOrigin','--publisher':'publisher'}[args[i]];if(!key||!args[i+1])throw new Error('Usage: node scripts/build-web.mjs [--out path] [--editor-origin https://...] [--viewer-origin https://...]');options[key]=key==='publisher'?args[i+1]==='true':args[i+1];}
   console.log(JSON.stringify(await buildWeb(options),null,2));
 }

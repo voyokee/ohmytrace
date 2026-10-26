@@ -126,6 +126,5 @@ export function validateImage(image){
   const binary=atob(image.split(',')[1]);if(binary.length>256*1024)throw new Error('缩略图超过 256 KiB');cleanJPEG(Uint8Array.from(binary,c=>c.charCodeAt(0)),{reject:true});
 }
 
-export class Publisher {
-  async publish(artifact,options={}){throw new Error('尚未配置 Hosted Sharing；请导出静态分享包并自行部署');}
-}
+// Stable, replaceable publishing boundary; JSON/ZIP exports remain independent.
+export {StoryPublisher as Publisher} from './publishing/publisher.js';

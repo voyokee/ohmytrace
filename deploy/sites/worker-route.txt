@@ -1,0 +1,5 @@
+    // ohmytrace-publisher-route
+    if(new URL(request.url).pathname.startsWith('/api/publications')){
+      const service=cloudflarePublisher(env,{origin:new URL(request.url).origin,editorOrigin:'https://ohmytrace-editor.whiteduck3.chatgpt.site'});
+      return service.handle(request);
+    }

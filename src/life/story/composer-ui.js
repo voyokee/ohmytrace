@@ -2,14 +2,16 @@ import {composeStory,setStoryMemories,storyYears} from './compose.js';
 import {projectShare} from './share.js';
 import {esc,periodText} from './schema.js';
 import {storyThumbnail} from './thumbnail.js';
+import {createPublishingPanel} from './publishing/panel.js';
 
 const sceneNames={globe:'全球概览',chapter:'人生阶段',trip:'旅行概览',place:'地点飞入',memory:'记忆时刻',closing:'结束'};
-export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPreview,onExportPackage,saveBlob}){
+export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPreview,onExportPackage,saveBlob,publisher=null}){
   const dialog=document.createElement('dialog');dialog.id='story-composer';dialog.className='dialog glass';dialog.setAttribute('aria-label','生成人生故事');document.body.append(dialog);
   let story=null,images={},review=null,approved=false,source='all',busy=false;
+  const publishing=createPublishingPanel({publisher,getArtifact:()=>review,isApproved:()=>approved&&!!review});
   const data=()=>getDataset();
   const availableMemories=()=>{const d=data();return d.memories.filter(m=>m.tripIds.some(id=>story.selectedTripIds.includes(id))||d.chapters.some(c=>story.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(m.id)));};
-  function dirty(){review=null;approved=false;}
+  function dirty(){review=null;approved=false;publishing.refresh();}
   function editText(el){
     if(el.hasAttribute('data-story-field'))story[el.dataset.storyField]=el.value;
     else if(el.hasAttribute('data-story-scene-field'))story.orderedScenes[+el.closest('[data-story-scene]').dataset.storyScene][el.dataset.storySceneField]=el.value;
@@ -46,14 +48,15 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       <div class="row-actions"><button class="btn" data-story-review>审查最终分享内容</button><button class="btn primary" data-story-preview>预览最终回放</button></div>
       <section data-story-review-panel>${review?`<h4>这份作品将包含</h4><p>${review.chapters.length} 个人生阶段 · ${review.trips.length} 次旅行 · ${review.places.length} 个地点 · ${review.memories.length} 条记忆 · ${review.memories.filter(m=>m.image).length} 张缩略图</p><p class="hint">${review.privacySettings.includeNotes?'包含所选记录的原始备注。':'不含原始备注。'}${review.privacySettings.locationMode==='precise'?'公开所选地点精确坐标。':'未公开精确坐标。'} 下面是实际导出内容。</p><details><summary>检查作品 JSON</summary><pre>${esc(JSON.stringify(review,null,2))}</pre></details><label><input type="checkbox" data-story-approve ${approved?'checked':''}>我已逐项检查，确认这些内容可公开</label>`:''}</section>
       <div class="row-actions"><button class="btn" data-story-json ${!approved?'disabled':''}>导出 Story JSON</button><button class="btn" data-story-package ${!approved||busy?'disabled':''}>导出静态分享包</button></div>
-      <p class="hint">分享包需部署到静态网站，无自动上传或云端一键分享。修改任意内容后须重新审查。编辑草稿仅在本页保留。每份作品最多 64 张缩略图（最长边 768 像素、每张 256 KiB），JSON 上限 24 MiB。</p>`:''}<p data-story-progress role="status"></p><p data-story-error role="alert"></p></div>`;
+      <p class="hint">分享包需部署到静态网站，在线发布只上传经审核的作品。修改任意内容后须重新审查。编辑草稿仅在本页保留。每份作品最多 64 张缩略图（最长边 768 像素、每张 256 KiB），JSON 上限 24 MiB。</p>`:''}<p data-story-progress role="status"></p><p data-story-error role="alert"></p></div>`;
     dialog.querySelector('[data-story-source]').value=source;
+    if(story){dialog.querySelector('.dlg-body').append(publishing.element);publishing.refresh();}
   }
   function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='all'?{type}:{type,id:rest.join(':')};}
   function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?`${entity.title} · 人生故事`:s.type==='year'?`${s.year} 年的足迹`:'我的人生故事'});images={};dirty();render();}
   dialog.addEventListener('input',e=>editText(e.target));
   dialog.addEventListener('change',async e=>{
-    const el=e.target;try{
+    const el=e.target;if(publishing.element.contains(el))return;try{
       if(el.hasAttribute('data-story-source')){source=el.value;return;}
       if(editText(el))return;
       if(el.hasAttribute('data-story-policy'))story.privacySettings[el.dataset.storyPolicy]=el.type==='checkbox'?el.checked:el.value;

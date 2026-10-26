@@ -9,7 +9,9 @@ export async function mountStoryExperience({privateData,getScope,enter,cancel,ap
   async function preview(artifact){applyBridge(createStoryBridge(artifact));onTheme(artifact.visualTheme);await player.load(artifact);}
   if(privateData){
     const {mountStoryComposer}=await import('./composer-ui.js');
-    composer=mountStoryComposer({getDataset:privateData,getScope,onPreview:preview,saveBlob:saveStoryBlob,
+    let publisher=null;
+    try{const config=await fetch('./runtime-config.json',{cache:'no-store',signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null);if(config?.publisher&&config?.viewerOrigin){const {PopupStoryPublisher}=await import('./publishing/popup-publisher.js');publisher=new PopupStoryPublisher({origin:config.viewerOrigin});}}catch{}
+    composer=mountStoryComposer({publisher,getDataset:privateData,getScope,onPreview:preview,saveBlob:saveStoryBlob,
       onExportPackage:async(artifact,progress)=>{const {createSharePackage}=await import('./package.js');const blob=await createSharePackage(artifact,{onProgress:progress});saveStoryBlob('LifeStory-static.zip',blob);}});
     document.addEventListener('click',e=>{if(e.target.closest('[data-story-compose]'))composer.open();});
   }else{

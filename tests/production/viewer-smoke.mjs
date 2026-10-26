@@ -20,7 +20,7 @@ try{
   const response=await page.goto(target.url);assert.equal(response.status(),200);
   const app=await appResponse,appBytes=await app.body(),expected=await readFile(new URL('../../app.js',import.meta.url));
   assert.equal(createHash('sha256').update(appBytes).digest('hex'),createHash('sha256').update(expected).digest('hex'));
-  await page.waitForSelector('[data-story-file]');await page.locator('[data-story-file]').setInputFiles({name:'reviewed-demo.story.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(artifact))});
+  await page.waitForSelector('[data-story-file]',{state:'attached'});await page.locator('[data-story-file]').setInputFiles({name:'reviewed-demo.story.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(artifact))});
   await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-play]').tap();
   assert.equal(await page.locator('#story-player').getAttribute('data-status'),'paused');
   await page.locator('[data-story-speed]').selectOption('4');await page.locator('[data-story-play]').tap();

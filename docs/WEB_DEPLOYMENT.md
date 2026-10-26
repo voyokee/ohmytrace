@@ -27,7 +27,7 @@ owned build is atomically replaced; unrelated directories are never removed.
 
 The entry HTML includes content-versioned JS/CSS URLs. Nonfingerprinted module
 paths must revalidate (`public, max-age=0, must-revalidate`); runtime configuration
-and build manifests use `no-store`. `_headers` declares this policy for compatible
+and build manifests declare `no-store` on hosts that support those rules. `_headers` declares this policy for compatible
 static hosts; configure equivalent HTTP headers on other providers. Never give
 mutable module URLs an immutable one-year cache policy. See Cloudflare's
 [static asset headers](https://developers.cloudflare.com/workers/static-assets/headers/).
@@ -79,3 +79,18 @@ HTTPS source/WASM, and loads a reviewed fictional artifact with both IndexedDB a
 localStorage trapped and external services blocked. It checks mobile playback.
 No mock pass substitutes for an unavailable online dependency; results are
 recorded separately in `PHASE5_VERIFICATION.md`.
+
+## Actual Sites cache policy
+
+HTTPS checks observed `public, max-age=0, must-revalidate` on static HTML, JS
+and runtime-config, including a valid clean-URL redirect for story-viewer.html.
+Sites did not apply the per-path no-store rule from `_headers`. Runtime-config
+contains public origin/build settings only. Hosted Story API responses explicitly
+set `no-store, private` in Worker code and were checked separately; static asset
+caching must never be treated as authorization/revocation for controlled stories.
+
+Publishing is opt-in at build time (`--publisher true` with both origins); the
+default local/build output still works offline. See `HOSTED_SHARING.md` for the
+D1/R2 Worker wrapper, scoped ownership and real hosted acceptance. The maintained
+wrapper may add its own favicon/framework assets outside the audited Web runtime;
+those do not change the Web manifest's exact input/file integrity checks.

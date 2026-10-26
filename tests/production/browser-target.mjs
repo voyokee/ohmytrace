@@ -1,8 +1,8 @@
 // Optional HTTPS target for the existing fictional end-to-end acceptances.
 // A private Site's service token enters through stdin only, never argv, files,
 // page JavaScript, screenshots or headers sent to another origin.
-export async function browserTarget(fallback){
-  const url=process.env.LIFE_APP_URL||fallback,origin=new URL(url).origin;let token=null;
+export async function browserTarget(fallback,{token:providedToken=null}={}){
+  const url=process.env.LIFE_APP_URL||fallback,origin=new URL(url).origin;let token=providedToken;
   if(process.env.LIFE_APP_AUTH_STDIN==='1'){
     const rawMode=!!process.stdin.setRawMode&&process.stdin.isTTY;if(rawMode)process.stdin.setRawMode(true);
     console.log('Ready for private Site access JSON on stdin (input is not echoed).');
@@ -34,7 +34,7 @@ export async function browserTarget(fallback){
           response=await context.request.fetch(next.href,{method:route.request().method(),maxRedirects:0,headers});
         }
         await route.fulfill({response});
-      }catch{await route.abort().catch(()=>{});}
+      }catch(e){console.error('Site test resource failed:',new URL(route.request().url()).pathname,String(e.message).split('\n')[0]);await route.abort().catch(()=>{});}
     });
   }};
 }

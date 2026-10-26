@@ -1244,7 +1244,7 @@ function renderChips() {
   const out = [];
   if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读人生故事 · 不连接个人数据库':'只读故事预览 · 未改动人生数据'}</span>`;return;}
   if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例<span class="chip-extra"> · 导入 CSV 开始记录人生</span></span>');
-  if(life&&!sceneDemo)out.push('<button class="chip" data-story-compose>生成人生故事 →</button>');
+  if(life&&!sceneDemo)out.push(`<button class="chip" data-story-compose ${storyExperience?'':'disabled'}>${storyExperience?'生成人生故事 →':'故事准备中…'}</button>`);
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
@@ -1774,6 +1774,7 @@ async function boot() {
       if(['globe','closing'].includes(item.kind)||!points.length){homeView(duration);await new Promise(resolve=>{const timer=setTimeout(resolve,duration*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);resolve();},{once:true});});}
       else await flyToPoints(points,{duration});
     }});
+  renderChips();
 }
 
 await boot();
