@@ -1,10 +1,13 @@
 (async () => {
 'use strict';
-const {createLifeBridge}=await import('./src/life/app-bridge.js');
-const {mountChapterUI}=await import('./src/life/chapter-ui.js');
+const publicViewer=document.body.hasAttribute('data-story-viewer');
+const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
+const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
+const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
+const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js');
-const {PhotoHistoryService}=await import('./src/life/media/integration.js');
-const {mountPhotoUI}=await import('./src/life/media/photo-ui.js');
+const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
+const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-places');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
@@ -23,7 +26,7 @@ const {GEOCODER_VERSION,needsGeocoding:legacyNeedsGeocoding,provinceSearchOption
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
 const demoParams=new URLSearchParams(location.search),demoKey=demoParams.get('demo');
-const demoBase=Object.hasOwn(SCENE_DEMOS,demoKey)?SCENE_DEMOS[demoKey]:undefined;
+const demoBase=!publicViewer&&Object.hasOwn(SCENE_DEMOS,demoKey)?SCENE_DEMOS[demoKey]:undefined;
 const demoMonth=Number(demoParams.get('month'));
 const sceneDemo=demoBase?{...demoBase,...(Number.isInteger(demoMonth)&&demoMonth>=1&&demoMonth<=12?{month:demoMonth}:{})}:undefined;
 const { installTerrainPicking } = await import('./src/rendering/terrain-picking.js');
@@ -201,6 +204,8 @@ let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let life, lifeSnapshot, lifeUI;
+let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null;
+let storyFallbackLayer=null;
 function storageError(error) {
   const el=$('#life-storage-error');el.hidden=false;
   el.textContent='Life Atlas：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
@@ -212,6 +217,7 @@ async function mutateLife(action) {
   catch(error){storageError(error);return false;}
 }
 async function load() {
+  if(publicViewer){body.classList.add('story-readonly');return;}
   try {
     life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
     lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
@@ -389,6 +395,7 @@ async function autoLocate(name) {
 }
 
 async function geocodeMissing() {
+  if(publicViewer||storyBaseLife)return;
   if (geo.busy) return;
   const todo = placeNames().filter(n => needsGeocoding(state.places[n]));
   if (!todo.length) return;
@@ -407,6 +414,7 @@ async function geocodeMissing() {
 }
 
 async function setPlace(name,data,manual=true) {
+  if(publicViewer||storyBaseLife)return false;
   const id=lifeSnapshot?.placeIds[name];if(!id)return false;
   const ok=await mutateLife(()=>life.setPlace(id,data,manual));
   if(ok)sampleHeights();return ok;
@@ -414,7 +422,10 @@ async function setPlace(name,data,manual=true) {
 
 /* ================= globe ================= */
 
-function initGlobe() {
+async function initGlobe() {
+  // Cesium 1.120 starts a Blob request before awaiting this shared probe. Finish
+  // it first so immediate offline rejection already has a consumer attached.
+  await Cesium.Resource.supportsImageBitmapOptions().catch(()=>false);
   const mobile = constrainedDevice(runtimeDeviceConfig());
   const imagery = new Cesium.UrlTemplateImageryProvider({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -428,8 +439,12 @@ function initGlobe() {
     }),
     credit: new Cesium.Credit('影像 © Esri, Maxar, Earthstar Geographics · 地名 © OpenStreetMap'),
   });
-  const terrain = new Cesium.Terrain(Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
-    'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer'));
+  let terrainFallback=false,terrainDeadline;
+  const fallbackTerrain=()=>{terrainFallback=true;return new Cesium.EllipsoidTerrainProvider();};
+  const terrain = new Cesium.Terrain(Promise.race([
+    Cesium.ArcGISTiledElevationTerrainProvider.fromUrl('https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer').catch(fallbackTerrain),
+    new Promise(resolve=>{terrainDeadline=setTimeout(()=>resolve(fallbackTerrain()),8000);})
+  ]).finally(()=>clearTimeout(terrainDeadline)));
 
   viewer = new Cesium.Viewer('globe', {
     baseLayer: new Cesium.ImageryLayer(imagery,{maximumAnisotropy:mobile?2:4}),
@@ -449,7 +464,10 @@ function initGlobe() {
   cameraDirector = new CameraDirector(viewer);
   window.addEventListener('pagehide', event => {
     if(event.persisted || viewer.isDestroyed())return;
-    removeFrameMetrics?.();footprintOverlay?.dispose();mapChooser?.dispose();terrainPicking.dispose();clearScenery();sceneryManager.dispose();cinematic.dispose();viewer.destroy();
+    removeFrameMetrics?.();footprintOverlay?.dispose();mapChooser?.dispose();terrainPicking.dispose();clearScenery();sceneryManager.dispose();cinematic.dispose();
+    // pagehide precedes visibilitychange. Keep the Viewer alive until the
+    // existing visibility policy has stopped its loop, then release Cesium.
+    setTimeout(()=>{if(!viewer.isDestroyed())viewer.destroy();},0);
   });
   document.addEventListener('click', () => { lightsAnimating = true; scene.requestRender(); });
 
@@ -476,7 +494,7 @@ function initGlobe() {
   ssc.maximumZoomDistance = 4.5e7;
   viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
-  terrain.readyEvent.addEventListener(() => { terrainReady = true; sampleHeights(); });
+  terrain.readyEvent.addEventListener(() => { terrainReady = !terrainFallback;viewer.canvas.dataset.storyTerrain=terrainFallback?'fallback':'available';sampleHeights(); });
   terrain.errorEvent.addEventListener(() => toast('地形服务暂时连不上，先以平面地球显示'));
 
   arcSource = new Cesium.CustomDataSource('arcs');
@@ -489,6 +507,7 @@ function initGlobe() {
   }
 
   const markInput = () => {
+    storyExperience?.pauseForInteraction();
     lastInput = performance.now();
     orbit = null;
     cinematic.setFocus(null);
@@ -601,7 +620,7 @@ function initGlobe() {
     loaded = true;
     $('#loader').classList.add('out');
     setTimeout(() => $('#loader').remove(), 1300);
-    setTimeout(() => homeView(3.4), 250);
+    setTimeout(() => {if(!storyScene)homeView(reducedMotion?0:3.4);}, 250);
     // Light the footprints one by one as the globe settles.
     setTimeout(() => {
       lightsOn = true;
@@ -662,7 +681,7 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   orbit = null;
   sceneryManager.preload().catch(() => {});
   const sphere = Cesium.BoundingSphere.fromPoints(positions);
-  cinematic.setFocus(sphere.center,placeName?seasonFor(placeName,state.places[placeName].lat).month:8);
+  cinematic.setFocus(storyScene&&visualContext(storyScene).month===null?null:sphere.center,placeName?seasonFor(placeName,state.places[placeName].lat).month:8);
   const r = sphere.radius;
   const framing=close&&placeName?sceneTemplateFor({name:placeName,...state.places[placeName],height:state.places[placeName]?.h||0}).camera:null;
   const range = close ? framing?.range||1900 : Math.max(30000, r * 3.4);
@@ -688,7 +707,7 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
 function flyToItem(item, opts) {
   const names = item.kind === 'trip' ? item.stops.map(s => s.place) : [item.place];
   const pts = names.map(n => posOf(n)).filter(Boolean);
-  if (!pts.length) { toast('这里的地点还没有定位，可以在「地点校正」里设置'); return Promise.resolve(false); }
+  if (!pts.length) { toast(publicViewer||storyBaseLife?'作品未公开此处坐标，可继续观看文字与其他地点':'这里的地点还没有定位，可以在「地点校正」里设置'); return Promise.resolve(false); }
   return flyToPoints(pts, {placeName:names.length===1?names[0]:undefined,...opts});
 }
 
@@ -850,6 +869,7 @@ function biomeAt(lat, lon) {
 // Season of the trip that brought you here, as a northern-hemisphere day of year (shifted half a
 // year south of the equator). A month-only date counts as mid-month.
 function seasonFor(name, lat) {
+  if(storyScene){const {month}=visualContext(storyScene);if(month===null)return {name:'neutral',month:7,day:0};const m=lat<0?(month+5)%12+1:month;return {month:m,day:Math.round((new Date(2001,m-1,15)-new Date(2001,0,1))/DAY)+1,name:m>=3&&m<=4?'spring':m>=5&&m<=8?'summer':m>=9&&m<=11?'autumn':'winter'};}
   const sel = byId(state.sel);
   const t = sel && sel.kind === 'trip' && sel.stops.some(s => s.place === name) ? sel
     : trips.filter(x => x.stops.some(s => s.place === name)).pop();
@@ -897,6 +917,7 @@ function clearScenery() {
 
 function setScenery(name) {
   clearScenery();
+  if(storyScene&&visualContext(storyScene).month===null)return;
   if (!name) return;
   const center = posOf(name);
   if (!center) return;
@@ -947,7 +968,7 @@ function offsetFrom(center, e, n, h, result) {
 function updateScenery(now, dt) {
   if (now - scenery.lastCheck > 600 && !flying && !scenery.pinned) {
     scenery.lastCheck = now;
-    const f = focusPlace();
+    const f = storyScene&&visualContext(storyScene).month===null?null:focusPlace();
     if (f !== scenery.name) setScenery(f);
   }
   // Close to the ground the trip arcs would shoot through the sky like lasers; hide them there.
@@ -1053,12 +1074,12 @@ async function buildVegetation(name, token, signal) {
 /* ---------- footprint overlay ---------- */
 
 function markerObstacles() {
-  return [$('#brand'),$('#stats'),$('#chips'),$('#toolbar'),$('#timeline'),body.classList.contains('list-open')?$('#list'):null,
+  return [$('#brand'),$('#stats'),$('#chips'),$('#toolbar'),$('#timeline'),body.classList.contains('story-active')?$('#story-player'):null,body.classList.contains('list-open')?$('#list'):null,
     body.classList.contains('card-open')?$('#card'):null];
 }
 function renderMarkers() {
   if(!viewer)return;
-  if(!mapChooser)mapChooser=createMapChooser({bottom:()=>$('#timeline').getBoundingClientRect().top-8});
+  if(!mapChooser)mapChooser=createMapChooser({bottom:()=>(body.classList.contains('story-active')?$('#story-player'):$('#timeline')).getBoundingClientRect().top-8});
   if(!footprintOverlay)footprintOverlay=createFootprintOverlay(viewer,{container:$('#markers'),
     groundHeight:(lon,lat)=>cinematic.groundHeight(lon,lat),obstacles:markerObstacles,
     onSelect:name=>onMarkerClick(name,markerInfo.get(name)),onCluster:showPlaceCluster,
@@ -1079,6 +1100,7 @@ function markerTarget(info) {
   return info?.trips.filter(inYear).at(-1)||info?.homes.filter(inYear).find(h=>h.kind==='home')||info?.homes.find(inYear);
 }
 function onMarkerClick(name,info) {
+  storyExperience?.pauseForInteraction();
   const target=markerTarget(info);if(!target)return;
   const sel=byId(state.sel);
   if(sel&&(sel.kind==='trip'?sel.stops.some(s=>s.place===name):sel.place===name)) {
@@ -1087,6 +1109,7 @@ function onMarkerClick(name,info) {
   select(target.id);
 }
 function showPlaceCluster(names,anchor,element) {
+  storyExperience?.pauseForInteraction();
   pauseOverviewMotion();
   mapChooser.open({title:`这一带 · ${names.length} 个地点`,subtitle:'放大地图展开足迹，或直接选择地点',anchor,element,
     items:names.map(name=>{const info=markerInfo.get(name),target=markerTarget(info),count=info.trips.filter(inYear).length,st=statusOf(state.places[name]);
@@ -1137,6 +1160,7 @@ function updateArcs() {
   if(signature!==arcSignature) {
     arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
     for(const t of wanted) {
+      if(t.routeKind==='unknown')continue;
       const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
       for(let i=1;i<points.length;i++) {
         const e=arcSource.entities.add({polyline:{positions:arcPositions(points[i-1],points[i]),width:sel?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
@@ -1191,7 +1215,7 @@ function renderStats() {
 }
 let yearSignature='';
 function renderYears() {
-  const options=yearOptions(trips),signature=options.map(y=>`${y}:${trips.filter(t=>matchesYear(t,y)).length}`).join('|');
+  const options=yearOptions(trips),signature=trips.length+'|'+options.map(y=>`${y}:${trips.filter(t=>matchesYear(t,y)).length}`).join('|');
   const el=$('#year-filter');
   if(signature!==yearSignature||!el.children.length) {
     const scroll=el.scrollLeft;yearSignature=signature;
@@ -1215,7 +1239,9 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 
 function renderChips() {
   const out = [];
-  if(life?.repository.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例 · 导入 CSV 开始记录人生</span>');
+  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读人生故事 · 不连接个人数据库':'只读故事预览 · 未改动人生数据'}</span>`;return;}
+  if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例 · 导入 CSV 开始记录人生</span>');
+  if(life&&!sceneDemo)out.push('<button class="chip" data-story-compose>生成人生故事 →</button>');
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
@@ -1361,6 +1387,7 @@ function updateSelectionUI() {
 }
 
 function select(id, { fly = true } = {}) {
+  storyExperience?.pauseForInteraction();
   const x = byId(id);
   if (!x) return;
   state.sel = id;
@@ -1640,9 +1667,10 @@ function bindEvents() {
     }
     if (t.dataset.year) { setYear(+t.dataset.year); return; }
     if (t.dataset.place && t.closest('#card')) {
+      storyExperience?.pauseForInteraction();
       life?.adapter.focusPlace(lifeSnapshot.placeIds[t.dataset.place]);
       const pos = posOf(t.dataset.place);
-      if (pos) flyToPoints([pos], { close: true,placeName:t.dataset.place }); else openModal('places');
+      if (pos) flyToPoints([pos], { close: true,placeName:t.dataset.place }); else if(publicViewer||storyBaseLife)toast('此地点的坐标未知或未公开');else openModal('places');
       return;
     }
     if (t.dataset.id) select(t.dataset.id);
@@ -1679,7 +1707,7 @@ function bindEvents() {
     else if (state.sel && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) step(e.key === 'ArrowRight' ? 1 : -1);
   });
 
-  $('#btn-home').addEventListener('click', () => { stopPlay(); deselect(); });
+  $('#btn-home').addEventListener('click', () => { storyExperience?.pauseForInteraction();stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
   $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
   $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
@@ -1703,9 +1731,27 @@ async function boot() {
     $('#ld-sub').textContent = '地图引擎加载失败，请检查网络后刷新';
     return;
   }
-  initGlobe();
+  await initGlobe();
   refresh();
   geocodeMissing();
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>state.year?{type:'year',year:state.year}:life.adapter.scope,
+    reducedMotion,cancel:()=>pauseOverviewMotion(),
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay};}life=bridge;state.year=null;state.sel=null;body.classList.add('story-readonly');
+      if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
+      refresh();},
+    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
+    enter:async(item,{signal,instant,speed})=>{
+      if(signal.aborted)return;storyScene=item;signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});
+      state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
+      if(item.tripId)state.sel=item.tripId;refresh();
+      const duration=instant?0:Math.min(2.4,1.8/speed);
+      const name=item.placeId?Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===item.placeId):null;
+      if(name){const point=posOf(name);if(point)return flyToPoints([point],{duration,close:true,placeName:name});toast('此地点未公开坐标，继续展示故事内容');return;}
+      const points=[...visibleHomes().map(h=>h.place),...visibleTrips().flatMap(t=>t.stops.map(s=>s.place))].map(name=>posOf(name)).filter(Boolean);
+      if(['globe','closing'].includes(item.kind)||!points.length){homeView(duration);await new Promise(resolve=>{const timer=setTimeout(resolve,duration*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);resolve();},{once:true});});}
+      else await flyToPoints(points,{duration});
+    }});
 }
 
 await boot();

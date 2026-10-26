@@ -10,10 +10,10 @@ export function mountStoryPlayer({enter,cancel,onClose,onEdit,reducedMotion=fals
     if(!artifact)return;panel.dataset.status=state.status;
     const scene=state.scene,context=scene?visualContext(scene):null,memory=artifact.memories.find(m=>m.id===scene?.memoryId);
     panel.innerHTML=`<div class="story-caption"><div><p class="story-kicker">${esc(levels[scene?.kind]||'人生故事')} · ${state.index+1} / ${state.count}</p>
-      <h2 data-story-scene-title>${esc(scene?.title||artifact.title)}</h2><p data-story-scene-description>${esc(scene?.description||'')}</p>
+      <h2 data-story-scene-title>${esc(scene?.title||artifact.title)}</h2><p data-story-scene-description>${esc(scene?.description||(scene?.kind==='globe'?artifact.description:''))}</p>
       <small data-story-time>${esc(context?.label||'')}${context?.month===null?' · 季节未知，使用中性场景':''}</small>
       <p class="hint">记录的是到访地点；虚线为推测连接，未知位置不绘制路线。</p>
-      ${memory?`<p>${esc(memory.title)}</p><p>${esc(memory.text)}</p>${memory.kind==='photo'&&!memory.image?'<small>这份作品未附照片，可继续观看地点与文字。</small>':''}`:''}
+      ${memory?`<p>${esc(memory.title)}</p><p>${esc(memory.text)}</p>${memory.kind==='photo'&&!memory.image?'<small>这份作品未附照片，可继续观看地点与文字。</small>':['video','other'].includes(memory.kind)?'<small>此记忆仅分享文字与地点摘要，未附带可播放的原始文件。</small>':''}`:''}
       ${state.error?`<p role="alert">${esc(state.error)}</p>`:''}</div>
       ${memory?.image?`<img class="story-memory-image" src="${memory.image}" alt="${esc(memory.title)}">`:''}</div>
       <div class="story-controls"><button class="btn sm" data-story-previous aria-label="上个镜头">‹</button>
