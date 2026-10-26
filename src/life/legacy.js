@@ -72,7 +72,7 @@ const fingerprint=r=>JSON.stringify([rowFields(r),r._coordinates??null]);
 // title/date grouping is used only to interpret new CSV rows as legacy trips.
 export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual=false}={}) {
   const previous=clone(data),oldVisits=new Map(previous.visits.map(v=>[v.id,v])),usedVisits=new Set();
-  const nextVisits=[],nextTrips=[],nextHomes=[],groups=new Map();
+  const nextVisits=[],nextTrips=[],nextHomes=[],groups=new Map(),hints=new Map();
   for(const raw of rows) {
     const row=rowFields(raw);if(!row.place.trim())continue;
     const old=oldVisits.get(raw._lifeVisitId);
@@ -100,8 +100,10 @@ export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual
     if(kind==='trip') {
       const hint=JSON.stringify([row.trip||row.place,row.date]);
       const priorTrip=old?.tripId || raw._lifeTripId;
-      let trip=groups.get(priorTrip||hint);
-      if(!trip){const prior=previous.trips.find(t=>t.id===priorTrip);trip={id:prior?.id||priorTrip||newId('trip'),title:row.trip||row.place,type:row.type||'旅行',start:clone(visit.start),end:clone(visit.end),visitIds:[],evidenceIds:prior?.evidenceIds||addEvidence(data,'observed',source)};groups.set(priorTrip||hint,trip);nextTrips.push(trip);}
+      let trip=priorTrip?groups.get(priorTrip):hints.get(hint)?.length===1?hints.get(hint)[0]:null;
+      if(!trip){const prior=previous.trips.find(t=>t.id===priorTrip);trip={id:prior?.id||priorTrip||newId('trip'),title:row.trip||row.place,type:row.type||'旅行',start:clone(visit.start),end:clone(visit.end),visitIds:[],evidenceIds:prior?.evidenceIds||addEvidence(data,'observed',source)};groups.set(trip.id,trip);nextTrips.push(trip);}
+      if(!hints.has(hint))hints.set(hint,[]);
+      if(!hints.get(hint).includes(trip))hints.get(hint).push(trip);
       trip.visitIds.push(id);visit.tripId=trip.id;
     } else {
       const prior=previous.residences.find(r=>r.visitId===id);

@@ -86,3 +86,9 @@ test('editing a visit to a different place never fabricates coordinates from its
   assert.notEqual(changed.id,original);assert.equal(d.visits[3].placeId,original);
   assert.deepEqual(d.places.find(p=>p.id===original).coordinates,{latitude:39,longitude:116});
 });
+test('CSV append adds a new Stop to an unambiguous existing legacy trip without changing its ID',()=>{
+  const d=emptyDataset();importCSVInto(d,CSV,'replace');const id=d.trips[0].id;
+  importCSVInto(d,'日期,行程,地点,类型,备注,坐标\n2025-05,北京实习,第三站,旅行,,"38,115"');
+  assert.equal(d.trips.length,3,'legacy append must not create a second copy of the same trip');
+  assert.equal(d.trips[0].id,id);assert.equal(d.trips[0].visitIds.length,3);
+});
