@@ -1,5 +1,7 @@
 // Reuse the already sampled elevations to reject cliff faces without another network sampling
 // pass. Nearby height differences give a conservative lower bound on local steepness.
+export const ROOT_LIFT=.3;
+export const exaggeratedRoot=(physicalHeight,exaggeration=1)=>physicalHeight*exaggeration+ROOT_LIFT;
 export async function filterSteepPlants(plants,{signal,maxSlope=1,checkpoint=()=>new Promise(r=>setTimeout(r,0))}={}) {
   if(!plants.length)return [];
   const lat=plants[0].lat,lon=plants[0].lon,sx=111320*Math.cos(lat*Math.PI/180),sy=111320,cell=120;

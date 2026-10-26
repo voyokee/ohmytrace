@@ -24,7 +24,8 @@ export class EffectManager {
     const rnd=random(1843+Math.round(lon*10)),image=mistImage();this.dynamic=[];this.scratch=new Cesium.Cartesian3();this.local=new Cesium.Cartesian3();
     for(let i=0;i<template.mist;i++) {
       const plant=plants[Math.floor(i/Math.max(1,template.mist)*plants.length)];
-      const p=plant?Cesium.Cartesian3.fromDegrees(plant.lon,plant.lat,plant.ground*(config.exaggeration||1)+45):this.offset((rnd()-.5)*2500,(rnd()-.5)*2500,70);
+      // SceneryManager supplies the same rendered roots used by its glTF instances.
+      const p=plant?Cesium.Cartesian3.fromDegrees(plant.lon,plant.lat,plant.ground+45):this.offset((rnd()-.5)*2500,(rnd()-.5)*2500,70);
       this.mist.add({position:p,image,width:900+rnd()*1100,height:90+rnd()*100,sizeInMeters:true,
         color:Cesium.Color.WHITE.withAlpha(.38),distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,15000)});
     }

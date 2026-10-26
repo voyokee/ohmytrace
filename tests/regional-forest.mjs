@@ -35,6 +35,7 @@ for(let height=0;height<=5000000;height+=100) {
 assert.equal(regionalState(1000).treeHeight,22,'Restore physical scale before local vegetation takes over');
 assert.equal(regionalState(15000).treeHeight,750,'Keep readable mid-distance silhouettes until the local overlap band');
 assert.equal(regionalState(300000).treeHeight,15000);
+assert.equal(regionalState(15000).localLight,0);assert.equal(regionalState(1000).localLight,1);
 assert.ok(regionalWorldScale(2000000)>.2&&regionalWorldScale(2000000)<.3,'Retain a visible orbital canopy while reducing its mid-distance size');
 assert.equal(regionalWorldScale(650000),.08,'Finish crown contraction at the terrain handoff');
 assert.equal(regionalWorldScale(6000000),1,'Preserve full crowns in the distant global view');
@@ -46,6 +47,8 @@ assert.equal(visualBenchmark('?pitch=-45').pitch,-Math.PI/2,'Diagnostics must no
 assert.equal(visualBenchmark('?benchmark=1&pitch=-45').pitch,-Math.PI/4);
 for(const pitch of ['','0','-10','-100','Infinity','oops'])assert.equal(visualBenchmark('?benchmark=1&pitch='+pitch).pitch,-Math.PI/2);
 assert.ok(regionalState(2000).opacity>regionalState(2000,{localReady:true}).opacity,'Retain trees until nearby vegetation is ready');
+assert.ok(regionalState(500).active&&regionalState(500).opacity===1,'Keep physical regional trees when close scenery is still loading or unavailable');
+assert.equal(regionalState(500,{localReady:true}).active,false,'Release the regional fallback after close scenery is truly GPU-ready');
 const context={console,setTimeout,clearTimeout,performance,URL,TextDecoder,TextEncoder,atob,btoa,TransformStream,ReadableStream,WritableStream};
 context.global=context;context.self=context;vm.createContext(context);
 vm.runInContext(readFileSync(new URL('../vendor/cesium/Cesium.js',import.meta.url),'utf8'),context);

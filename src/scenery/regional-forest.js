@@ -1,17 +1,8 @@
-import {regionalState,regionalAnchor,regionalPlants,REGIONAL_MAX_HEIGHT} from './regional-forest-data.js?v=20261025-handoff';
-import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261025-handoff';
+import {regionalState,regionalAnchor,regionalPlants,REGIONAL_MAX_HEIGHT} from './regional-forest-data.js?v=20261026-continuity';
+import {makeVegetationModel,vegetationShader} from './instanced-vegetation.js?v=20261026-continuity';
+import {exaggeratedRoot} from './terrain-placement.js?v=20261026-continuity';
+import {waitForModelReady} from './model-ready.js';
 const aborted=()=>new DOMException('Regional forest cancelled','AbortError');
-function waitReady(model,signal) {
-  if(model.ready)return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    let offReady,offError;
-    const clean=()=>{offReady?.();offError?.();signal.removeEventListener('abort',cancel);};
-    const cancel=()=>{clean();reject(aborted());};
-    offReady=model.readyEvent.addEventListener(()=>{clean();resolve();});
-    offError=model.errorEvent.addEventListener(error=>{clean();reject(error);});
-    signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();
-  });
-}
 export class RegionalForest {
   constructor(viewer,maps,{constrained=false,survey,createModel=makeVegetationModel,shader}={}) {
     this.viewer=viewer;this.maps=maps;this.limit=constrained?220:900;this.createModel=createModel;
@@ -65,6 +56,7 @@ export class RegionalForest {
     const elapsed=Math.max(0,Math.min(1000,now-(this.previousNow??now)));this.previousNow=now;
     this.opacity=(this.opacity||0)+(state.opacity-(this.opacity||0))*(1-Math.exp(-elapsed/180));
     this.shader.setUniform('u_day',day);this.shader.setUniform('u_canopyScale',state.treeHeight/REGIONAL_MAX_HEIGHT);
+    this.shader.setUniform('u_localLight',state.localLight);
     this.shader.setUniform('u_autumn',Math.abs(this.wanted.anchor.lat)>40&&(month===9||month===10)?1:0);
     let changed=false;
     for(const set of this.sets) {
@@ -92,7 +84,7 @@ export class RegionalForest {
       if(points.length)await this.survey(level,points);
       if(this.disposed||generation!==this.generation||this.wanted?.key!==request.key)throw aborted();
       const plants=candidates.flatMap((p,i)=>Number.isFinite(points[i].height)&&points[i].height>15&&points[i].height<p.treeline?
-        [{...p,ground:points[i].height*request.exaggeration+.3,height:REGIONAL_MAX_HEIGHT*p.variation,width:.8,angle:p.variation*19}]:[]);
+        [{...p,ground:exaggeratedRoot(points[i].height,request.exaggeration),height:REGIONAL_MAX_HEIGHT*p.variation,width:.8,angle:p.variation*19}]:[]);
       const chunks=new Map();
       for(const p of plants) {
         const dx=((p.lon-request.anchor.lon+540)%360)-180,key=`${dx>0}:${p.lat>request.anchor.lat}`;
@@ -105,7 +97,7 @@ export class RegionalForest {
         if(signal.aborted||generation!==this.generation){model.destroy();throw aborted();}
         model.show=true;model.color=Cesium.Color.WHITE.withAlpha(.001);
         models.push(this.viewer.scene.primitives.add(model));this.viewer.scene.requestRender();
-        await waitReady(model,signal);
+        await waitForModelReady(model,signal);
       }}catch(error){controller.abort();throw error;}}));
       const rejected=outcomes.find(x=>x.status==='rejected');if(rejected)throw rejected.reason;
       if(this.disposed||generation!==this.generation||this.wanted?.key!==request.key)throw aborted();
@@ -124,6 +116,7 @@ export class RegionalForest {
     this.generation++;this.controller?.abort();for(const set of this.sets)this.remove(set);
     for(const model of this.building)this.viewer.scene.primitives.remove(model);
     this.sets=[];this.key=this.wanted=undefined;this.retryAfter=0;
+    this.opacity=0;this.previousNow=undefined;this.lastCheck=-Infinity;
   }
   details(){return {regionalSupported:this.supported,regionalInstances:this.sets.reduce((n,e)=>n+e.plants.length,0),regionalSets:this.sets.length,
     regionalModels:this.sets.reduce((n,e)=>n+e.models.length,0),regionalStaging:this.building.length,

@@ -1,13 +1,14 @@
 import {syncCameraSun} from './sunlight.js';
-import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261026-relief-fit';
+import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261026-continuity';
 import { presentationState } from './presentation-state.js';
 import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-ridges';
 import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261026-relief-fit';
 import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-ridges';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';
-import { createWorldForest } from '../scenery/world-forest.js?v=20261026-relief-fit';
-import {RegionalForest} from '../scenery/regional-forest.js?v=20261025-handoff';
-import {regionalWorldScale} from '../scenery/regional-forest-data.js?v=20261025-handoff';
+import { createWorldForest } from '../scenery/world-forest.js?v=20261026-continuity';
+import {RegionalForest} from '../scenery/regional-forest.js?v=20261026-continuity';
+import {regionalWorldScale} from '../scenery/regional-forest-data.js?v=20261026-continuity';
+import {groundHandoff,surfaceHandoffVertexShader} from './terrain-handoff.js';
 
 const asset = name => new URL('../../assets/' + name, import.meta.url).href;
 const loadImage = url => new Promise((resolve, reject) => {
@@ -28,11 +29,12 @@ async function loadTexture(name, maxWidth) {
   return canvas;
 }
 
-function shell(viewer, material, altitude, writeDepth = false, terrain) {
+function shell(viewer, material, altitude, writeDepth = false, terrain,groundMorph=false) {
   const radii = Cesium.Cartesian3.add(Cesium.Ellipsoid.WGS84.radii,
     new Cesium.Cartesian3(altitude, altitude, altitude), new Cesium.Cartesian3());
   // Single front face: Cesium's closed+translucent two-pass path would also draw the far hemisphere.
   const appearance = new Cesium.MaterialAppearance({ material, flat: true, closed: false, translucent: true,
+    vertexShaderSource:groundMorph&&writeDepth?surfaceHandoffVertexShader(material):undefined,
     renderState: { depthTest: { enabled: true }, depthMask: writeDepth,
       cull: { enabled: true, face: Cesium.CullFace.BACK }, blending: Cesium.BlendingState.ALPHA_BLEND } });
   appearance.isTranslucent = () => !writeDepth || material.uniforms.opacity < 0.999;
@@ -61,6 +63,11 @@ function terrainGeometry(data) {
 
 export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration = 1.65 } = {}) {
   const scene = viewer.scene;
+  const continuous=Cesium.VERSION==='1.120'&&new URLSearchParams(location.search).get('handoff')!=='0';
+  const regionalEnabled=continuous&&new URLSearchParams(location.search).get('regional')!=='0';
+  const traceEnabled=new URLSearchParams(location.search).get('handofftrace')==='1';
+  const handoffTrace=[];let lastTrace=-Infinity;
+  let currentGroundBlend=0;
   const plan = earthTexturePlan({ ...runtimeDeviceConfig(),maxTextureSize: Cesium.ContextLimits.maximumTextureSize });
   const canvas = document.createElement('canvas');
   canvas.id = 'cosmos'; canvas.setAttribute('aria-hidden', 'true');
@@ -112,12 +119,11 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     const contact=document.createElement('canvas');contact.width=contact.height=1;
     textures.contact=contact;
     materials = createEarthMaterials(textures);
-    layers.push(shell(viewer, materials.surface, 12000, true));
+    layers.push(shell(viewer, materials.surface, 12000, true,undefined,continuous));
     layers.push(shell(viewer, materials.clouds, 170000));
     layers.push(shell(viewer, materials.atmosphere, 120000));
     const dayPixels=pixels(textures.day),nightPixels=pixels(textures.night);heightPixels=pixels(textures.height,plan.constrained?1024:2048);
-    // Regional placement is a development preview until its visual handoff is calibrated.
-    if(new URLSearchParams(location.search).get('regional')==='1')
+    if(regionalEnabled)
       regional=new RegionalForest(viewer,{day:dayPixels,height:heightPixels,night:nightPixels},{constrained:plan.constrained});
     const fallback=()=>new Promise((resolve,reject)=>setTimeout(async()=>{
       try {
@@ -151,10 +157,10 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       const previous=layers[0],oldMaterial=materials.surface;
       const replacement=createEarthMaterials(textures);materials.surface=replacement.surface;
       replacement.clouds.destroy();replacement.atmosphere.destroy();
-      layers[0]=shell(viewer,materials.surface,12000,true,geometry);
+      layers[0]=shell(viewer,materials.surface,12000,true,geometry,continuous);
       scene.primitives.remove(previous);reliefReady=true;
       oldMaterial.destroy();
-      worldForest=createWorldForest(viewer,forest,{constrained:plan.constrained});scene.requestRender();
+      worldForest=createWorldForest(viewer,forest,{constrained:plan.constrained,groundMorph:continuous,nativeReliefRatio:terrainExaggeration/WORLD_RELIEF});scene.requestRender();
     }).catch(reason=>{if(disposed||reason.name==='AbortError')return;worldError=reason.message;console.warn('Miniature world:',reason.message);})
       .finally(()=>{worldWorker?.terminate();worldWorker=undefined;});
     // Present the small local maps immediately, then replace only the albedo. Never hide the globe
@@ -204,6 +210,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
     details: () => ({ renderer: state.phase, earthMix: +state.mix.toFixed(2), earthTexture: textures?.day.width || 0,
       earthDetail: detail,
       worldRelief:reliefReady, worldDataSource, worldReliefScale:WORLD_RELIEF,worldRidgeRelief:WORLD_RIDGE_RELIEF,worldRidgeMax:WORLD_RIDGE_MAX, worldContactMap:textures?.contact.width||0,
+      smoothHandoff:continuous,regionalEnabled,worldGroundBlend:+currentGroundBlend.toFixed(3),terrainExaggeration:scene.verticalExaggeration,
       ...worldSurfaceStats,...(worldForest?.details()||{}),...(regional?.details()||{}),...(worldError?{worldError}:{}),
       ...(error ? { earthError: error } : {}) }),
     update({ altitude, day, lightUniforms, reducedMotion = false, now = performance.now(),terrainReady=true,localReady=false }) {
@@ -211,7 +218,8 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       state = presentationState(altitude, !!materials);
       // Cesium 1.120 also exaggerates glTF models with a local-curvature approximation. At orbital
       // distances this displaces entire forests. The miniature layer already contains its own relief.
-      scene.verticalExaggeration = state.surface ? 1 : terrainExaggeration;
+      scene.verticalExaggeration = continuous?terrainExaggeration:state.surface?1:terrainExaggeration;
+      currentGroundBlend=continuous?groundHandoff(altitude):0;
       if(terrainReady)regional?.update({altitude,day,now,mix:state.mix,focus,month:focusMonth,localReady});
       if (handoffs[handoffs.length - 1]?.phase !== state.phase) {
         handoffs.push({ phase: state.phase, altitude: Math.round(altitude), mix: +state.mix.toFixed(3) });
@@ -220,16 +228,27 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }
       viewer.canvas.dataset.renderer = state.phase;
       viewer.canvas.dataset.earthMix = state.mix.toFixed(3);
+      viewer.canvas.dataset.worldGroundBlend=currentGroundBlend.toFixed(3);
+      viewer.canvas.dataset.worldNativeReliefRatio=String(terrainExaggeration/WORLD_RELIEF);
       viewer.canvas.dataset.earthTexture = String(textures?.day.width || 0);
       viewer.canvas.dataset.earthDetail = detail;
       viewer.canvas.dataset.worldRelief=String(reliefReady);
       viewer.canvas.dataset.worldDataSource=worldDataSource;
       viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
       if(worldForest) {
-        worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? regionalWorldScale(altitude) : 1});
+        worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? regionalWorldScale(altitude) : 1,groundBlend:currentGroundBlend});
         if(materials)materials.surface.uniforms.canopyMix=Math.min(1,worldForest.details().worldTrees/1000);
         viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
         viewer.canvas.dataset.worldReady=String(worldForest.details().worldReady);
+      }
+      if(traceEnabled&&now-lastTrace>=150) {
+        lastTrace=now;const r=regional?.details();
+        handoffTrace.push({time:Math.round(now-start),altitude:Math.round(altitude),mix:+state.mix.toFixed(3),
+          groundBlend:+currentGroundBlend.toFixed(3),worldScale:regional?.supported?+regionalWorldScale(altitude).toFixed(3):1,
+          worldTrees:worldForest?.details().worldTrees||0,regionalTrees:r?.regionalInstances||0,regionalReady:!!r?.regionalReady,
+          regionalOpacity:r?.regionalOpacity||0,regionalRadius:r?.regionalRadius||0,regionalHeight:r?.regionalTreeHeight||0,
+          localReady,nativeExaggeration:scene.verticalExaggeration});
+        if(handoffTrace.length>120)handoffTrace.shift();viewer.canvas.dataset.handoffTrace=JSON.stringify(handoffTrace);
       }
       scene.globe.show = terrainEnabled && (state.terrain || surfaceIsolated);
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;
@@ -243,6 +262,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       }
       layers.forEach((layer, i) => { layer.show = state.surface && (i === 0 ? !surfaceIsolated : i !== 2 || atmosphereEnabled); });
       const u = materials.surface.uniforms;
+      u.groundBlend=currentGroundBlend;u.nativeReliefRatio=terrainExaggeration/WORLD_RELIEF;
       u.visitRadius = Math.max(0.018, (lightUniforms?.fpRadius || 300000) / 6378137);
       materials.visitNames.forEach((name, i) => {
         const v = lightUniforms?.['fpL' + String(i).padStart(2, '0')], out = u[name];

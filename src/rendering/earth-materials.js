@@ -17,7 +17,7 @@ export function createEarthMaterials(textures) {
   const common = () => ({ sunWC: new Cesium.Cartesian3(1, 0, 0), opacity: 1, day: 1, cloudPhase: 0 });
   const uniforms = { ...common(), dayMap: textures.day, heightMap: textures.height,
     depthMap: textures.depth, nightMap: textures.night, cloudMap: textures.cloud,
-    contactMap: textures.contact, canopyMix:0, reliefStrength:8.5,
+    contactMap: textures.contact, canopyMix:0, reliefStrength:8.5,groundBlend:0,nativeReliefRatio:1.65/30,
     texel: new Cesium.Cartesian2(1 / textures.height.width, 1 / textures.height.height), visitRadius: 0.045 };
   let visits = '';
   for (const name of visitNames) {

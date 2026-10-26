@@ -1,5 +1,6 @@
-import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261025-handoff';
-export function createWorldForest(viewer,forest,{constrained=false,createModel=makeVegetationModel,loadAssets=preloadVegetation}={}) {
+import {makeVegetationModel,vegetationShader,preloadVegetation} from './instanced-vegetation.js?v=20261026-continuity';
+import {contractedHeight} from '../rendering/terrain-handoff.js';
+export function createWorldForest(viewer,forest,{constrained=false,groundMorph=false,nativeReliefRatio=1.65/30,createModel=makeVegetationModel,loadAssets=preloadVegetation}={}) {
   const shader=vegetationShader({world:true}),live=new Map(),staging=new Map(),pending=new Map(),retries=new Map();
   const controller=new AbortController(),maxChunks=constrained?12:28,maxDetailed=constrained?0:4;
   const direction=new Cesium.Cartesian3();
@@ -21,7 +22,7 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
   function add(chunk,low) {
     // A terrain-fitted orbital tree may be shorter than 10 km. Its display band belongs
     // to the global layer, independent of the local-tree size heuristic in the loader.
-    const task=createModel(viewer,chunk,{low,shader,signal:controller.signal,far:100000000}).then(model=>{
+    const task=createModel(viewer,chunk,{low,shader,signal:controller.signal,far:100000000,world:true,groundMorph}).then(model=>{
       if(disposed||currentMix<.01||!wantedKeys.has(chunk.key)){model.destroy();return;}
       const previous=live.get(chunk.key),entry={model,chunk,low,lastSeen:currentNow,listeners:[]};
       if(!previous&&live.size>=maxChunks) {
@@ -35,7 +36,8 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
       else {
         if(new URLSearchParams(location.search).has('probe')) {
           entry.probe=viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
-          chunk.plants.filter((p,i)=>i%12===0).forEach(p=>entry.probe.add({position:Cesium.Cartesian3.fromDegrees(p.lon,p.lat,p.ground),
+          entry.probeRoots=chunk.plants.filter((p,i)=>i%12===0);
+          entry.probeRoots.forEach(p=>entry.probe.add({position:Cesium.Cartesian3.fromDegrees(p.lon,p.lat,p.ground),
             pixelSize:4,color:Cesium.Color.RED,disableDepthTestDistance:Infinity}));
         }
         live.set(chunk.key,entry);
@@ -58,9 +60,10 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
   }
   return {
     toggleDetail(){inspectDetail=!inspectDetail;lastCheck=-Infinity;viewer.scene.requestRender();},
-    update({mix,day,now=performance.now(),altitude,canopyScale=1}) {
+    update({mix,day,now=performance.now(),altitude,canopyScale=1,groundBlend=0}) {
       if(disposed)return;currentMix=mix;currentNow=now;shader.setUniform('u_day',day);
       shader.setUniform('u_canopyScale',canopyScale);
+      shader.setUniform('u_groundBlend',groundMorph?groundBlend:0);shader.setUniform('u_nativeReliefRatio',nativeReliefRatio);
       if(mix<.01){clear();return;}
       if(altitude>5200000)lowView=true;else if(altitude<4800000)lowView=false;
       detailKeys=new Set((!lowView||inspectDetail?wantedOrder.slice(0,maxDetailed):[]).map(x=>x.chunk.key));
@@ -69,11 +72,18 @@ export function createWorldForest(viewer,forest,{constrained=false,createModel=m
         const low=!detailKeys.has(key);
         if(!wantedKeys.has(key)||entry.low!==low){remove(entry);staging.delete(key);continue;}
         if(!entry.model.ready)continue;
-        const previous=live.get(key);entry.probe=previous?.probe;
+        const previous=live.get(key);entry.probe=previous?.probe;entry.probeRoots=previous?.probeRoots;
         if(previous)remove(previous,true);
         entry.model.color=Cesium.Color.WHITE.withAlpha(mix);live.set(key,entry);staging.delete(key);retries.delete(key);
       }
       for(const entry of live.values())if(Math.abs(entry.model.color.alpha-mix)>.01)entry.model.color=Cesium.Color.WHITE.withAlpha(mix);
+      for(const entry of [...live.values(),...staging.values()]) {
+        entry.model.handoffBounds?.setActive(groundMorph&&groundBlend>0);
+        if(entry.probe&&entry.probeBlend!==groundBlend) {
+          entry.probeRoots.forEach((p,i)=>{entry.probe.get(i).position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,
+            contractedHeight(p.ground,groundMorph?groundBlend:0,nativeReliefRatio));});entry.probeBlend=groundBlend;
+        }
+      }
       if(now-lastCheck<550)return;lastCheck=now;
       Cesium.Cartesian3.normalize(viewer.camera.positionWC,direction);
       const wanted=chunks.map(chunk=>({chunk,dot:Cesium.Cartesian3.dot(chunk.up,direction)}))

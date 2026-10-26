@@ -1,4 +1,5 @@
 import {layoutFootprints} from './footprint-layout.js?v=20261026-places';
+import {contractedHeight} from '../rendering/terrain-handoff.js';
 
 function writeLabel(label,item) {
   label.replaceChildren();
@@ -27,7 +28,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
   const C=Cesium,items=new Map(),clusters=new Map(),matrix=new C.Matrix4();
   const occluder=new C.EllipsoidalOccluder(C.Ellipsoid.WGS84,C.Cartesian3.ZERO);
   const scratch=new C.Cartesian3(),position=new C.Cartesian3(),windowPoint=new C.Cartesian2();
-  let dirty=true,lastMix=-1,lastRelief=false,lastWidth=0,lastHeight=0,lastUI='',previousSeeds=[],statistics={};
+  let dirty=true,lastMix=-1,lastGroundBlend=-1,lastRatio=-1,lastRelief=false,lastWidth=0,lastHeight=0,lastUI='',previousSeeds=[],statistics={};
   return {
     setItems(data) {
       const wanted=new Set(data.map(d=>d.id));
@@ -35,7 +36,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       for(const item of data) {
         let m=items.get(item.id);
         if(!m){m=makeMarker(container);items.set(item.id,m);m.el.onclick=e=>{e.stopPropagation();onSelect(item.id);};}
-        if(m.item?.lon!==item.lon||m.item?.lat!==item.lat)m.globalPos=undefined;
+        if(m.item?.lon!==item.lon||m.item?.lat!==item.lat){m.globalPos=undefined;m.globalHeight=undefined;}
         m.item=item;
         const text=`${item.home||''}:${item.label}`;
         if(m.text!==text){writeLabel(m.label,item);m.text=text;m.measure=true;}
@@ -51,17 +52,23 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       const camera=viewer.camera,width=viewer.canvas.clientWidth,height=viewer.canvas.clientHeight;
       const resized=width!==lastWidth||height!==lastHeight;
       const mix=+(viewer.canvas.dataset.earthMix||0),relief=viewer.canvas.dataset.worldRelief==='true',ui=document.body.className;
+      const groundBlend=+(viewer.canvas.dataset.worldGroundBlend||0),ratio=+(viewer.canvas.dataset.worldNativeReliefRatio||1.65/30);
       const moved=!C.Matrix4.equals(camera.viewMatrix,matrix);
-      if(!dirty&&!moved&&mix===lastMix&&relief===lastRelief&&width===lastWidth&&height===lastHeight&&ui===lastUI)return;
+      if(!dirty&&!moved&&mix===lastMix&&groundBlend===lastGroundBlend&&ratio===lastRatio&&relief===lastRelief&&width===lastWidth&&height===lastHeight&&ui===lastUI)return;
       if(moved)onCameraChange?.();
       dirty=false;lastMix=mix;lastRelief=relief;lastWidth=width;lastHeight=height;lastUI=ui;C.Matrix4.clone(camera.viewMatrix,matrix);
+      lastGroundBlend=groundBlend;lastRatio=ratio;
       occluder.cameraPosition=camera.positionWC;
       const projected=[],toWindow=C.SceneTransforms.worldToWindowCoordinates||C.SceneTransforms.wgs84ToWindowCoordinates;
       // These dimensions change only with text, not on every moving frame.
       for(const m of items.values())if(m.measure||resized){m.labelWidth=m.label.offsetWidth;m.labelHeight=m.label.offsetHeight;m.measure=false;}
       for(const m of items.values()) {
         const d=m.item;if(!d.active)continue;
-        if(relief&&!m.globalPos)m.globalPos=C.Cartesian3.fromDegrees(d.lon,d.lat,groundHeight(d.lon,d.lat)+18000);
+        if(relief&&(!m.globalPos||m.groundBlend!==groundBlend||m.ratio!==ratio)) {
+          m.globalHeight??=groundHeight(d.lon,d.lat);
+          m.globalPos=C.Cartesian3.fromDegrees(d.lon,d.lat,contractedHeight(m.globalHeight,groundBlend,ratio)+18000);
+          m.groundBlend=groundBlend;m.ratio=ratio;
+        }
         const p=m.globalPos?C.Cartesian3.lerp(d.position,m.globalPos,mix,position):d.position;
         if(!occluder.isPointVisible(p)||C.Cartesian3.dot(camera.directionWC,C.Cartesian3.subtract(p,camera.positionWC,scratch))<=0)continue;
         const w=toWindow(viewer.scene,p,windowPoint);

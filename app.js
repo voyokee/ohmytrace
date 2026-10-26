@@ -6,13 +6,13 @@ const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-
 const benchmark=visualBenchmark(location.search);
 const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-ridges');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
-const { filterSteepPlants } = await import('./src/scenery/terrain-placement.js');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261026-relief-fit');
-const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261025-handoff');
+const { filterSteepPlants,ROOT_LIFT } = await import('./src/scenery/terrain-placement.js?v=20261026-continuity');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261026-continuity');
+const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261026-continuity');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
-const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-places');
+const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-continuity');
 const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
 const {GEOCODER_VERSION,needsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
@@ -637,7 +637,7 @@ function initGlobe() {
     frameStart = now;
     cameraMoving=cameraMotion.update(viewer.camera,now);
     cinematic.update({ altitude: viewer.camera.positionCartographic.height, day: dayMix,
-      lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:sceneryManager.details().sceneryPhase==='ready' });
+      lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:['ready','empty'].includes(sceneryManager.details().sceneryPhase) });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
     renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !state.sel && !pickName && now >= globalSpinUntil &&
@@ -1147,7 +1147,7 @@ async function buildVegetation(name, token, signal) {
     const small = kind === 'grass' || kind === 'shrub';
     const height = kind === 'grass' ? 1.5 + rnd() * 2 : kind === 'shrub' ? 3 + rnd() * 4 :
       kind === 'spruce' ? 26 + rnd() * 28 : kind === 'birch' ? 20 + rnd() * 15 : 15 + rnd() * 18;
-    placements.push({ lon: plants[i].lon, lat: plants[i].lat, ground: ground + 0.3,
+    placements.push({ lon: plants[i].lon, lat: plants[i].lat, ground: ground + ROOT_LIFT,
       species: kind, height, width: small ? 1.2 : .75 + rnd() * .4, angle: rnd() * Math.PI * 2 });
   }
   if (token !== scenery.token || signal.aborted) return;
