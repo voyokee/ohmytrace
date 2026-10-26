@@ -67,6 +67,7 @@ export function parseLegacyCSV(text) {
 }
 const rowFields=r=>Object.fromEntries(['date','trip','place','type','note'].map(k=>[k,String(r[k]??'')]));
 const fingerprint=r=>JSON.stringify([rowFields(r),r._coordinates??null]);
+const locationMetadata=location=>Object.fromEntries(['status','label','countryCode','geocoderVersion'].filter(k=>location?.[k]!==undefined).map(k=>[k,clone(location[k])]));
 
 // Reconcile a legacy editing draft. Persisted visit IDs carry identity through edits;
 // title/date grouping is used only to interpret new CSV rows as legacy trips.
@@ -85,7 +86,7 @@ export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual
     if(!place) {
       const requested=raw._lifePlaceId;
       place={id:requested&&!data.places.some(p=>p.id===requested)?requested:newId('place'),name:row.place,coordinates:clone(coordinates),
-        location:clone(raw._location||{status:coordinates?'confirmed':'unknown'}),
+        location:locationMetadata(raw._location||{status:coordinates?'confirmed':'unknown'}),
         evidenceIds:addEvidence(data,coordinates?(['auto','rough'].includes(raw._location?.status)?'inferred':'observed'):'unknown',
           {...source,coordinateOrder:'latitude,longitude',...(raw._location?.status?{legacyCoordinateStatus:raw._location.status}:{}),...(raw._swapped?{normalization:'legacy-unambiguous-longitude-first'}:{})}),
         ...(raw._legacyPlaceKey?{legacyKey:raw._legacyPlaceKey}:{})};
@@ -144,7 +145,7 @@ export function migrateLegacy(legacy) {
 export function updatePlace(data,id,location,{manual=true}={}) {
   const place=data.places.find(p=>p.id===id);if(!place)throw new Error('地点不存在');
   const before={coordinates:clone(place.coordinates),location:clone(place.location)};
-  place.coordinates=location.lat==null?null:{latitude:location.lat,longitude:location.lon};place.location=clone(location);
+  place.coordinates=location.lat==null?null:{latitude:location.lat,longitude:location.lon};place.location=locationMetadata(location);
   place.evidenceIds.push(...(manual?manualEvidence(data,{kind:'coordinate-correction'},before,{coordinates:place.coordinates,location:place.location}):addEvidence(data,'inferred',{kind:'geocoder',provider:'Nominatim',result:clone(location)})));
   validateDataset(data);
 }

@@ -92,3 +92,10 @@ test('CSV append adds a new Stop to an unambiguous existing legacy trip without 
   assert.equal(d.trips.length,3,'legacy append must not create a second copy of the same trip');
   assert.equal(d.trips[0].id,id);assert.equal(d.trips[0].visitIds.length,3);
 });
+test('coordinate corrections persist canonical fields without renderer height or identity caches',()=>{
+  const d=emptyDataset();importCSVInto(d,CSV,'replace');const id=d.places[1].id;
+  updatePlace(d,id,{lat:39.1,lon:116.1,status:'confirmed',label:'手动确认',h:1234,lifePlaceId:id,sourceName:'公园'});
+  const place=d.places.find(p=>p.id===id);
+  assert.deepEqual(place.coordinates,{latitude:39.1,longitude:116.1});
+  assert.deepEqual(place.location,{status:'confirmed',label:'手动确认'});
+});
