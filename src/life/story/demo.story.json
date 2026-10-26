@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "kind": "OhMyTraceStory",
-  "storyId": "story_819c87d7-18ff-4a4c-9828-cb7f7af145aa",
+  "storyId": "story_dc295afe-e38a-4f7a-9678-7a5d559e9877",
   "title": "求学与城市之间 · 虚构人生故事",
-  "description": "",
+  "description": "虚构示例：重叠的人生阶段、同城重访、未知地点与一张授权缩略图。",
   "selectedChapterIds": [
     "c1",
     "c2"
@@ -167,6 +167,25 @@
     },
     {
       "id": "s9",
+      "kind": "place",
+      "title": "天津",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": "t2",
+      "placeId": "p4",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s10",
       "kind": "chapter",
       "title": "北京实习阶段",
       "description": "",
@@ -185,7 +204,7 @@
       "duration": 3
     },
     {
-      "id": "s10",
+      "id": "s11",
       "kind": "trip",
       "title": "北京实习",
       "description": "",
@@ -204,7 +223,7 @@
       "duration": 3
     },
     {
-      "id": "s11",
+      "id": "s12",
       "kind": "place",
       "title": "北京",
       "description": "",
@@ -223,7 +242,7 @@
       "duration": 4
     },
     {
-      "id": "s12",
+      "id": "s13",
       "kind": "memory",
       "title": "获准分享的照片",
       "description": "",
@@ -242,7 +261,7 @@
       "duration": 5
     },
     {
-      "id": "s13",
+      "id": "s14",
       "kind": "place",
       "title": "未知博物馆",
       "description": "",
@@ -261,7 +280,7 @@
       "duration": 4
     },
     {
-      "id": "s14",
+      "id": "s15",
       "kind": "closing",
       "title": "继续探索这段人生",
       "description": "",
@@ -295,7 +314,7 @@
     "coordinateRule": "0.1-degree-grid (~11 km latitude); not an administrative city boundary"
   },
   "provenanceSummary": {
-    "observed": 8,
+    "observed": 10,
     "inferred": 0,
     "manual": 2,
     "unknown": 2,
@@ -324,6 +343,15 @@
       "id": "p3",
       "name": "未知博物馆",
       "coordinates": null,
+      "granularity": "city"
+    },
+    {
+      "id": "p4",
+      "name": "天津",
+      "coordinates": {
+        "latitude": 39.1,
+        "longitude": 117.2
+      },
       "granularity": "city"
     }
   ],
@@ -384,6 +412,18 @@
       "stops": [
         {
           "placeId": "p2",
+          "start": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "end": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "note": ""
+        },
+        {
+          "placeId": "p4",
           "start": {
             "precision": "year",
             "value": "2026"

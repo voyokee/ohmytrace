@@ -3,6 +3,9 @@
 Phase 3 local photo ingestion/reconstruction now extends these interfaces;
 see [PHOTO_HISTORY.md](PHOTO_HISTORY.md) for media storage, review, recovery and validation.
 
+Phase 4 adds Story composition, privacy-reviewed exports and an independent
+read-only Viewer; see [LIFE_STORY.md](LIFE_STORY.md).
+
 ## Baseline and boundaries
 
 Implementation branch: `feat/life-atlas-mvp`, based on `perf/local-rendering`
