@@ -2,9 +2,9 @@
   "date": "2026-10-26",
   "branch": "feat/life-atlas-mvp",
   "fixture": "Fictional records only; no real user database or media",
-  "testCommand": "package.json test chain via bundled pnpm",
+  "testCommand": "npm test",
   "existingScriptsPassed": 18,
-  "lifeTestsPassed": 71,
+  "lifeTestsPassed": 73,
   "browser": {
     "result": "PASS",
     "csvOnly": true,
@@ -16,13 +16,15 @@
     "transport": true,
     "privacyProjection": true,
     "staticZipFiles": 454,
-    "staticZipBytes": 31984822,
+    "staticZipBytes": 31927418,
     "independentViewer": true,
     "storageReads": 0,
     "externalResourcesBlocked": true,
     "mobile": true,
+    "mobileComposer": true,
     "approvedPhoto": true,
     "normalMotionCancellation": true,
+    "latestSelectionWins": true,
     "closeLifecycle": true,
     "pageErrors": []
   },
@@ -63,13 +65,13 @@
       "id": "P4.4",
       "status": "PASS",
       "evidence": "share.js; privacy unit and real export assertions",
-      "verified": "Whitelisted records, remapped IDs, no private evidence/paths/notes by default, coarse/hidden coordinates, per-record review"
+      "verified": "Whitelisted records, remapped IDs, no private evidence/paths/notes by default, coarse/hidden coordinates, per-record review; post-scan JPEG metadata rejected and stripped"
     },
     {
       "id": "P4.5",
       "status": "PASS",
       "evidence": "story-viewer.html, viewer.js, viewer-bridge.js; independent origin with storage traps",
-      "verified": "No login, CSV or personal database; static Artifact playback/exploration with zero storage reads"
+      "verified": "No login, CSV or personal database; static Artifact playback/exploration with zero storage reads; latest explicit loading selection wins"
     },
     {
       "id": "P4.6",
@@ -87,7 +89,7 @@
       "id": "P4.8",
       "status": "PASS",
       "evidence": "71 Life tests, 18 original scripts, Story/mobile/Life/Photo/Timeline browser scripts",
-      "verified": "Full selected life with overlapping Chapters and shared Trip; unknown dates/coordinates, private records, no-photo and approved-photo flows"
+      "verified": "Full selected life with overlapping Chapters and shared Trip; unknown dates/coordinates, private records, no-photo and approved-photo flows; 390×844 Composer edit/theme/preview/review/export preserves persisted Dataset and revision; extracted-package mobile replay"
     },
     {
       "id": "P4.9-P4.10",
@@ -98,5 +100,72 @@
   ],
   "protectedPathsUnchangedSince": "b7154f1",
   "physicalDeviceCoverage": "Mobile Chromium emulation; no physical iOS/Safari verification",
-  "hostedSharing": false
+  "hostedSharing": false,
+  "packagedMobile": {
+    "result": "PASS",
+    "packagedRuntime": true,
+    "viewport": "390x844",
+    "deviceScaleFactor": 2,
+    "isMobile": true,
+    "hasTouch": true,
+    "fullLifePlayback": true,
+    "nativeTouchExploration": true,
+    "photoMemory": true,
+    "storageReads": 0,
+    "externalResourcesBlocked": true,
+    "pageErrors": [],
+    "physicalDeviceTest": false
+  },
+  "reviewBaseline": "28b79d5",
+  "correctnessFixes": [
+    {
+      "commit": "a1347fc",
+      "issue": "Metadata after the first JPEG scan was accepted and retained",
+      "proof": "Failing-then-passing story.test.mjs post-scan APP1/COM regression; full browser approved-photo export"
+    },
+    {
+      "commit": "ae342aa",
+      "issue": "Late automatic Viewer fetch and older file read replaced explicit latest choice",
+      "proof": "Failing-then-passing story-viewer.test.mjs; held real-browser story.json request cancelled after manual selection"
+    }
+  ],
+  "sourceHashes": {
+    "app.js": "813259839333dc9605ca253970e7855794c75a594006681e3c69eea941629c7d",
+    "story-viewer.html": "8ac8a7fb50b1bbbe2d860c44bbff672b7041365225bda1682c26957cfbd98619",
+    "package.json": "8b3735158e7867f8c54d355253c09810fd32e75263d1f5abb903ddf53e1e9ce7",
+    "src/life/schema.js": "98a2ca3f346e8c55e82cd32599de093ce4aed11ff357e2b3f55e01845cdc991f",
+    "src/life/story/app-integration.js": "c4993ce8de358be1e53133a9a48fb2ee6a2661f6aa0ede000326c19c71186555",
+    "src/life/story/compose.js": "b7cce340998478cf1d23a620e2dbf93461b00dd5d58d6b0f11233ccc2d786d96",
+    "src/life/story/composer-ui.js": "b9d1375b04c71a276b26e62996091faad09155c215f8feec1dbd75830b87d95d",
+    "src/life/story/demo.story.json": "1a1b02466e7af02c878211d272b124014a02d661e5222944ee99ce6dc706c464",
+    "src/life/story/package.js": "9f0bb6e2fadf0930155a9ded9812f9633cb5c422b39dfe8230aad6f10cc8fa6e",
+    "src/life/story/playback.js": "2a377b9f4e816288cf6b75cadd5949626ad910757193a2139d693a58e6f324ac",
+    "src/life/story/player-ui.js": "ffecd65e00817c54a4633a0d6640d66ec5cc804f2eca3b6bd6444311cba219c2",
+    "src/life/story/runtime-files.json": "61ff877ca5c80497c7d36626e7399c603b93b307e736714da1cbcfceeadcb06e",
+    "src/life/story/schema.js": "582ac6d0dc9d60a05420804b56a1dc5a024083e16607473b3e75e847b44cf502",
+    "src/life/story/share.js": "da4f09ec54b172290907e54c874f0fbf55dce2b8fc0126b7fe55be6311e1752c",
+    "src/life/story/story.css": "b64d87508b60ba2434c3610c6084c70882e9e0d7cf9eff3c1fc90f243640d7cd",
+    "src/life/story/thumbnail.js": "eea1416e58ee51dc23841c3ed5742c13862f868e71194d646cf8ce2985a08b8c",
+    "src/life/story/viewer-bridge.js": "9629ac74a897f20d9433955538965404626cba9ac4d09b9315ffc24c67803a18",
+    "src/life/story/viewer-config.js": "9bca6eba40132e2875726d0c13a95ddf8740fb5c421b7cc5305ec43bd365e4ea",
+    "src/life/story/viewer.js": "2ebc35c299030e3d590591a4e59c9e927d10b9d85f10762975dab4ad20a3da7c",
+    "tests/life/story-browser.mjs": "ce69cec71c86ed8db6471c9c24f31116d7ed60f17bd23432d9e92b53a58e576e",
+    "tests/life/story-fixtures.mjs": "a3ace84ddad21a896f95075625596aaf01f79deb4b4eafa5418fd11bfa64d26f",
+    "tests/life/story-mobile-browser.mjs": "0e39cd365fca92310354f68f5ab9b125ff05cf5e6214a59e532d91a015beb90e",
+    "tests/life/story-playback.test.mjs": "fbce6e394197743d34a22ed4b2431b9c24f460d10167ddd5d7a68a5b5d8ea1eb",
+    "tests/life/story-viewer.test.mjs": "6a56567d7e20c5c929494c515c94948c07637f4ad04e13411cc0e8ffef8fce6a",
+    "tests/life/story.test.mjs": "e197758d3a98ca795d31015d04dda90532e4b604860e794c48b2adffcfce6338"
+  },
+  "demo": {
+    "source": "src/life/story/demo.story.json",
+    "chapters": 2,
+    "trips": 2,
+    "memories": 1,
+    "scenes": 15,
+    "staticFiles": 454,
+    "staticZipBytes": 31931882,
+    "staticZipSHA256": "e08222c6f408b08daac8090e1154fea8c6e90cec4ea9e9af1389ff2367745b55",
+    "verification": "Extracted package only, Chromium touch mobile, private storage traps and external services blocked",
+    "hostedUpload": false
+  }
 }

@@ -261,11 +261,32 @@ plays the complete fictional life and opens its photo Memory with external
 services blocked. This is browser mobile emulation; physical iOS/Safari devices
 were not available for testing.
 
-Verified on this host: all 18 pre-existing test scripts and 71 Life unit tests
-passed using the unchanged `package.json` test chain via bundled pnpm (npm is
-available in the user-installed Node directory, but not this task's inherited
-PATH). Life, Photo History, dynamic Timeline, full Story and fresh touch-mobile
-browser acceptances passed. Public Viewer verification made zero storage reads
-and blocked every external service; no page errors remained, including close.
-See `LIFE_STORY_VERIFICATION.json` for the requirement-to-evidence audit. Rebuild
-the explicitly fictional source demo with `node tests/life/build-story-demo.mjs`.
+Final review on this host: `npm test` passed all 18 original scripts and 73 Life
+unit tests. The full Story acceptance rechecked creation from CSV, overlapping
+Chapters, complete playback, privacy review, photo permission, JSON/ZIP export,
+isolated Viewer, actual-flight cancellation and lifecycle cleanup. It also edited,
+previewed and exported a Story at 390×844, preserving the persisted Dataset and
+its revision. Public Viewer storage traps recorded zero reads with all external
+services blocked. Fresh touch-mobile acceptance passed; this is Chromium mobile
+emulation, not physical iOS/Safari certification. Earlier Life/Photo/Timeline
+acceptances are historical evidence, not newly rerun by this review.
+
+Two additional failures were reproduced and corrected. JPEG inspection now walks
+all scans, escaped entropy bytes and restart markers: APP1–APP15/COM metadata
+after the first scan is stripped during sanitization and rejected on import.
+Late automatic Viewer fetches and slower file reads cannot overwrite a newer
+explicit selection; superseded fetches are aborted. Both have regression tests,
+including a held real-browser default request followed by manual selection.
+
+For a deployment-level touch test, extract an exported package, then pass its
+absolute root as `LIFE_VIEWER_ROOT=/path/to/extracted-package` to
+`tests/life/story-mobile-browser.mjs` with the same Playwright/executable/output
+environment variables. This runs the full fictional story against only packaged
+files, with private storage and external services unavailable. The reviewed demo
+contains two overlapping Chapters, two Trips, an unknown-coordinate Stop and one
+approved thumbnail; it is a separate, deployable 454-file artifact.
+
+See `LIFE_STORY_VERIFICATION.json` for current requirement-to-evidence results and
+source hashes. Rebuild the explicitly fictional source demo with
+`node tests/life/build-story-demo.mjs`. No creator records or original media are
+included in the demo, test exports or public repository.

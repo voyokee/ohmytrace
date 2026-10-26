@@ -105,6 +105,20 @@ try{
   await page.waitForFunction(()=>document.querySelector('#story-composer').textContent.includes('已生成去除 EXIF 的缩略图'));
   await review();const photoArtifact=parseArtifact((await download('[data-story-json]','with-photo.story.json')).toString());
   assert.equal(photoArtifact.memories.length,1);assert.ok(photoArtifact.memories[0].image);assert.equal(JSON.stringify(photoArtifact).includes('PRIVATE_'),false);cleanJPEG(Buffer.from(photoArtifact.memories[0].image.split(',')[1],'base64'),{reject:true});
+  const beforeMobile=await dataset();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('[data-story-field=title]').fill('移动端 · 求学足迹');
+  await page.locator('[data-story-scene="0"] [data-story-scene-field=description]').fill('在窄屏编辑的故事说明');
+  await page.locator('[data-story-field=visualTheme]').selectOption('paper');
+  const composerBox=await page.locator('#story-composer').boundingBox();assert.ok(composerBox.x>=0&&composerBox.x+composerBox.width<=390);
+  assert.equal(await page.locator('#story-composer').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Mobile composer must not overflow horizontally');
+  await page.screenshot({path:resolve(output,'05-mobile-composer.png')});
+  await page.locator('[data-story-preview]').click();await page.locator('[data-story-play]').click();
+  await page.locator('[data-story-edit]').click();assert.equal(await page.locator('[data-story-field=title]').inputValue(),'移动端 · 求学足迹');
+  assert.equal(await page.locator('[data-story-field=visualTheme]').inputValue(),'paper');
+  await review();const mobileArtifact=parseArtifact((await download('[data-story-json]','mobile-edited.story.json')).toString());
+  assert.equal(mobileArtifact.title,'移动端 · 求学足迹');assert.equal(mobileArtifact.orderedScenes[0].description,'在窄屏编辑的故事说明');
+  assert.deepEqual(await dataset(),beforeMobile,'Responsive composing and export must preserve the persisted private Dataset and revision');
   await viewer.locator('[data-story-file]').setInputFiles({name:'with-photo.story.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(photoArtifact))});await viewer.waitForSelector('#story-player:not([hidden])');
   await viewer.locator('[data-story-play]').click();const memoryIndex=photoArtifact.orderedScenes.findIndex(s=>s.kind==='memory');await viewer.locator('[data-story-jump]').selectOption(String(memoryIndex));
   await viewer.waitForFunction(()=>document.querySelector('.story-memory-image')?.naturalWidth>0);assert.equal(await viewer.evaluate(()=>window.storageReads),0);
@@ -118,7 +132,7 @@ try{
   await viewer.close();
   if(viewerErrors.length)console.error('Viewer errors:',viewerErrors);
   assert.deepEqual(errors,[]);assert.deepEqual(viewerErrors,[]);
-  const result={result:'PASS',csvOnly:true,overlappingChapters:true,sceneEditing:true,fullPlayback:true,fullLifePlayback:true,sharedTripAcrossChapters:true,transport:true,privacyProjection:true,staticZipFiles:entries.size,staticZipBytes:zip.length,independentViewer:true,storageReads:0,externalResourcesBlocked:true,mobile:true,approvedPhoto:true,normalMotionCancellation:true,latestSelectionWins:true,closeLifecycle:true,pageErrors:[],output};
+  const result={result:'PASS',csvOnly:true,overlappingChapters:true,sceneEditing:true,fullPlayback:true,fullLifePlayback:true,sharedTripAcrossChapters:true,transport:true,privacyProjection:true,staticZipFiles:entries.size,staticZipBytes:zip.length,independentViewer:true,storageReads:0,externalResourcesBlocked:true,mobile:true,mobileComposer:true,approvedPhoto:true,normalMotionCancellation:true,latestSelectionWins:true,closeLifecycle:true,pageErrors:[],output};
   await writeFile(resolve(output,'story-acceptance.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
 }catch(error){await page.screenshot({path:resolve(output,'failure-private.png')}).catch(()=>{});console.error('Page errors:',errors,'Composer error:',await page.locator('[data-story-error]').allTextContents());throw error;}
 finally{await publicContext?.close();if(publicServer)await new Promise(r=>publicServer.close(r));await ctx.close();await browser.close();await new Promise(r=>server.close(r));}
