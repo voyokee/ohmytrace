@@ -91,9 +91,13 @@ const signature=async review=>[...new Uint8Array(await crypto.subtle.digest('SHA
 export class PhotoHistoryService {
   constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false}={}){this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;}
   async assetsFor(batch){const assets=await this.manifest.listAssets(),ids=new Set(batch.assetIds);return assets.filter(a=>ids.has(a.assetId));}
-  async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const review=reconstructPhotos(await this.assetsFor(batch),photoBase(this.repository.getDataset()));await this.saveReview(batchId,review);return review;}
+  async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);await this.saveReview(batchId,review);return review;}
   async saveReview(batchId,review){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');await this.manifest.putBatch({...batch,review:clone(review)});}
-  async preview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch?.review)throw new Error('请先生成并审核候选');const data=this.repository.getDataset(),plan=buildPhotoPlan(data,await this.assetsFor(batch),batch.review,{batchId});return {batchId,baseRevision:data.revision,signature:await signature(batch.review),summary:plan.summary};}
+  async preview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch?.review)throw new Error('请先生成并审核候选');const data=this.repository.getDataset();
+    // A never-persisted empty/demo dataset gets a fresh ID on reload. Rebase only
+    // this explicitly ephemeral draft; a replaced real dataset still requires review.
+    if(batch.review.baseDatasetId!==data.id&&batch.review.baseWasEphemeral&&data.revision===0&&['new','demo'].includes(data.meta.origin)){batch.review.baseDatasetId=data.id;await this.saveReview(batchId,batch.review);}
+    const plan=buildPhotoPlan(data,await this.assetsFor(batch),batch.review,{batchId});return {batchId,baseRevision:data.revision,signature:await signature(batch.review),summary:plan.summary};}
   async commit(batchId,preview){
     if(this.readOnly)throw new Error('景观演示不能保存照片历史，请返回首页');
     if(this.scanner.running)throw new Error('请等待扫描结束或取消扫描');

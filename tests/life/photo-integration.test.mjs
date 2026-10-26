@@ -74,3 +74,9 @@ test('restored review cannot turn observation date edits into fake EXIF evidence
   review.candidates[0].visits[0].observedStart='2000-01-01';await env.service.saveReview(batch.id,review);
   await assert.rejects(env.service.preview(batch.id),/观测日期/);assert.equal(env.repository.backup(),before);
 });
+test('a fresh browser can resume saved review after reload without persisting canonical data before confirmation',async()=>{
+  const env=await setup(),{batch}=await reviewFiles(env,[photoFile()]);assert.equal(env.store.value,null);
+  const restarted=new LifeRepository(env.store);await restarted.initialize({legacyStorage:null});assert.notEqual(restarted.getDataset().id,env.repository.getDataset().id);
+  const resumed=new PhotoHistoryService(restarted,{manifest:env.manifest});await resumed.recover();const preview=await resumed.preview(batch.id);assert.equal(env.store.value,null);
+  await resumed.commit(batch.id,preview);assert.equal(restarted.getDataset().memories.length,1);assert.equal(restarted.getDataset().trips.length,1);
+});
