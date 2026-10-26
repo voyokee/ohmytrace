@@ -614,7 +614,8 @@ function initGlobe() {
 function centroid() {
   const current = homes.find(h => h.kind === 'home' && located(h.place));
   if (current) { const p = state.places[current.place]; return { lat: p.lat, lon: p.lon }; }
-  const pts = placeNames().filter(located).map(n => state.places[n]);
+  const scopeNames=life?.adapter.scope.type==='chapter'?[...new Set([...homes.map(h=>h.place),...trips.flatMap(t=>t.stops.map(s=>s.place))])]:placeNames();
+  const pts = scopeNames.filter(located).map(n => state.places[n]);
   if (!pts.length) return { lat: 33, lon: 105 };
   return { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lon: pts.reduce((s, p) => s + p.lon, 0) / pts.length };
 }
@@ -1081,7 +1082,7 @@ function showPlaceCluster(names,anchor,element) {
   pauseOverviewMotion();
   mapChooser.open({title:`这一带 · ${names.length} 个地点`,subtitle:'放大地图展开足迹，或直接选择地点',anchor,element,
     items:names.map(name=>{const info=markerInfo.get(name),target=markerTarget(info),count=info.trips.filter(inYear).length,st=statusOf(state.places[name]);
-      return {title:name,meta:(count?`${count} 次旅行`:(target?.kind==='home'?'现居地':'曾居地'))+(st.pending?` · ${st.text}`:''),select:()=>{
+      return {title:name,meta:(count?`${count} 次旅行`:(target?.anchor?'阶段地点':target?.kind==='home'?'现居地':'曾居地'))+(st.pending?` · ${st.text}`:''),select:()=>{
         if(target)select(target.id,{fly:false});flyToPoints([posOf(name)],{placeName:name});
       }};}),primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
 }
@@ -1093,7 +1094,7 @@ function updateMarkerClasses() {
     const p=state.places[name],position=posOf(name);if(!position)continue;
     const activeTrips=info.trips.filter(inYear),activeHomes=info.homes.filter(inYear);
     const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name);
-    data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.kind,
+    data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.anchor?undefined:home?.kind,
       active:!!(activeTrips.length||home||chosen),selected:chosen,dim:!!sel&&!chosen,
       color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:home?300:0)+(latest?.date?.start||0)/1e13});
   }
@@ -1177,7 +1178,7 @@ function renderStats() {
   if(days)parts.push(`<b>${days}</b> 天在路上`);
   if(state.year==null&&years.length)parts.push(years.length===1?`<b>${years[0]}</b>`:`<b>${years[0]}</b>–<b>${years.at(-1)}</b>`);
   const current=state.year==null?homes.find(h=>h.kind==='home'):visibleHomes().find(h=>h.kind==='home')||visibleHomes()[0];
-  if(current)parts.push(`<span class="home-stat">${state.year==null?'现居':'当时居住'} <b>${esc(coreName(current.place))}</b></span>`);
+  if(current)parts.push(`<span class="home-stat">${current.anchor?'阶段地点':state.year==null?'现居':'当时居住'} <b>${esc(coreName(current.place))}</b></span>`);
   $('#stats').innerHTML=parts.map(part=>`<span class="stat-item">${part}</span>`).join('<i>·</i>');
 }
 let yearSignature='';
@@ -1226,7 +1227,7 @@ function itemHTML(x) {
   }
   return `<button class="item${on}" data-id="${esc(x.id)}"><span class="glyph ${x.kind}"></span>
     <span class="item-main"><span class="item-title">${esc(x.title)}</span>
-    <span class="item-meta">${x.kind === 'home' ? '现居' : '曾居'}${x.date ? ' · ' + esc(x.date.label) : ''}</span></span></button>`;
+    <span class="item-meta">${x.anchor?'阶段地点':x.kind === 'home' ? '现居' : '曾居'}${x.date ? ' · ' + esc(x.date.label) : ''}</span></span></button>`;
 }
 
 function renderList() {
@@ -1236,7 +1237,7 @@ function renderList() {
     ? `<span class="filter-chip">仅看 ${state.year}<button data-act="clear-year" aria-label="取消筛选">${ICON.close}</button></span>` : '';
   const types = Object.keys(typeColors).filter(type=>list.some(t=>t.type===type));
   $('#legend').innerHTML = types.length > 1 ? types.map(t => `<span style="--c:${typeColors[t]}"><i></i>${esc(t)}</span>`).join('') : '';
-  let html = '<div class="grp"><div class="grp-label">常驻地</div>';
+  let html = `<div class="grp"><div class="grp-label">${lifeSnapshot?.chapter?'阶段地点 / 常驻地':'常驻地'}</div>`;
   html += visibleHomes().length ? visibleHomes().map(itemHTML).join('')
     : homes.length&&state.year!=null?'<p class="hint">这一年没有填写居住记录。</p>'
     : '<p class="hint">在表格的「类型」列填 <b>现居地</b> 或 <b>曾居地</b>，日期写居住时段（如 2022-07~至今），就能在地图上标出来。</p>';
@@ -1266,7 +1267,7 @@ function renderTimeline() {
   for(const h of visibleHomes()) {
     if(!h.date||h.date.end<T0||h.date.start>T1)continue;
     const l=P(h.date.start),r=P(h.date.end);
-    html+=`<button class="tl-band ${h.kind}${state.sel===h.id?' on':''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${h.kind==='home'?'现居':'曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
+    html+=`<button class="tl-band ${h.kind}${state.sel===h.id?' on':''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${h.anchor?'阶段地点':h.kind==='home'?'现居':'曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
   }
   if(!dense) {
     for(const y of years)html+=`<button class="tl-year has" data-year="${y}" style="left:${P(new Date(y,6,1).getTime())}%">${y}</button>`;
@@ -1322,7 +1323,7 @@ function renderCard() {
     el.style.setProperty('--c', HOME_COLOR);
     const dur = x.date ? durationText(x.date) : '';
     const fromHere = trips.filter(t => t.origin === x);
-    html += `<div class="card-kicker"><span class="dot ${x.kind}"></span>${x.kind === 'home' ? '现居地' : '曾居地'}</div>
+    html += `<div class="card-kicker"><span class="dot ${x.kind}"></span>${x.anchor?'阶段地点':x.kind === 'home' ? '现居地' : '曾居地'}</div>
       <h2>${esc(x.title)}</h2>
       <div class="card-date">${x.date ? esc(x.date.label) : '时间未填写'}${dur ? ` <span>· ${dur}</span>` : ''}</div>
       <ol class="stops">${stopHTML(x.place, x.note, HOME_COLOR)}</ol>

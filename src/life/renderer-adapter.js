@@ -35,14 +35,14 @@ export function projectDataset(data,scope={type:'all'}) {
     homes=homes.filter(h=>chapter.homeAnchors.includes(h.placeId));
     // Home anchors need not already be ResidencePeriod records. Synthetic view
     // items never become fabricated canonical residences.
-    for(const id of chapter.homeAnchors)if(!homes.some(h=>h.placeId===id))homes.push({id:`anchor:${id}`,kind:'home',title:keys.get(id),place:keys.get(id),placeId:id,type:'阶段地点',note:'关联阶段地点',date:renderDate(chapter.start,chapter.end)});
+    for(const id of chapter.homeAnchors)if(!homes.some(h=>h.placeId===id))homes.push({id:`anchor:${id}`,anchor:true,kind:'home',title:keys.get(id),place:keys.get(id),placeId:id,type:'阶段地点',note:'关联阶段地点',date:renderDate(chapter.start,chapter.end)});
   } else if(scope.type==='year') {trips=trips.filter(t=>inYear(t,scope.year));homes=homes.filter(h=>inYear(h,scope.year));}
   const order=x=>x.date?.start??Infinity;
   trips.sort((a,b)=>order(a)-order(b));homes.sort((a,b)=>(b.kind==='home')-(a.kind==='home')||order(b)-order(a));
   trips.forEach((t,i)=>{
     t.n=i+1;t.year=t.date?new Date(t.date.start).getUTCFullYear():null;t.endYear=t.date?new Date(t.date.end).getUTCFullYear():null;
-    const dated=homes.filter(h=>h.date&&t.date&&h.date.start<=t.date.start&&t.date.start<=h.date.end);
-    const undated=homes.filter(h=>h.kind==='home'&&!h.date);
+    const dated=homes.filter(h=>!h.anchor&&h.date&&t.date&&h.date.start<=t.date.start&&t.date.start<=h.date.end);
+    const undated=homes.filter(h=>!h.anchor&&h.kind==='home'&&!h.date);
     t.origin=dated.sort((a,b)=>b.date.start-a.date.start)[0]||(undated.length===1?undated[0]:null);
   });
   const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)}));

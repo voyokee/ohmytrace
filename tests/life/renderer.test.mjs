@@ -25,3 +25,10 @@ test('year scope and Chapter without trips are valid render views',async()=>{
   adapter.setScope({type:'year',year:2026});assert.equal(adapter.getRenderSnapshot().trips.length,1);
   assert.throws(()=>adapter.setScope({type:'chapter',id:'missing'}));assert.throws(()=>adapter.focusPlace('missing'));adapter.dispose();
 });
+test('a Chapter place anchor is not evidence of residence or travel origin',async()=>{
+  const repo=new LifeRepository(new MemoryStore());await repo.initialize({legacyStorage:null});await repo.update(d=>importCSVInto(d,csv));
+  const id=await repo.update(d=>upsertChapter(d,{title:'实习',start:'2024',end:'2026',homeAnchors:[d.places[1].id],relatedTripIds:[d.trips[0].id]}));
+  const adapter=new RendererAdapter(repo);adapter.setScope({type:'chapter',id});const snapshot=adapter.getRenderSnapshot();
+  assert.equal(snapshot.trips[0].origin,null,'associating a place with a Chapter must not invent a residence-based departure');
+  assert.equal(snapshot.homes[0].anchor,true);assert.equal(repo.getDataset().residences.length,1);adapter.dispose();
+});
