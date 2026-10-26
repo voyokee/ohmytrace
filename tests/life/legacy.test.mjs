@@ -4,6 +4,13 @@ import {emptyDataset,upsertChapter,deleteChapter,exportJSON,importJSON,addMemory
 import {importCSVInto,exportLegacyCSV,migrateLegacy,datasetRows,reconcileRows,updatePlace,parseLegacyPeriod,parseLegacyCSV} from '../../src/life/legacy.js';
 import {LifeRepository,MemoryStore} from '../../src/life/repository.js';
 const CSV='日期,行程,地点,类型,备注,坐标\n2024~2026,,新加坡,现居地,,"1.3,103.8"\n2025-05,北京实习,公园,旅行,第一站,"39,116"\n2025-05,北京实习,公园,旅行,第二站,"40,117"\n2026,重访,公园,旅行,,"39,116"\n,无日期,未知,旅行,,\n';
+test('real CSV import removes every fictional demo entity and source',()=>{
+  const d=emptyDataset();importCSVInto(d,'日期,行程,地点,坐标\n2020,虚构旅行,虚构地点,"10,20"');d.meta.origin='demo';
+  const demoIds=new Set([...d.places,...d.visits,...d.trips,...d.evidence].map(e=>e.id));
+  importCSVInto(d,CSV,'append');
+  assert.equal(d.places.length,4,'only real CSV places may enter the persisted dataset');
+  for(const entities of [d.places,d.visits,d.trips,d.evidence])assert.ok(entities.every(e=>!demoIds.has(e.id)),'fictional entities must not survive real import');
+});
 test('legacy CSV preserves visits, homonyms, partial and unknown dates and axis convention',()=>{
   const d=emptyDataset();importCSVInto(d,CSV,'replace');
   assert.equal(d.trips.length,3);assert.equal(d.residences.length,1);assert.equal(d.visits.length,5);assert.equal(d.places.length,4);

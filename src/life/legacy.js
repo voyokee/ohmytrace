@@ -1,4 +1,4 @@
-import { emptyDataset, newId, clone, partialDate, unknownDate, addEvidence, manualEvidence, validateDataset } from './schema.js';
+import { COLLECTIONS, emptyDataset, newId, clone, partialDate, unknownDate, addEvidence, manualEvidence, validateDataset } from './schema.js';
 
 const ALIASES={date:['日期','date','时间','time'],trip:['行程','trip','旅行','标题','title','名称','name'],
   place:['地点','place','location','地名','目的地'],type:['类型','type','分类','category'],note:['备注','note','notes','描述','说明','description'],
@@ -117,7 +117,9 @@ export function datasetRows(data) {
   return data.visits.map(v=>{const p=data.places.find(p=>p.id===v.placeId);return {...clone(v.legacy),_lifeVisitId:v.id,_lifePlaceId:p.id,_lifeTripId:v.tripId,_coordinates:clone(p.coordinates)};});
 }
 export function importCSVInto(data,text,mode='append') {
-  const parsed=parseLegacyCSV(text),current=data.meta.origin==='demo'?[]:datasetRows(data);
+  const parsed=parseLegacyCSV(text);
+  if(data.meta.origin==='demo')for(const key of COLLECTIONS)data[key]=[];
+  const current=datasetRows(data);
   let rows=parsed.rows;
   if(mode==='append') {
     const seen=new Set(current.map(fingerprint));rows=[...current];
