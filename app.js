@@ -5,17 +5,17 @@ const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js'
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
-const {timelineLayout}=await import('./src/life/timeline-layout.js');
+const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
 const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
-const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-places');
+const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-mobile-clear');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
 const {visualBenchmark,benchmarkDetails}=await import('./src/performance/visual-benchmark.js?v=20261025-handoff');
 const benchmark=visualBenchmark(location.search);
-const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261025-ridges');
+const { constrainedDevice, runtimeDeviceConfig } = await import('./src/rendering/texture-policy.js?v=20261026-mobile-clear');
 const { prepareVegetation } = await import('./src/scenery/prepare-vegetation.js?v=20261024');
 const { filterSteepPlants,ROOT_LIFT } = await import('./src/scenery/terrain-placement.js?v=20261026-continuity');
-const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261026-continuity');
+const { setupCinematic } = await import('./src/rendering/hero-earth.js?v=20261026-mobile-clear');
 const { SceneryManager } = await import('./src/scenery/scenery-manager.js?v=20261026-continuity');
 const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
@@ -550,8 +550,8 @@ async function initGlobe() {
       lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:['ready','empty'].includes(sceneryManager.details().sceneryPhase) });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
-    renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !state.sel && !pickName && now >= globalSpinUntil &&
-      now - lastInput > 800 && viewer.camera.positionCartographic.height > 4e6);
+    renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !orbit && !(scenery.name&&!reducedMotion) &&
+      !state.playing && !pickName && now >= globalSpinUntil && now-lastInput>800);
     if (!renderPolicy.tick(now)) return;
     if(benchmark.enabled)scene.requestRender();
     const dt = Math.min((now - lastT) / 1000, 0.1);
@@ -1242,7 +1242,7 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 function renderChips() {
   const out = [];
   if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读人生故事 · 不连接个人数据库':'只读故事预览 · 未改动人生数据'}</span>`;return;}
-  if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例 · 导入 CSV 开始记录人生</span>');
+  if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例<span class="chip-extra"> · 导入 CSV 开始记录人生</span></span>');
   if(life&&!sceneDemo)out.push('<button class="chip" data-story-compose>生成人生故事 →</button>');
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
@@ -1345,12 +1345,23 @@ function stopHTML(place, note, color) {
     ${st.pending ? `<span class="badge ${st.cls}">${st.text}</span>` : ''}${located(place) ? '<span class="stop-go">近看</span>' : ''}</button></li>`;
 }
 
+function focusCardPlace(name) {
+  storyExperience?.pauseForInteraction();life?.adapter.focusPlace(lifeSnapshot.placeIds[name]);
+  const pos=posOf(name);
+  if(pos)flyToPoints([pos],{close:true,placeName:name});
+  else if(publicViewer||storyBaseLife)toast('此地点的坐标未知或未公开');else openModal('places');
+}
+
+let expandedCardId=null;
 function renderCard() {
   const el = $('#card');
   const x = byId(state.sel);
   const show=!!x&&(!storyScene||storyExploreCard);
   body.classList.toggle('card-open',show);
-  if (!show) { el.classList.remove('show'); return; }
+  if (!show) { el.classList.remove('show','expanded'); return; }
+  const expanded=expandedCardId===x.id;el.classList.toggle('expanded',expanded);
+  const primary=x.kind==='trip'?x.stops.find(s=>located(s.place))?.place:x.place;
+  const mobileActions=`<div class="card-mobile-actions">${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
   let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>`;
   if (x.kind === 'trip') {
     const color = typeColors[x.type];
@@ -1359,11 +1370,12 @@ function renderCard() {
     html += `<div class="card-kicker"><span class="dot"></span>${esc(x.type)} · 第 ${x.n} 次</div>
       <h2>${esc(x.title)}</h2>
       <div class="card-date">${esc(x.date ? x.date.label : '日期未知')}${x.date && x.date.days ? ` <span>· ${x.date.days} 天</span>` : ''}</div>
+      ${mobileActions}<div class="card-detail" id="card-detail-body">
       ${x.inferredConnections?`<p class="hint">${x.memoryCount>0?`${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，`:''}记录地点间的虚线为推测连接，交通方式未知。</p>`:''}
       ${x.origin ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
       <ol class="stops">${x.stops.map(s => stopHTML(s.place, s.note, color)).join('')}</ol>
       <div class="card-nav"><button data-act="prev"${idx <= 0 ? ' disabled' : ''}>‹ 上一次</button>
-      <span>${idx + 1} / ${list.length}</span><button data-act="next"${idx < 0 || idx >= list.length - 1 ? ' disabled' : ''}>下一次 ›</button></div>`;
+      <span>${idx + 1} / ${list.length}</span><button data-act="next"${idx < 0 || idx >= list.length - 1 ? ' disabled' : ''}>下一次 ›</button></div></div>`;
   } else {
     el.style.setProperty('--c', HOME_COLOR);
     const dur = x.date ? durationText(x.date) : '';
@@ -1371,9 +1383,10 @@ function renderCard() {
     html += `<div class="card-kicker"><span class="dot ${x.kind}"></span>${x.anchor?'阶段地点':x.kind === 'home' ? '现居地' : '曾居地'}</div>
       <h2>${esc(x.title)}</h2>
       <div class="card-date">${x.date ? esc(x.date.label) : '时间未填写'}${dur ? ` <span>· ${dur}</span>` : ''}</div>
+      ${mobileActions}<div class="card-detail" id="card-detail-body">
       <ol class="stops">${stopHTML(x.place, x.note, HOME_COLOR)}</ol>
       ${fromHere.length ? `<div class="sub-title">住在这里时的旅行 · ${fromHere.length}</div>
-        ${fromHere.map(t => `<button class="mini" data-id="${esc(t.id)}"><span>${esc(t.title)}</span><span>${esc(t.date ? t.date.label : '')}</span></button>`).join('')}` : ''}`;
+        ${fromHere.map(t => `<button class="mini" data-id="${esc(t.id)}"><span>${esc(t.title)}</span><span>${esc(t.date ? t.date.label : '')}</span></button>`).join('')}` : ''}</div>`;
   }
   el.innerHTML = html;
   el.scrollTop = 0;
@@ -1394,6 +1407,7 @@ function select(id, { fly = true } = {}) {
   if(storyScene)storyExploreCard=true;
   const x = byId(id);
   if (!x) return;
+  if(state.sel!==id)expandedCardId=null;
   state.sel = id;
   if(x.kind==='trip')life?.adapter.focusTrip(id);
   renderCard();
@@ -1403,6 +1417,7 @@ function select(id, { fly = true } = {}) {
 }
 
 function deselect({ home = true } = {}) {
+  expandedCardId=null;
   state.sel = null;
   renderCard();
   updateSelectionUI();
@@ -1649,6 +1664,11 @@ function bindEvents() {
     const plCard = t.closest('.pl');
     if (plCard && act) { onPlaceAction(act, plCard, t); return; }
     switch (act) {
+      case 'card-near': focusCardPlace(t.dataset.placeName);return;
+      case 'card-details': {
+        const el=$('#card'),expanded=el.classList.toggle('expanded');expandedCardId=expanded?state.sel:null;
+        t.setAttribute('aria-expanded',String(expanded));t.textContent=expanded?'收起详情 ▴':'地点与详情 ▾';footprintOverlay?.invalidate();return;
+      }
       case 'close': deselect(); return;
       case 'prev': step(-1); return;
       case 'next': step(1); return;
@@ -1671,10 +1691,7 @@ function bindEvents() {
     }
     if (t.dataset.year) { setYear(+t.dataset.year); return; }
     if (t.dataset.place && t.closest('#card')) {
-      storyExperience?.pauseForInteraction();
-      life?.adapter.focusPlace(lifeSnapshot.placeIds[t.dataset.place]);
-      const pos = posOf(t.dataset.place);
-      if (pos) flyToPoints([pos], { close: true,placeName:t.dataset.place }); else if(publicViewer||storyBaseLife)toast('此地点的坐标未知或未公开');else openModal('places');
+      focusCardPlace(t.dataset.place);
       return;
     }
     if (t.dataset.id) select(t.dataset.id);

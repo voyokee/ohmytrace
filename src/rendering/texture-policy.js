@@ -7,10 +7,11 @@ export function earthTexturePlan({ coarsePointer = false, memoryGB, maxTextureSi
   const limit = Math.max(1, Math.floor(maxTextureSize));
   const lowMemory = Number.isFinite(memoryGB) && memoryGB <= 2;
   const constrained = constrainedDevice({ coarsePointer, memoryGB });
+  const highMemory=Number.isFinite(memoryGB)&&memoryGB>=8;
   return {
     previewWidth: Math.min(2048, limit),
     // Spend the texture budget on visible surface detail; height/depth/night stay at 2K.
-    surfaceWidth: Math.min(lowMemory ? 2048 : constrained ? 4096 : 5400, limit),
+    surfaceWidth: Math.min(lowMemory ? 2048 : constrained&&!highMemory ? 4096 : 5400, limit),
     constrained,
   };
 }

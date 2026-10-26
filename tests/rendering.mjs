@@ -12,6 +12,9 @@ assert.equal(earthTexturePlan({ memoryGB: 2, maxTextureSize: 8192 }).surfaceWidt
   'Known low-memory devices must retain the small texture budget');
 assert.equal(earthTexturePlan({ maxTextureSize: 1024 }).surfaceWidth, 1024, 'Respect actual GPU texture limits');
 assert.equal(earthTexturePlan({ maxTextureSize: 4096 }).surfaceWidth, 4096);
+const flagship=earthTexturePlan({coarsePointer:true,memoryGB:8,maxTextureSize:8192});
+assert.equal(flagship.surfaceWidth,5400,'High-memory touch devices can retain full surface detail');
+assert.equal(flagship.constrained,true,'Sharper textures must not silently increase phone vegetation budgets');
 
 for (const altitude of [0, 10000, TERRAIN_END, 1000000, HERO_START, TERRAIN_PRELOAD, 35000000]) {
   const pending = presentationState(altitude, false);

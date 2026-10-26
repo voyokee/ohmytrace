@@ -1,19 +1,29 @@
+export function renderResolutionBudget({mobile=false,dpr=1,memoryGB,width=0,height=0}={}) {
+  dpr=Math.max(.5,Number.isFinite(dpr)?dpr:1);
+  if(!mobile)return {maxScale:Math.min(dpr,1.5),minScale:Math.min(dpr,.85),stillScale:Math.min(dpr,2)};
+  const low=Number.isFinite(memoryGB)&&memoryGB<=2,high=Number.isFinite(memoryGB)&&memoryGB>=8;
+  const area=Math.max(1,width*height);
+  const fit=(ratio,pixels)=>Math.min(dpr,ratio,Math.sqrt(pixels/area));
+  const maxScale=fit(low?1:high?2:1.5,low?800000:1600000);
+  return {maxScale,minScale:Math.min(maxScale,low ? .75 : high ? 1 : .85),stillScale:fit(low?1.5:high?3:2.5,low?1200000:high?4000000:3000000)};
+}
 export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=false }) {
   const scene = viewer.scene;
   const targetFps = mobile ? 30 : 60;
-  const maxScale = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.5);
-  const minScale = Math.min(maxScale, mobile ? 0.75 : 0.85);
-  const stillScale = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
+  const budget=()=>renderResolutionBudget({mobile,dpr:window.devicePixelRatio||1,memoryGB:globalThis.navigator?.deviceMemory,
+    width:viewer.canvas?.clientWidth||window.innerWidth||0,height:viewer.canvas?.clientHeight||window.innerHeight||0});
+  let {maxScale,minScale,stillScale}=budget();
   let scale = Math.min(window.devicePixelRatio || 1, maxScale);
   let still = false, near = false;
   let samples = [], costs = [], lastFrame = 0, lastChange = performance.now(), goodWindows = 0;
   let wasRunning = true;
   let tickOrigin, lastSlot = 0;
   const applyScale = () => {
+    ({maxScale,minScale,stillScale}=budget());scale=Math.max(minScale,Math.min(maxScale,scale));
     const pixels = benchmark?1:still ? stillScale : scale;
     viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
     // Supersampled stills already smooth the silhouette; FXAA also softens mountain/coast detail.
-    if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !near && (!still || pixels < 1.5);
+    if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !near && (mobile?pixels<1.5:!still||pixels<1.5);
     if (scene.globe) scene.globe.maximumScreenSpaceError = still ? 2 : mobile ? (scale < 0.9 ? 6 : 4) : (scale < 1 ? 3 : 2);
     scene.requestRender();
   };
@@ -85,6 +95,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
       } else goodWindows = 0;
     },
     details: () => ({ targetFps, pixelRatio: +(benchmark?1:still ? stillScale : scale).toFixed(2),
+      nativePixelRatio:window.devicePixelRatio||1,stillPixelRatio:+stillScale.toFixed(2),maxPixelRatio:+maxScale.toFixed(2),
       quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError,
       cadenceClock:Number.isFinite(document.timeline?.currentTime)?'animation':'performance' }),
   };

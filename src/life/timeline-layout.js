@@ -30,7 +30,7 @@ export function timelineLayout(trips,{year=null,context=[],viewportWidth=0}={}) 
   return {years,months,start,end,position,
     yearPosition:y=>(years.indexOf(y)+.5)/years.length*100,
     monthPosition:m=>(months.indexOf(m)+.5)/months.length*100,
-    width:Math.max(0,viewportWidth-48,(year!=null?months.length*84:years.length*160)),
+    width:Math.max(0,viewportWidth-48,(year!=null?months.length*(viewportWidth<600?56:84):years.length*(viewportWidth<600?56:160))),
     overlaps:date=>!!date&&date.end>=start&&date.start<end&&(!years.length||year!=null||years.some(y=>date.start<stamp(y+1)&&date.end>=stamp(y))),
     key:JSON.stringify([year,trips.map(t=>[t.id,t.date?.start,t.date?.end]),dates.length?null:[start,end]])};
 }

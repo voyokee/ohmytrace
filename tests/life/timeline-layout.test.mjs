@@ -15,8 +15,9 @@ test('sparse record years have evenly spaced slots; long history retains readabl
   const trips=[2008,2010,2020,2025].map(y=>date(`${y}-06-01`));
   const layout=timelineLayout(trips,{viewportWidth:300});
   assert.deepEqual(layout.years.map(layout.yearPosition),[12.5,37.5,62.5,87.5]);
-  assert.equal(layout.width,640);assert.equal(layout.position(new Date('2015-01-01').getTime()),50);
+  assert.equal(layout.width,252,'Four years should fit a phone viewport without cropped edge labels');assert.equal(layout.position(new Date('2015-01-01').getTime()),50);
   assert.equal(timelineLayout(trips,{viewportWidth:1200}).width,1152);
+  assert.equal(timelineLayout(Array.from({length:12},(_,i)=>date(`${2010+i}-06-01`)),{viewportWidth:300}).width,672,'Long phone histories retain horizontal scrolling and readable year spacing');
 });
 test('month view bounds use actual coverage, including cross-year travel',()=>{
   const single=timelineLayout([date('2025-06-01','2025-06-30')],{year:2025});
