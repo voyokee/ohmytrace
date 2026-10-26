@@ -77,8 +77,9 @@ export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual
     const row=rowFields(raw);if(!row.place.trim())continue;
     const old=oldVisits.get(raw._lifeVisitId);
     let place=raw._lifePlaceId&&data.places.find(p=>p.id===raw._lifePlaceId);
-    if(old&&old.legacy.place!==row.place)place=null;
-    const coordinates=raw._coordinates ?? (place?.coordinates || null);
+    const renamed=manual&&old&&old.legacy.place!==row.place;
+    if(renamed)place=null;
+    const coordinates=renamed?null:raw._coordinates ?? (place?.coordinates || null);
     if(!place&&coordinates)place=data.places.find(p=>p.name===row.place&&p.coordinates?.latitude===coordinates.latitude&&p.coordinates?.longitude===coordinates.longitude);
     if(!place&&raw._legacyPlaceKey)place=data.places.find(p=>p.legacyKey===raw._legacyPlaceKey);
     if(!place) {

@@ -78,3 +78,11 @@ test('legacy geocoder coordinates retain inferred provenance instead of becoming
   assert.equal(e.state,'inferred');assert.equal(e.source.legacyCoordinateStatus,'rough');
   assert.equal(p.location.status,'rough');
 });
+test('editing a visit to a different place never fabricates coordinates from its old place',()=>{
+  const d=emptyDataset();importCSVInto(d,CSV,'replace');const original=d.visits[1].placeId,rows=datasetRows(d);
+  rows[1].place='杭州';reconcileRows(d,rows,{manual:true});
+  const changed=d.places.find(p=>p.id===d.visits[1].placeId);
+  assert.equal(changed.coordinates,null,'a renamed visit destination needs independent location evidence');
+  assert.notEqual(changed.id,original);assert.equal(d.visits[3].placeId,original);
+  assert.deepEqual(d.places.find(p=>p.id===original).coordinates,{latitude:39,longitude:116});
+});
