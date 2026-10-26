@@ -1064,7 +1064,8 @@ function renderMarkers() {
   syncLights();markerInfo=new Map();
   for(const t of trips)for(const stop of t.stops) {
     if(!markerInfo.has(stop.place))markerInfo.set(stop.place,{trips:[],homes:[]});
-    markerInfo.get(stop.place).trips.push(t);
+    const placeTrips=markerInfo.get(stop.place).trips;
+    if(!placeTrips.some(trip=>trip.id===t.id))placeTrips.push(t);
   }
   for(const h of homes) {
     if(!markerInfo.has(h.place))markerInfo.set(h.place,{trips:[],homes:[]});
