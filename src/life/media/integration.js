@@ -5,8 +5,8 @@ import {reconstructPhotos,distanceKm} from './reconstruction.js';import {RECONST
 export function photoBase(data){const next=clone(data);if(next.meta.origin==='demo')for(const key of COLLECTIONS)next[key]=[];next.meta.origin='user';return next;}
 const coverageDate=(a,b)=>a?(a===b||!b?a:`${a}~${b}`):'';
 const uriFor=id=>`media:${id}`;
-function observedEvidence(data,asset,batchId){
-  const id=`evidence_photo_${asset.deduplicationKey}`;if(!data.evidence.some(e=>e.id===id))data.evidence.push({id,state:asset.metadataStatus==='parsed'?'observed':'unknown',source:{kind:'photo-exif',assetId:asset.assetId,batchId,originalFile:clone(asset.originalFile),extractedTime:clone(asset.extractedTime),coordinates:clone(asset.coordinates),altitude:clone(asset.altitude??null),orientation:asset.orientation??null,rawTags:clone(asset.rawTags||{}),diagnostics:clone(asset.diagnostics)},revisions:[]});return id;
+function observedEvidence(data,asset,batchId,known){
+  const id=`evidence_photo_${asset.deduplicationKey}`;if(!known.has(id)){known.add(id);data.evidence.push({id,state:asset.metadataStatus==='parsed'?'observed':'unknown',source:{kind:'photo-exif',assetId:asset.assetId,batchId,format:asset.format||'jpeg',originalFile:clone(asset.originalFile),extractedTime:clone(asset.extractedTime),coordinates:clone(asset.coordinates),altitude:clone(asset.altitude??null),orientation:asset.orientation??null,rawTags:clone(asset.rawTags||{}),diagnostics:clone(asset.diagnostics)},revisions:[]});}return id;
 }
 function assertReview(review,assetMap,data){
   if(review?.version!==1||!Array.isArray(review.candidates)||!Array.isArray(review.manualRevisions)||!Array.isArray(review.unlocatedAssetIds))throw new Error('审核草稿格式无效');
@@ -36,7 +36,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
   const data=photoBase(input),assetMap=new Map(assets.map(a=>[a.assetId,a]));assertReview(review,assetMap,data);
   const original={places:data.places.length,visits:data.visits.length,trips:data.trips.length,memories:data.memories.length};
   const byUri=new Map(data.memories.map(m=>[m.uri,m])),links={},existingTripIds=new Set(data.trips.map(t=>t.id)),existingVisitIds=new Set(data.visits.map(v=>v.id)),matchedVisitIds=new Set();
-  const modifications=[],chapterAssociations=[];let reviewEvidenceId=null;
+  const modifications=[],chapterAssociations=[],knownEvidence=new Set(data.evidence.map(e=>e.id));let reviewEvidenceId=null;
   const reviewEvidence=()=>{
     if(!reviewEvidenceId){const source={kind:'photo-review',batchId,reviewVersion:1,manualChanges:clone(review.manualRevisions)};
       reviewEvidenceId=manualEvidence(data,source,null,{confirmedCandidateIds:review.candidates.filter(c=>!c.excluded).map(c=>c.id),includeUnlocated:review.includeUnlocated})[0];}
@@ -44,7 +44,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
   };
   function addMemory(asset,place,trip,visit){
     const uri=uriFor(asset.assetId);if(byUri.has(uri)){links[asset.assetId]=byUri.get(uri).id;return byUri.get(uri);}
-    const evidence=observedEvidence(data,asset,batchId),day=asset.extractedTime?.localDateTime?.slice(0,10),memory={id:`memory_photo_${asset.deduplicationKey}`,kind:'photo',title:asset.originalFile.name,uri,
+    const evidence=observedEvidence(data,asset,batchId,knownEvidence),day=asset.extractedTime?.localDateTime?.slice(0,10),memory={id:`memory_photo_${asset.deduplicationKey}`,kind:'photo',title:asset.originalFile.name,uri,
       start:partialDate(day||''),end:partialDate(day||''),placeIds:place?[place.id]:[],tripIds:trip?[trip.id]:[],evidenceIds:[evidence,reviewEvidence()]};
     data.memories.push(memory);byUri.set(uri,memory);links[asset.assetId]=memory.id;
     if(visit&&!visit.evidenceIds.includes(evidence))visit.evidenceIds.push(evidence);
@@ -63,7 +63,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
       const newAssets=v.assetIds.map(id=>assetMap.get(id)).filter(a=>!byUri.has(uriFor(a.assetId)));
       if(!newAssets.length){for(const id of v.assetIds){const m=byUri.get(uriFor(id));if(m)links[id]=m.id;}continue;}
       let place=v.placeId?data.places.find(p=>p.id===v.placeId):data.places.find(p=>p.coordinates&&distanceKm(p.coordinates,v.coordinates)<=RECONSTRUCTION_RULES.existingPlaceRadiusKm);
-      if(!place){place={id:v.proposedPlaceId,name:v.placeName.trim(),coordinates:clone(v.coordinates),location:{status:'confirmed',label:'照片 GPS · 用户确认关联'},evidenceIds:[observedEvidence(data,newAssets[0],batchId),reviewEvidence()]};data.places.push(place);}
+      if(!place){place={id:v.proposedPlaceId,name:v.placeName.trim(),coordinates:clone(v.coordinates),location:{status:'confirmed',label:'照片 GPS · 用户确认关联'},evidenceIds:[observedEvidence(data,newAssets[0],batchId,knownEvidence),reviewEvidence()]};data.places.push(place);}
       let visit=null;
       if(trip){
         const available=prior=>existingVisitIds.has(prior.id)&&!matchedVisitIds.has(prior.id)&&prior.tripId===trip.id&&prior.placeId===place.id;
@@ -83,7 +83,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
   if(review.includeUnlocated)for(const id of review.unlocatedAssetIds)addMemory(assetMap.get(id),null,null,null);
   validateDataset(data);
   const summary={createPlaces:data.places.length-original.places,createVisits:data.visits.length-original.visits,createTrips:data.trips.length-original.trips,createdTripIds:data.trips.slice(original.trips).map(t=>t.id),createMemories:data.memories.length-original.memories,
-    existingTripAdditions:modifications,chapterAssociations,unlocatedMemories:review.includeUnlocated?review.unlocatedAssetIds.filter(id=>!input.memories.some(m=>m.uri===uriFor(id))).length:0,
+    existingTripAdditions:modifications,chapterAssociations,unlocatedMemories:review.includeUnlocated?(uris=>review.unlocatedAssetIds.filter(id=>!uris.has(uriFor(id))).length)(new Set(input.memories.map(m=>m.uri))):0,
     preservedExistingPlaceNames:review.candidates.flatMap(c=>c.visits.filter(v=>v.placeId&&data.places.find(p=>p.id===v.placeId)?.name!==v.placeName).map(v=>({requested:v.placeName,preserved:data.places.find(p=>p.id===v.placeId)?.name}))),
     candidateChanges:review.candidates.filter(c=>!c.excluded).map(c=>({title:c.title,action:c.action,existingTripId:c.relatedTripId,actualStart:c.start||'unknown',actualEnd:c.end||'unknown',transport:'unknown',connection:'inferred',observedPlaces:c.visits.map(v=>({name:v.placeName,coordinates:v.coordinates,start:v.observedStart,end:v.observedEnd,photos:v.assetIds.length}))}))};
   return {dataset:data,links,summary,changed:summary.createMemories>0||chapterAssociations.length>0};

@@ -226,7 +226,13 @@ async function load() {
         stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('JSON 备份已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
-    mountPhotoUI({service:photos,download,onError:error=>toast('照片处理失败：'+error.message,6000),
+    // The dialog covers the globe while a scan runs; pausing its render loop keeps
+    // worker replies and storage commits from queueing behind globe frames.
+    let photoPausedLoop=false;
+    const onScanning=active=>{if(!viewer)return;
+      if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
+      else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
+    mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
       onCommitted:result=>{stopPlay();state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }

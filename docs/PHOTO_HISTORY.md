@@ -2,6 +2,51 @@
 
 Development stays on `feat/life-atlas-mvp`, starting at `480ea69`.
 
+## Photo Import V2（2026-10-27，分支 `feat/photo-import`）
+
+目标收窄为：**选照片 → 有 GPS 就解析并上地图 → 没 GPS 就过滤并说明数量 → 大批量要快**。
+离线地名、缩略图持久化、ZIP/统一备份不在本轮范围。
+
+- **格式**：按文件签名（不是扩展名）识别 JPEG、HEIC/HEIF/AVIF（ISO-BMFF `meta/iinf/iloc` 定位 Exif/XMP item）、
+  PNG（`eXIf`、XMP `iTXt`、ImageMagick 原始 EXIF 文本）、WebP（`EXIF`/`XMP ` chunk）、TIFF 系 RAW（DNG/CR2/NEF/ARW）。
+  XMP 的 `exif:DateTimeOriginal` / `photoshop:DateCreated` 和 `exif:GPSLatitude/Longitude` 作为 EXIF 缺失时的来源。
+  CR3/ORF/RW2/RAF 只记录 `RAW_METADATA_UNSUPPORTED`。模块：`src/life/media/formats/*`、`time.js`。
+- **视频与实况照片**：MOV/MP4 记为 `deferred`（`VIDEO_DEFERRED`）；与同名静态图成对的 `IMG_x.MOV`
+  记为 `LIVE_PHOTO_COMPANION`，不会成为另一个到访。
+- **GPS 真实性**：GPS 精确为 0,0（`GPS_NULL_ISLAND`）或 `GPSMapDatum` 明确不是 WGS-84
+  （`GPS_DATUM_NOT_WGS84`）时不上地图；EXIF 与 XMP 坐标冲突时用 EXIF 并记录 `GPS_SOURCE_CONFLICT`。
+  `DateTimeDigitized`/`xmp:CreateDate` 只存为 `mediaCreatedTime`，不冒充拍摄时间。
+- **无 GPS 过滤**：审核草稿 `includeUnlocated` 默认改为 `false`；界面显示「有 GPS N 张（上地图）· 无 GPS M 张（已过滤）
+  · 不支持/失败 · 视频」，用户可勾选「仍然保存为未定位记忆」。在手机上无 GPS 占多数时，提示系统相册选择器
+  可能去掉了位置信息，并给出改用电脑原图文件夹 /「文件」App / 文件管理的建议（这是对浏览器行为的提示，不是检测结论）。
+- **性能**：每个文件只读开头 64 KiB + 结尾 16 KiB（元数据更深时一次放大到最多 4 MiB；HEIC 的 Exif item 按 `iloc`
+  精确读取），不再整文件读取和哈希。最多 4 个 Worker（≤ CPU 核数−1），每个任务 16 个文件，结果按输入顺序每 100 个
+  原子落盘，续扫游标仍然精确。扫描期间暂停地球的渲染循环（对话框覆盖地球），结束后恢复。单批上限 20,000 个文件。
+- **身份**：≤80 KiB 的文件仍用全文 SHA-256（与 v1 相同）；更大的文件用「大小 + 头 64 KiB + 尾 16 KiB」的 SHA-256
+  （`identity: sampled-sha256-v2`）。旧版本按全文哈希导入过的同一照片，用「大小 + 原始拍摄时间 + 坐标」重新匹配回原
+  assetId，不会重复生成 Memory。
+- **日常照片**：没有任何 ResidencePeriod 时，照片天数最多的约 0.1° 网格（≥5 天且 ≥30% 天数）被建议为常住地
+  （`review.inferredHome`，state=inferred，不写入人生图谱）；其 15 km 内的照片按日常记忆分组，不再把多年日常照片
+  串成一个「旅行」。阈值在 `config.js`。
+- **Manifest v2**：新增可选字段 `format`、`mediaType`、`metadataSources`、`xmpTags`、`mediaCreatedTime`、`gpsTime`、
+  `identity`，`processingStatus` 增加 `deferred`。时间按其 `source` 从原始字符串重算校验（EXIF 或 XMP）。v1 备份可直接恢复。
+  IndexedDB 结构不变，无需迁移。
+
+### V2 实测：2026-10-27，macOS headless Chrome（Playwright 1.55），真实 Worker + IndexedDB
+
+生成的 64×48 JPEG + EXIF（≤1,000 张补齐到 64 KiB，10,000 张补齐到 16 KiB），**不是真实照片库**。原始输出：
+`PHOTO_IMPORT_PERFORMANCE.json`。
+
+| 张数 | 扫描 | 首结果 | Dry Run | 确认写入 | Canonical 写次数 | 失败 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 100 | 53 ms | 46 ms | 4 ms | 24 ms | 1 | 0 |
+| 1,000 | 192 ms | 46 ms | 31 ms | 213 ms | 1 | 0 |
+| 10,000 | 2.7 s | 80 ms | 0.8 s | 6.1 s | 1 | 0 |
+
+在应用页面内（地球刚加载完、片头动画仍在运行）选择 10,000 张，扫描 + 分组约 6.8 s。读取量与原图大小基本无关：
+3 MiB 的 JPEG、1 MiB 的 HEIC 各只读 80 KiB（单元测试断言）。Node 端完整流程脚本：`node tests/life/photo-scale.mjs 10000`。
+真实手机照片（安卓 Chrome、iOS Safari）尚未在本轮实测。
+
 ## Boundaries and data flow
 
 Selected File objects → bounded worker EXIF extraction + content hash → separate
@@ -191,10 +236,10 @@ JSON 备份恢复及迁移中止恢复。Node 测试覆盖时区、日界线、�
 
 ## 已知限制与后续 Native Bridge
 
-- 最低支持 JPEG 的常用 EXIF IFD/GPS 标签；PNG/WebP/HEIC/HEIF/RAW 不解析元数据。
+- V2 起支持 JPEG/HEIC/PNG/WebP/TIFF 系 RAW 的 EXIF/XMP（见上文）；CR3 等 RAW 和视频元数据不解析。
   不读取 MakerNotes；非常规或厂商私有 EXIF 需后续增加独立 fixture，GPS 高度不认识的参考值保持未知。
 - 无偏移的拍摄先后与跨时区分组不能完全确定，算法不会补时区；相机本身时间/GPS 错误也需人工校正。
-- 没有离线城市词典，不保证自动城市名。不会把 GPS 相近当成已确认的交通轨迹。
+- 没有离线城市词典，不保证自动城市名（新地点显示「城市未知 + 经纬度」，可手动改名）。不会把 GPS 相近当成已确认的交通轨迹。
 - 单标签页扫描是推荐路径；不提供跨标签页扫描租约或后台相册监控，Canonical 仍用 revision 防覆盖。
 - 两个数据库是可恢复协议而非跨库原子事务；必须保留两个索引备份及原图。关闭前未落盘的最后一小批可能重扫。
 - 旧 CSV 是足迹交换格式，不能替代包含照片 Evidence/未知起止语义的完整 JSON 备份。

@@ -455,6 +455,9 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
 .photo-candidate ol { padding-left:24px; }
 .photo-thumb { max-width:160px; max-height:120px; object-fit:contain; border-radius:8px; background:#08111b; }
 .photo-diagnostics { max-height:220px; overflow:auto; font-size:12px; }
+.photo-summary { margin:12px 0; padding:10px 12px; border-radius:10px; background:#ffffff0d; }
+.photo-summary p { margin:4px 0; }
+.photo-warning { color:#ffd27a; font-size:13px; line-height:1.5; }
 [data-photo-dry-run] pre { max-height:300px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:12px; }
 [data-photo-error] { color:#ffad97; }
 #life-dialog::backdrop { background:#02060bb3; backdrop-filter:blur(5px); }

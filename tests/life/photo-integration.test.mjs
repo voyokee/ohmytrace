@@ -11,6 +11,9 @@ async function reviewFiles(env,files){const batch=await env.scanner.scan(files),
 
 test('scan and dry run do not mutate canonical data; one confirmation writes a complete v1 graph',async()=>{
   const env=await setup(),before=env.repository.backup(),{batch,review}=await reviewFiles(env,[photoFile(),photoFile({lat:30,lon:120,time:'2025:05:02 11:00:00',nonce:1}),photoFile({lat:null,lon:null,nonce:2})]);
+  assert.equal(review.includeUnlocated,false,'photos without GPS are filtered unless the user opts in');
+  assert.equal((await env.service.preview(batch.id)).summary.createMemories,2);
+  review.includeUnlocated=true;await env.service.saveReview(batch.id,review);
   const preview=await env.service.preview(batch.id);assert.equal(env.repository.backup(),before);assert.equal(env.store.value,null);
   assert.equal(preview.summary.createTrips,1);assert.equal(preview.summary.createMemories,3);assert.equal(preview.summary.unlocatedMemories,1);
   const real=env.store.write.bind(env.store);let writes=0;env.store.write=async(...a)=>{writes++;return real(...a);};
@@ -66,7 +69,7 @@ test('legacy row edits and CSV append preserve photo Trip unknown boundaries and
 });
 test('demo data is removed only on confirmed photo commit; missing GPS stays off the map',async()=>{
   const env=await setup();env.repository.data=emptyDataset('demo');importCSVInto(env.repository.data,'日期,行程,地点,坐标\n2020,虚构,虚构地点,"10,20"');env.repository.data.meta.origin='demo';
-  const before=env.repository.backup(),{batch}=await reviewFiles(env,[photoFile({lat:null,lon:null})]);const preview=await env.service.preview(batch.id);assert.equal(env.repository.backup(),before);
+  const before=env.repository.backup(),{batch,review}=await reviewFiles(env,[photoFile({lat:null,lon:null})]);review.includeUnlocated=true;await env.service.saveReview(batch.id,review);const preview=await env.service.preview(batch.id);assert.equal(env.repository.backup(),before);
   await env.service.commit(batch.id,preview);const d=env.repository.getDataset();assert.equal(d.places.length,0);assert.equal(d.visits.length,0);assert.equal(d.trips.length,0);assert.equal(d.memories.length,1);assert.equal(d.meta.origin,'user');
 });
 test('restored review cannot turn observation date edits into fake EXIF evidence',async()=>{
