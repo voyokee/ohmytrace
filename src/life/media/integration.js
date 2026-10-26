@@ -35,7 +35,7 @@ function assertReview(review,assetMap,data){
 export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
   const data=photoBase(input),assetMap=new Map(assets.map(a=>[a.assetId,a]));assertReview(review,assetMap,data);
   const original={places:data.places.length,visits:data.visits.length,trips:data.trips.length,memories:data.memories.length};
-  const byUri=new Map(data.memories.map(m=>[m.uri,m])),links={},existingTripIds=new Set(data.trips.map(t=>t.id));
+  const byUri=new Map(data.memories.map(m=>[m.uri,m])),links={},existingTripIds=new Set(data.trips.map(t=>t.id)),existingVisitIds=new Set(data.visits.map(v=>v.id)),matchedVisitIds=new Set();
   const modifications=[],chapterAssociations=[];let reviewEvidenceId=null;
   const reviewEvidence=()=>{
     if(!reviewEvidenceId){const source={kind:'photo-review',batchId,reviewVersion:1,manualChanges:clone(review.manualRevisions)};
@@ -66,8 +66,10 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
       if(!place){place={id:v.proposedPlaceId,name:v.placeName.trim(),coordinates:clone(v.coordinates),location:{status:'confirmed',label:'照片 GPS · 用户确认关联'},evidenceIds:[observedEvidence(data,newAssets[0],batchId),reviewEvidence()]};data.places.push(place);}
       let visit=null;
       if(trip){
-        visit=data.visits.find(prior=>prior.tripId===trip.id&&prior.placeId===place.id&&prior.start.value===v.observedStart&&prior.end.value===v.observedEnd);
-        if(!visit&&existingTripIds.has(trip.id))visit=data.visits.find(prior=>prior.tripId===trip.id&&prior.placeId===place.id&&v.observedStart&&prior.start.value&&prior.end.value&&prior.start.value<=v.observedStart&&v.observedEnd<=prior.end.value);
+        const available=prior=>existingVisitIds.has(prior.id)&&!matchedVisitIds.has(prior.id)&&prior.tripId===trip.id&&prior.placeId===place.id;
+        visit=data.visits.find(prior=>available(prior)&&prior.start.value===v.observedStart&&prior.end.value===v.observedEnd);
+        if(!visit&&existingTripIds.has(trip.id))visit=data.visits.find(prior=>available(prior)&&v.observedStart&&prior.start.value&&prior.end.value&&prior.start.value<=v.observedStart&&v.observedEnd<=prior.end.value);
+        if(visit)matchedVisitIds.add(visit.id);
         if(!visit){visit={id:v.proposedVisitId,placeId:place.id,tripId:trip.id,start:partialDate(v.observedStart||''),end:partialDate(v.observedEnd||''),legacy:{date:coverageDate(v.observedStart,v.observedEnd),trip:trip.title,place:place.name,type:trip.type,note:'照片观测时段；到达和离开时间未知；地点间为推测连接'},evidenceIds:[...addEvidence(data,'inferred',{kind:'photo-visit',batchId,arrival:'unknown',departure:'unknown',arrivalWindow:clone(v.arrivalWindow||null),departureWindow:clone(v.departureWindow||null),connection:'inferred'}),reviewEvidence()]};data.visits.push(visit);trip.visitIds.push(visit.id);if(existingTripIds.has(trip.id))modifications.push({tripId:trip.id,title:trip.title,addedVisitId:visit.id,preserveExistingFields:true});}
       }
       for(const asset of newAssets)addMemory(asset,place,trip,visit);

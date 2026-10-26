@@ -80,3 +80,13 @@ test('a fresh browser can resume saved review after reload without persisting ca
   const resumed=new PhotoHistoryService(restarted,{manifest:env.manifest});await resumed.recover();const preview=await resumed.preview(batch.id);assert.equal(env.store.value,null);
   await resumed.commit(batch.id,preview);assert.equal(restarted.getDataset().memories.length,1);assert.equal(restarted.getDataset().trips.length,1);
 });
+test('unknown photo Trip start cannot manufacture a departure residence from the first observation',async()=>{
+  const env=await setup();await env.repository.update(d=>importCSVInto(d,'日期,地点,类型,坐标\n2024~2026,新加坡,现居地,"1.3,103.8"'));
+  const {batch}=await reviewFiles(env,[photoFile()]);await env.service.commit(batch.id,await env.service.preview(batch.id));
+  const adapter=new RendererAdapter(env.repository);assert.equal(adapter.getRenderSnapshot().trips[0].origin,null);assert.equal(env.repository.getDataset().residences.length,1);adapter.dispose();
+});
+test('confirmed same-day A-B-A route keeps two visits to A instead of collapsing on place and day',async()=>{
+  const env=await setup(),{batch}=await reviewFiles(env,[photoFile({time:'2025:05:01 08:00:00',nonce:1}),photoFile({time:'2025:05:01 10:00:00',lat:30,lon:120,nonce:2}),photoFile({time:'2025:05:01 15:00:00',nonce:3})]);
+  const preview=await env.service.preview(batch.id);assert.equal(preview.summary.createVisits,3,'different stops within one day are separate observed visits');await env.service.commit(batch.id,preview);
+  const data=env.repository.getDataset();assert.equal(data.visits.length,3);assert.equal(data.places.length,2);assert.equal(data.visits[0].placeId,data.visits[2].placeId);assert.notEqual(data.visits[0].id,data.visits[2].id);assert.equal(data.trips[0].visitIds.length,3);
+});
