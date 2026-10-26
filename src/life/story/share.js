@@ -84,14 +84,40 @@ export function parseArtifact(input){if(typeof input==='string'&&input.length>24
 // Thumbnail JPEGs must not contain EXIF, XMP, comments or device metadata.
 export function cleanJPEG(bytes,{reject=false}={}){
   if(bytes[0]!==255||bytes[1]!==216)throw new Error('缩略图不是 JPEG');
-  const out=[bytes.slice(0,2)];let i=2,dimensions=false;
+  const out=[bytes.slice(0,2)];let i=2,dimensions=false,scan=false,seenScan=false;
   while(i<bytes.length){
-    if(bytes[i]!==255)throw new Error('JPEG 段无效');const marker=bytes[i+1];
-    if(marker===218){if(!dimensions||bytes.at(-2)!==255||bytes.at(-1)!==217)throw new Error('JPEG 图像不完整');out.push(bytes.slice(i));return Uint8Array.from(out.flatMap(b=>[...b]));}
-    const length=(bytes[i+2]<<8)|bytes[i+3];if(length<2||i+2+length>bytes.length)throw new Error('JPEG 段越界');
-    if([192,193,194].includes(marker)){const height=(bytes[i+5]<<8)|bytes[i+6],width=(bytes[i+7]<<8)|bytes[i+8];if(!width||!height||width>1024||height>1024)throw new Error('缩略图尺寸超出限制');dimensions=true;}
-    if(marker>=225&&marker<=239||marker===254){if(reject)throw new Error('缩略图含多余元数据');}else out.push(bytes.slice(i,i+2+length));
-    i+=2+length;
+    if(scan){
+      const start=i;
+      // Entropy-coded scans may contain FF00 escapes and restart markers. A real
+      // marker ends the scan; inspect subsequent segments too (including between
+      // progressive scans), rather than trusting everything after the first SOS.
+      while(i<bytes.length){
+        if(bytes[i]!==255){i++;continue;}
+        const markerStart=i;while(bytes[i]===255)i++;
+        const marker=bytes[i];
+        if(marker===0||marker>=208&&marker<=215){i++;continue;}
+        i=markerStart;break;
+      }
+      out.push(bytes.slice(start,i));scan=false;
+    }
+    const start=i;
+    if(bytes[i++]!==255)throw new Error('JPEG 段无效');while(bytes[i]===255)i++;
+    const marker=bytes[i++];
+    if(marker===217){
+      if(!dimensions||!seenScan||i!==bytes.length)throw new Error('JPEG 图像不完整或含尾随数据');
+      out.push(bytes.slice(start,i));const result=new Uint8Array(out.reduce((n,b)=>n+b.length,0));let offset=0;
+      for(const part of out){result.set(part,offset);offset+=part.length;}return result;
+    }
+    if(marker===undefined||marker<192||marker===216||marker>=208&&marker<=215)throw new Error('JPEG 段无效');
+    const length=(bytes[i]<<8)|bytes[i+1];if(length<2||i+length>bytes.length)throw new Error('JPEG 段越界');
+    if([192,193,194].includes(marker)){
+      if(length<8||length!==8+3*bytes[i+7])throw new Error('JPEG 尺寸段无效');
+      const height=(bytes[i+3]<<8)|bytes[i+4],width=(bytes[i+5]<<8)|bytes[i+6];if(!width||!height||width>1024||height>1024)throw new Error('缩略图尺寸超出限制');dimensions=true;
+    }
+    if(marker===218){if(!dimensions||length<8||length!==6+2*bytes[i+2])throw new Error('JPEG 扫描段无效');scan=true;seenScan=true;}
+    if(marker>=225&&marker<=239||marker===254){if(reject)throw new Error('缩略图含多余元数据');}
+    else out.push(bytes.slice(start,i+length));
+    i+=length;
   }
   throw new Error('JPEG 缺少图像数据');
 }

@@ -84,3 +84,19 @@ test('a Memory at a revisited Place remains inside its associated Trip narrative
   const memory=story.orderedScenes.findIndex(s=>s.kind==='memory'),repeat=story.orderedScenes.findIndex(s=>s.kind==='trip'&&s.tripId===f.repeat.id);
   assert.ok(memory<repeat,'The 2025 Trip photo must not be attached to the same-city 2026 revisit');
 });
+
+test('JPEG privacy inspection covers metadata after scans, stuffed bytes and restart markers',async()=>{
+  const clean=cleanJPEG(await readFile(new URL('./fixtures/photo-base.jpg',import.meta.url)));
+  const secret=Buffer.from('Exif\0\0PRIVATE_DEVICE_AFTER_SCAN'),length=secret.length+2;
+  const app1=Buffer.concat([Buffer.from([255,225,length>>8,length&255]),secret]);
+  const injected=Buffer.concat([clean.subarray(0,-2),app1,clean.subarray(-2)]);
+  assert.throws(()=>cleanJPEG(injected,{reject:true}),/元数据/);
+  assert.deepEqual(cleanJPEG(injected),clean,'Removing a post-scan APP1 must preserve the original image bytes');
+  const comment=Buffer.from([255,254,0,6,116,101,115,116]);
+  assert.throws(()=>cleanJPEG(Buffer.concat([clean.subarray(0,-2),comment,clean.subarray(-2)]),{reject:true}),/元数据/);
+  const entropy=Buffer.from([23,255,0,225,255,208,42]);
+  const stuffed=Buffer.concat([clean.subarray(0,-2),entropy,clean.subarray(-2)]);
+  assert.deepEqual(cleanJPEG(stuffed,{reject:true}),new Uint8Array(stuffed),'Stuffed bytes and restart markers are image data, not metadata');
+  for(const suffix of [Buffer.from([255,225,0,20,1,255,217]),Buffer.from([255,218,0,1,255,217]),Buffer.from([255,217,1,255,217])])
+    assert.throws(()=>cleanJPEG(Buffer.concat([clean.subarray(0,-2),suffix]),{reject:true}));
+});
