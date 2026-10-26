@@ -33,6 +33,8 @@ try {
   await page.locator('#file').setInputFiles({name:'history.csv',mimeType:'text/csv',buffer:Buffer.from(fixture)});
   await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));
   let d=await dataset();assert.equal(d.trips.length,2);assert.equal(d.places.length,4);assert.equal(d.meta.origin,'user');
+  const timelineYears=()=>page.locator('#tl-track .tl-year[data-year]').evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.year)));
+  assert.deepEqual(await timelineYears(),[2025,2026],'Residence coverage alone must not add empty years to the timeline');
   await page.locator('#btn-life').click();
   const add=async(title,start,end,tripIndices)=>{
     await page.locator('#chapter-form [name=title]').fill(title);await page.locator('#chapter-form [name=start]').fill(start);await page.locator('#chapter-form [name=end]').fill(end);
@@ -48,6 +50,7 @@ try {
   await page.locator(`[data-life-view="${d.chapters[1].id}"]`).click();
   assert.equal(await page.locator('#life-dialog').isVisible(),false,'Closed Chapter dialog must release the globe and other controls');
   assert.equal(await page.locator('#list-count').innerText(),'1');assert.equal(await page.locator('#tl-track [data-id]').count(),2);
+  assert.deepEqual(await timelineYears(),[2025],'Chapter and residence bounds must not add years without scoped Trip records');
   await page.waitForTimeout(2200);await page.locator('[data-act=all-years]').click();
   assert.equal(await page.locator('#list-count').innerText(),'2','All years must exit Chapter scope');
   assert.equal(await page.locator('#markers .mk[title="深圳"]').count(),1,'Exiting Chapter must restore other map footprints');
@@ -69,6 +72,7 @@ try {
   await page.locator('#chapter-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===3);
   const noTravel=(await dataset()).chapters[2];await page.locator(`[data-life-view="${noTravel.id}"]`).click();
   assert.equal(await page.locator('#list-count').innerText(),'0');
+  assert.deepEqual(await timelineYears(),[],'A Chapter without Trips retains its period band without empty year ticks');
   assert.notEqual(await page.locator('#timeline').evaluate(e=>getComputedStyle(e).pointerEvents),'none','Chapter without Trips must retain accessible timeline and scope controls');
   await page.locator('[data-life-scope=""]').click();await page.locator('#btn-life').click();
   page.once('dialog',dialog=>dialog.accept());await page.locator(`[data-life-delete="${noTravel.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===2);

@@ -1270,7 +1270,7 @@ function renderTimeline() {
     html+=`<button class="tl-band ${h.kind}${state.sel===h.id?' on':''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${h.anchor?'阶段地点':h.kind==='home'?'现居':'曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
   }
   if(!dense) {
-    for(const y of years)html+=`<button class="tl-year has" data-year="${y}" style="left:${P(new Date(y,6,1).getTime())}%">${y}</button>`;
+    for(const y of yearOptions(dated))html+=`<button class="tl-year has" data-year="${y}" style="left:${P(new Date(y,6,1).getTime())}%">${y}</button>`;
     for(const t of dated)html+=`<button class="tl-dot${state.sel===t.id?' on':''}" data-id="${esc(t.id)}" style="left:${P(t.date.start)}%;--c:${typeColors[t.type]}" aria-label="${esc(t.title)}"><span class="tl-tip">${esc(t.title)} · ${esc(t.date.short)}</span></button>`;
   } else if(state.year==null) {
     for(const {key,items}of timelineBuckets(dated)) {

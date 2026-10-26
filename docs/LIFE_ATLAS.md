@@ -144,6 +144,8 @@ explicit, not guessed from date overlap. Selecting a Chapter filters its Trips
 and home anchors; even a Chapter without Trips retains a period and navigation.
 A Place anchor without a ResidencePeriod is labeled “阶段地点”, and does not
 invent a residence or a travel departure origin.
+Timeline year ticks follow the scoped Trip records, matching the year filter;
+residence and Chapter spans retain their bands without adding empty year ticks.
 
 Start the usual static server, then click the toolbar **章** entry (“人生阶段”).
 Import your CSV, create a title/type and partial start/end, choose associated
