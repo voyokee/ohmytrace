@@ -1,9 +1,18 @@
 import {validateDataset,newId,clone,dateBound} from '../schema.js';
 import {validateStory,unknown} from './schema.js';
 
+function coverage(entity,data){
+  const visits=(entity.visitIds||[]).map(id=>data.visits.find(v=>v.id===id));
+  const observedStarts=visits.map(v=>dateBound(v.start)).filter(n=>n!==null),observedEnds=visits.map(v=>dateBound(v.end,true)).filter(n=>n!==null);
+  const start=dateBound(entity.start)??(observedStarts.length?Math.min(...observedStarts):null);
+  const end=dateBound(entity.end,true)??(observedEnds.length?Math.max(...observedEnds):dateBound(entity.start,true));
+  return start===null?null:{start,end:end??start};
+}
+export function storyYears(data){const years=new Set();for(const t of data.trips){const d=coverage(t,data);if(d)for(let y=new Date(d.start).getUTCFullYear();y<=new Date(d.end).getUTCFullYear();y++)years.add(y);}return [...years].sort((a,b)=>a-b);}
+
 export function composeStory(data,{scope={type:'all'},title='我的人生故事',chapterIds,tripIds}={}){
   validateDataset(data);
-  const byYear=e=>{const a=dateBound(e.start),b=dateBound(e.end,true);return a!==null&&a<=Date.UTC(scope.year+1,0,1)-1&&(b??dateBound(e.start,true))>=Date.UTC(scope.year,0,1);};
+  const byYear=e=>{const d=coverage(e,data),year={precision:'year',value:String(scope.year).padStart(4,'0')};return d!==null&&d.start<=dateBound(year,true)&&d.end>=dateBound(year);};
   if(!['all','chapter','trip','year'].includes(scope.type))throw new Error('未知故事范围');
   if(scope.type==='chapter'&&!data.chapters.some(c=>c.id===scope.id)||scope.type==='trip'&&!data.trips.some(t=>t.id===scope.id))throw new Error('故事范围不存在');
   if(scope.type==='year'&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效故事年份');
@@ -33,10 +42,11 @@ export function composeStory(data,{scope={type:'all'},title='我的人生故事'
 }
 
 export function setStoryMemories(story,data,memoryIds){
-  const next=clone(story);next.orderedScenes=next.orderedScenes.filter(s=>s.kind!=='memory');next.includedMemories=[...new Set(memoryIds)];
+  const next=clone(story);next.includedMemories=[...new Set(memoryIds)];next.orderedScenes=next.orderedScenes.filter(s=>s.kind!=='memory'||next.includedMemories.includes(s.memoryId));
   for(const id of next.includedMemories){
     const m=data.memories.find(m=>m.id===id);if(!m)throw new Error('记忆不存在');
     if(!m.tripIds.some(id=>next.selectedTripIds.includes(id))&&!data.chapters.some(c=>next.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(id)))throw new Error('记忆不在所选人生范围内');
+    if(next.orderedScenes.some(s=>s.kind==='memory'&&s.memoryId===id))continue;
     const after=next.orderedScenes.findLastIndex(s=>s.kind==='place'&&m.placeIds.includes(s.placeId)||s.kind==='trip'&&m.tripIds.includes(s.tripId));
     next.orderedScenes.splice(after>=0?after+1:Math.max(1,next.orderedScenes.length-1),0,{id:newId('scene'),kind:'memory',title:m.title||'记忆时刻',description:'',start:clone(m.start),end:clone(m.end),chapterId:null,tripId:m.tripIds.find(id=>next.selectedTripIds.includes(id))||null,placeId:m.placeIds[0]||null,memoryId:id,duration:5});
   }

@@ -16,6 +16,7 @@ export function validateScene(scene){
   text(scene.id,200);text(scene.title,200);text(scene.description,4000);validatePeriod(scene.start,scene.end);
   if(!SCENE_KINDS.includes(scene.kind)||!Number.isFinite(scene.duration)||scene.duration<.1||scene.duration>120)throw new Error('无效故事镜头');
   for(const k of ['chapterId','tripId','placeId','memoryId'])if(scene[k]!==null)text(scene[k],200);
+  const required={chapter:'chapterId',trip:'tripId',place:'placeId',memory:'memoryId'}[scene.kind];if(required&&!scene[required])throw new Error('镜头缺少关联对象');
 }
 export function validateStory(story){
   keys(story,['schemaVersion','kind','storyId','title','description','selectedChapterIds','selectedTripIds','orderedScenes','visualTheme','cameraPreferences','includedMemories','privacySettings','provenanceSummary']);

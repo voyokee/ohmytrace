@@ -25,14 +25,14 @@ export function projectShare(data,story,{images={}}={}){
     const coordinates=hidden||!p.coordinates?null:mode==='city'?{latitude:Math.round(p.coordinates.latitude*10)/10,longitude:Math.round(p.coordinates.longitude*10)/10}:{latitude:p.coordinates.latitude,longitude:p.coordinates.longitude};
     return {id:pm.get(p.id),name:policy.placeLabels[p.id]??(hidden?'隐藏地点':homes.has(p.id)&&mode!=='precise'?`居住区域 ${i+1}`:p.name),coordinates,granularity:mode};
   });
-  const exportedMemories=selectedMemories.map(m=>({id:mm.get(m.id),kind:m.kind==='photo'?'photo':'note',title:m.title||'记忆时刻',...period(m),
+  const exportedMemories=selectedMemories.map(m=>({id:mm.get(m.id),kind:['photo','note','video'].includes(m.kind)?m.kind:'other',title:m.title||'记忆时刻',...period(m),
     placeIds:m.placeIds.map(id=>pm.get(id)).filter(Boolean),tripIds:m.tripIds.map(id=>tm.get(id)).filter(Boolean),
     text:policy.includeNotes&&typeof m.text==='string'?m.text:'',image:m.kind==='photo'&&images[m.id]?images[m.id]:null}));
-  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:t.title,type:t.type,...period(t),routeKind:'inferred',
+  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:t.title,type:t.type,...period(t),routeKind:t.visitIds.some(id=>!exportedPlaces.find(p=>p.id===pm.get(visits.find(v=>v.id===id).placeId)).coordinates)?'unknown':'inferred',
     stops:t.visitIds.map(id=>{const v=visits.find(v=>v.id===id);return {placeId:pm.get(v.placeId),...period(v),note:policy.includeNotes?v.legacy.note:''};})}));
   const exportedChapters=chapters.map(c=>({id:cm.get(c.id),title:c.title,type:c.type,...period(c),homeAnchors:c.homeAnchors.map(id=>pm.get(id)),relatedTripIds:c.relatedTripIds.map(id=>tm.get(id)).filter(Boolean)}));
   const scenes=story.orderedScenes.filter(s=>(!s.chapterId||cm.has(s.chapterId))&&(!s.tripId||tm.has(s.tripId))&&(!s.memoryId||mm.has(s.memoryId))&&(!s.placeId||pm.has(s.placeId)))
-    .map((s,i)=>({id:`s${i+1}`,kind:s.kind,title:s.kind==='place'?exportedPlaces.find(p=>p.id===pm.get(s.placeId))?.name||s.title:s.title,description:s.description,...period(s),
+    .map((s,i)=>({id:`s${i+1}`,kind:s.kind,title:s.kind==='place'&&s.title===places.find(p=>p.id===s.placeId)?.name?exportedPlaces.find(p=>p.id===pm.get(s.placeId))?.name||s.title:s.title,description:s.description,...period(s),
       chapterId:cm.get(s.chapterId)||null,tripId:tm.get(s.tripId)||null,placeId:pm.get(s.placeId)||null,memoryId:mm.get(s.memoryId)||null,duration:s.duration}));
   const evidenceIds=new Set([...places,...trips,...chapters,...visits,...selectedMemories].flatMap(e=>e.evidenceIds));
   const counts=Object.fromEntries(['observed','inferred','manual','unknown'].map(state=>[state,data.evidence.filter(e=>evidenceIds.has(e.id)&&e.state===state).length]));
@@ -65,14 +65,18 @@ export function validateArtifact(a){
       if(place.granularity==='city'&&[c.latitude,c.longitude].some(n=>Math.abs(n*10-Math.round(n*10))>1e-8))throw new Error('模糊地点仍携带精确坐标');}
   }
   for(const t of a.trips){keys(t,['id','title','type','start','end','routeKind','stops']);text(t.title,200);text(t.type,200);validPeriod(t);if(!['observed','inferred','unknown'].includes(t.routeKind))throw new Error('无效路径证据');
-    list(t.stops,10000);for(const s of t.stops){keys(s,['placeId','start','end','note']);ref(s.placeId,'places');validPeriod(s);text(s.note,4000);if(!p.includeNotes&&s.note)throw new Error('备注未授权');}}
+    list(t.stops,10000);if(!t.stops.length)throw new Error('旅行缺少到访地点');for(const s of t.stops){keys(s,['placeId','start','end','note']);ref(s.placeId,'places');validPeriod(s);text(s.note,4000);if(!p.includeNotes&&s.note)throw new Error('备注未授权');}
+    if(t.routeKind!=='unknown'&&t.stops.some(s=>!a.places.find(place=>place.id===s.placeId).coordinates))throw new Error('未知位置不能伪装成已知路线');}
   for(const c of a.chapters){keys(c,['id','title','type','start','end','homeAnchors','relatedTripIds']);text(c.title,200);text(c.type,200);validPeriod(c);refs(c.homeAnchors,'places');refs(c.relatedTripIds,'trips');}
   for(const m of a.memories){keys(m,['id','kind','title','start','end','placeIds','tripIds','text','image']);text(m.title,200);text(m.text,4000);validPeriod(m);refs(m.placeIds,'places');refs(m.tripIds,'trips');
-    if(!['photo','note'].includes(m.kind)||m.kind==='photo'&&!p.includePhotos||m.text&&!p.includeNotes)throw new Error('记忆未授权');
+    if(!['photo','note','video','other'].includes(m.kind)||m.kind==='photo'&&!p.includePhotos||m.text&&!p.includeNotes)throw new Error('记忆未授权');
     if(m.image!==null){if(m.kind!=='photo'||!p.includePhotos)throw new Error('照片未授权');validateImage(m.image);}}
   refs(a.selectedChapterIds,'chapters');refs(a.selectedTripIds,'trips');refs(a.includedMemories,'memories');
   if(a.selectedChapterIds.length!==a.chapters.length||a.selectedTripIds.length!==a.trips.length||a.includedMemories.length!==a.memories.length)throw new Error('作品包含未选择记录');
   list(a.orderedScenes,5000).forEach(s=>{validateScene(s);validPeriod(s);for(const [key,kind]of [['chapterId','chapters'],['tripId','trips'],['placeId','places'],['memoryId','memories']])if(s[key]!==null)ref(s[key],kind);});ids(a.orderedScenes.map(s=>s.id));
+  if(!a.orderedScenes.length)throw new Error('作品至少需要一个镜头');
+  if(a.memories.filter(m=>m.image).length>64)throw new Error('一份作品最多包含 64 张缩略图');
+  if(new TextEncoder().encode(JSON.stringify(a)).length>24*1024*1024)throw new Error('作品超过 24 MiB 限制');
   return a;
 }
 export function parseArtifact(input){if(typeof input==='string'&&input.length>24*1024*1024)throw new Error('作品超过 24 MiB 限制');return validateArtifact(clone(typeof input==='string'?JSON.parse(input):input));}
@@ -97,5 +101,5 @@ export function validateImage(image){
 }
 
 export class Publisher {
-  async publish(){throw new Error('尚未配置 Hosted Sharing；请导出静态分享包并自行部署');}
+  async publish(artifact,options={}){throw new Error('尚未配置 Hosted Sharing；请导出静态分享包并自行部署');}
 }
