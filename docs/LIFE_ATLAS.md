@@ -1,5 +1,8 @@
 # Life Atlas M0 + M1
 
+Phase 3 local photo ingestion/reconstruction now extends these interfaces;
+see [PHOTO_HISTORY.md](PHOTO_HISTORY.md) for media storage, review, recovery and validation.
+
 ## Baseline and boundaries
 
 Implementation branch: `feat/life-atlas-mvp`, based on `perf/local-rendering`
@@ -205,8 +208,9 @@ are new files under `src/life`, `tests/life` and this document. No rendering,
 scenery, performance, assets or vendor file changed.
 
 This is browser-local storage and full-record transactional persistence. Very
-large datasets should be profiled before M2; there is no cross-tab live refresh,
-cloud sync, media scan or native app. Legacy format cannot recover distinct
+large datasets should be profiled before broader media use; there is no cross-tab live refresh,
+cloud sync or native app. Photo scanning is now an independent Phase 3 module.
+Legacy format cannot recover distinct
 places already collapsed by the old name-keyed table. Switching to an old
 application version can still write its old localStorage; this branch does not
 silently merge later legacy edits into canonical data. Use CSV/JSON explicitly.

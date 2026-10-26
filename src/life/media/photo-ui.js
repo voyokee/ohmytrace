@@ -10,17 +10,18 @@ const statusText={scanning:'正在扫描',review:'待审核',prepared:'待完成
 const diagnosticText={NO_GPS:'无 GPS',NO_CAPTURE_TIME:'无拍摄时间',UNSUPPORTED_FORMAT:'暂不支持此格式（含 HEIC/HEIF）',FILE_SIZE_LIMIT:'超过单文件 64 MiB 限制',INVALID_GPS:'GPS 元数据无效',INVALID_CAPTURE_TIME:'拍摄时间无效'};
 
 export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download}) {
-  const dialog=document.querySelector('#photo-dialog');let batch=null,review=null,assets=[],preview=null,busy=false,urls=[];
+  const dialog=document.querySelector('#photo-dialog');let batch=null,review=null,assets=[],preview=null,busy=false,urls=[],focusedPreviewId=null;
   const selected=new Set(),release=()=>{urls.forEach(url=>URL.revokeObjectURL(url));urls=[];};let work=Promise.resolve(),initialized=false;
   function message(error){const el=dialog.querySelector('[data-photo-error]');if(el)el.textContent=error.message;onError(error);}
   function run(action){work=work.then(async()=>{busy=true;try{await action();}catch(error){message(error);}finally{busy=false;}});return work;}
   const currentData=()=>service.repository.getDataset();
-  async function loadBatch(id){batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);preview=null;selected.clear();render();}
+  async function loadBatch(id){batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);preview=null;focusedPreviewId=null;selected.clear();render();}
   async function save(){preview=null;await service.saveReview(batch.id,review);render();}
   const count=c=>c.visits.reduce((n,v)=>n+v.assetIds.length,0);
   function imageFor(id){const asset=assets.find(a=>a.assetId===id),file=service.scanner.fileFor(id);
     if(!file)return '<span class="hint">原文件未在本次页面选择，重新选择后可预览。</span>';
     if(!asset?.dimensions||asset.dimensions.width*asset.dimensions.height>MEDIA_LIMITS.previewMaxPixels)return '<span class="hint">尺寸未知或超出预览预算，仅展示元数据。</span>';
+    if(urls.length>=MEDIA_LIMITS.maxPreviewImages||focusedPreviewId&&id!==focusedPreviewId)return `<button class="btn sm" type="button" data-photo-preview-asset="${esc(id)}">预览这张照片</button>`;
     const url=URL.createObjectURL(file);urls.push(url);return `<img src="${url}" alt="本地照片预览" loading="lazy" class="photo-thumb" style="image-orientation:from-image">`;
   }
   function render(){
@@ -77,6 +78,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},download
     if(button.hasAttribute('data-photo-cancel')){service.scanner.cancel();return;}
     run(async()=>{
       const row=button.closest('[data-candidate]'),id=row?.dataset.candidate;
+      if(button.dataset.photoPreviewAsset){focusedPreviewId=button.dataset.photoPreviewAsset;render();}
       if(button.hasAttribute('data-photo-exclude')){const c=review.candidates.find(c=>c.id===id);editCandidate(review,id,{excluded:!c.excluded});await save();}
       if(button.hasAttribute('data-photo-merge')){mergeCandidates(review,[...selected]);selected.clear();await save();}
       if(button.hasAttribute('data-photo-split')||button.hasAttribute('data-photo-split-images')){splitCandidate(review,id,{photos:button.hasAttribute('data-photo-split-images'),assets});await save();}

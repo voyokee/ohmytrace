@@ -20,6 +20,7 @@ test('multi-city, same-day stops and A-B-A returns retain separate visits',async
   const a=await assets([{time:'2025:05:01 08:00:00'},{time:'2025:05:01 10:00:00',lat:30,lon:120},{time:'2025:05:01 15:00:00'}]);
   const r=reconstructPhotos(a,emptyDataset());assert.equal(r.candidates.length,1);assert.equal(r.candidates[0].visits.length,3);
   assert.equal(r.candidates[0].start,'');assert.equal(r.candidates[0].transport,'unknown');assert.equal(r.candidates[0].visits[0].arrival,'unknown');
+  assert.equal(r.candidates[0].visits[0].arrivalWindow.after,null);assert.equal(r.candidates[0].visits[1].arrivalWindow.state,'inferred');assert.equal(r.candidates[0].visits[1].arrivalWindow.after.localDateTime,'2025-05-01T08:00:00');assert.equal(r.candidates[0].visits[2].departureWindow.before,null);
 });
 test('timezone offsets order instants across New Year, while unzoned dates never acquire UTC',async()=>{
   const a=await assets([{time:'2026:01:01 00:30:00',offset:'+09:00',lat:35,lon:139},{time:'2025:12:31 08:00:00',offset:'-08:00',lat:37,lon:-122}]);
