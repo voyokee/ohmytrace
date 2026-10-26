@@ -439,6 +439,7 @@ textarea:focus, .tbl input:focus, .search-row input:focus { border-color: rgba(2
   #toast { bottom:calc(142px + env(safe-area-inset-bottom)); }
 }
 #life-dialog { color:var(--text); padding:0; border:1px solid #ffffff25; width:min(740px,calc(100vw - 28px)); max-height:85dvh; background:#111b29; }
+#life-dialog:not([open]) { display:none; }
 #life-dialog::backdrop { background:#02060bb3; backdrop-filter:blur(5px); }
 #life-dialog .dlg-body { max-height:calc(85dvh - 65px); }
 #life-dialog h3 { margin:0; font-size:17px; }

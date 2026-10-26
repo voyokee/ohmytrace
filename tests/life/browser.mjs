@@ -46,10 +46,13 @@ try {
   d=await dataset();assert.equal(d.chapters.length,2);assert.ok(d.chapters.every(c=>c.relatedTripIds.includes(d.trips[0].id)));
   await page.screenshot({path:resolve(output,'02-overlapping-chapters.png')});
   await page.locator(`[data-life-view="${d.chapters[1].id}"]`).click();
+  assert.equal(await page.locator('#life-dialog').isVisible(),false,'Closed Chapter dialog must release the globe and other controls');
   assert.equal(await page.locator('#list-count').innerText(),'1');assert.equal(await page.locator('#tl-track [data-id]').count(),2);
   await page.waitForTimeout(2200);await page.locator('[data-act=all-years]').click();
   assert.equal(await page.locator('#list-count').innerText(),'2','All years must exit Chapter scope');
   assert.equal(await page.locator('#markers .mk[title="深圳"]').count(),1,'Exiting Chapter must restore other map footprints');
+  await page.locator('#year-filter [data-year="2026"]').click();assert.equal(await page.locator('#list-count').innerText(),'1');assert.match(await page.locator('#list-body').innerText(),/深圳之行/);
+  await page.locator('[data-act=all-years]').click();assert.equal(await page.locator('#list-count').innerText(),'2');
   await page.locator(`[data-life-scope="${d.chapters[1].id}"]`).click();
   await page.locator('#list-body .item').filter({hasText:'北京实习'}).click();await page.waitForSelector('#card.show');assert.match(await page.locator('#card h2').innerText(),/北京实习/);
   await page.locator('#card [data-place]').first().click();
@@ -78,19 +81,32 @@ try {
   assert.equal((await dataset()).trips.length,2);assert.equal((await dataset()).places.length,4);
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-life-restore]').setInputFiles({name:'LifeAtlas.json',mimeType:'application/json',buffer:Buffer.from(backup)});
   await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===2);assert.deepEqual((await dataset()).chapters,d.chapters);
+  // Reuse the original map-pick correction and CSV export UI.
+  await page.locator('[data-life-close]').click();await page.locator('#btn-data').click();await page.locator('[data-tab=places]').click();
+  const placeBefore=(await dataset()).places.find(p=>p.name==='北京');
+  await page.locator('.pl[data-name="北京"] [data-act=pick]').click();await page.waitForTimeout(2200);
+  const canvas=page.locator('#globe canvas').first(),box=await canvas.boundingBox();await canvas.click({position:{x:box.width/2,y:box.height/2}});
+  await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('已把'));
+  const placeAfter=(await dataset()).places.find(p=>p.name==='北京');assert.equal(placeAfter.id,placeBefore.id);assert.ok(placeAfter.evidenceIds.length>placeBefore.evidenceIds.length);
+  await page.locator('#btn-data').click();await page.locator('[data-tab=import]').click();
+  const csvDownloadPromise=page.waitForEvent('download');await page.locator('[data-act=export]').click();const csvDownload=await csvDownloadPromise;
+  const exportedCSV=await readFile(await csvDownload.path(),'utf8');assert.match(exportedCSV,/visit_id,place_id,trip_id/);assert.match(exportedCSV,/北京实习/);await page.locator('#modal-close').click();
   // Real IndexedDB transaction abort: rejected edit leaves both committed data
   // and the open editor intact, without a false success notification.
-  await page.locator('[data-life-close]').click();await page.locator('#btn-data').click();await page.locator('[data-tab=edit]').click();
+  await page.locator('#btn-data').click();await page.locator('[data-tab=edit]').click();
   await page.locator('[data-i="1"][data-k=note]').fill('this must not be committed');const beforeError=await dataset();
   await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=put.apply(this,args);this.transaction.abort();IDBObjectStore.prototype.put=put;return r;};});
   await page.locator('[data-act=save-rows]').click();await page.waitForSelector('#life-storage-error:visible');
   assert.deepEqual(await dataset(),beforeError);assert.ok(await page.locator('#modal').evaluate(e=>document.body.classList.contains('modal-open')));
   assert.equal(await page.locator('[data-i="1"][data-k=note]').inputValue(),'this must not be committed');
-  await page.locator('#modal-close').click();await page.reload();await page.waitForSelector('#chapter-filter [data-life-scope]');
+  await page.locator('[data-i="1"][data-k=note]').fill('已验证的用户修订');await page.locator('[data-act=save-rows]').click();
+  await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));assert.equal((await dataset()).visits[1].legacy.note,'已验证的用户修订');
+  assert.deepEqual((await dataset()).chapters,d.chapters);
+  await page.reload();await page.waitForSelector('#chapter-filter [data-life-scope]');
   await page.setViewportSize({width:390,height:844});await page.locator('#btn-life').click();
   assert.ok(await page.locator('#life-dialog').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}));
   await page.screenshot({path:resolve(output,'05-mobile-chapters.png')});
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({result:'PASS',checks:['new-browser demo is ephemeral','CSV file import','overlapping Chapter CRUD','shared Trip relationships','scoped map/list/timeline','Trip and Place flights','day/night','Trip Replay','reload persistence','JSON backup'],output,entities:{trips:d.trips.length,chapters:d.chapters.length,places:d.places.length},pageErrors:errors},null,2));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({result:'PASS',checks:['new-browser demo is ephemeral','CSV file import and export','overlapping Chapter CRUD','shared Trip relationships','scoped map/list/timeline and year reset','Chapter without Trips','Trip and Place flights','day/night','Trip Replay','reload persistence','JSON backup and restore','manual coordinate correction','failed edit preserves data and draft','successful edit preserves IDs and relationships','mobile layout'],output,entities:{trips:d.trips.length,chapters:d.chapters.length,places:d.places.length},pageErrors:errors},null,2));
   // Distinct old browser states, migration failure and pending-marker resume,
   // using actual IndexedDB transactions (not the MemoryStore test boundary).
   for(const failAt of [0,1,2]) {
