@@ -47,7 +47,7 @@ export function setStoryMemories(story,data,memoryIds){
     const m=data.memories.find(m=>m.id===id);if(!m)throw new Error('记忆不存在');
     if(!m.tripIds.some(id=>next.selectedTripIds.includes(id))&&!data.chapters.some(c=>next.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(id)))throw new Error('记忆不在所选人生范围内');
     if(next.orderedScenes.some(s=>s.kind==='memory'&&s.memoryId===id))continue;
-    const after=next.orderedScenes.findLastIndex(s=>s.kind==='place'&&m.placeIds.includes(s.placeId)||s.kind==='trip'&&m.tripIds.includes(s.tripId));
+    const after=next.orderedScenes.findLastIndex(s=>m.tripIds.length?m.tripIds.includes(s.tripId)&&(s.kind==='trip'||s.kind==='place'&&m.placeIds.includes(s.placeId)):s.kind==='place'&&m.placeIds.includes(s.placeId));
     next.orderedScenes.splice(after>=0?after+1:Math.max(1,next.orderedScenes.length-1),0,{id:newId('scene'),kind:'memory',title:m.title||'记忆时刻',description:'',start:clone(m.start),end:clone(m.end),chapterId:null,tripId:m.tripIds.find(id=>next.selectedTripIds.includes(id))||null,placeId:m.placeIds[0]||null,memoryId:id,duration:5});
   }
   return validateStory(next);

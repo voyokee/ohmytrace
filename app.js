@@ -204,7 +204,7 @@ let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let life, lifeSnapshot, lifeUI;
-let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null;
+let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
   const el=$('#life-storage-error');el.hidden=false;
@@ -684,7 +684,8 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   cinematic.setFocus(storyScene&&visualContext(storyScene).month===null?null:sphere.center,placeName?seasonFor(placeName,state.places[placeName].lat).month:8);
   const r = sphere.radius;
   const framing=close&&placeName?sceneTemplateFor({name:placeName,...state.places[placeName],height:state.places[placeName]?.h||0}).camera:null;
-  const range = close ? framing?.range||1900 : Math.max(30000, r * 3.4);
+  const storyMinimum=publicViewer||storyBaseLife?!terrainReady?1200000:state.places[placeName]?.granularity!=='precise'?90000:0:0;
+  const range = Math.max(storyMinimum,close ? framing?.range||1900 : Math.max(30000, r * 3.4));
   const pitch = Cesium.Math.toRadians(close ? framing?.pitch||-19 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
   const flight = flightGeneration = cameraDirector.begin('entering');
   flying = true;
@@ -1227,6 +1228,7 @@ function renderYears() {
 }
 
 function statusOf(p) {
+  if((publicViewer||storyBaseLife)&&p&&p.lat==null)return {cls:'auto',text:p.granularity==='hidden'?'坐标未公开':'位置未知',pending:true};
   if (!p) return { cls: 'wait', text: '定位中', pending: true };
   return {
     confirmed: { cls: 'ok', text: '已确认', pending: false },
@@ -1346,8 +1348,9 @@ function stopHTML(place, note, color) {
 function renderCard() {
   const el = $('#card');
   const x = byId(state.sel);
-  body.classList.toggle('card-open', !!x);
-  if (!x) { el.classList.remove('show'); return; }
+  const show=!!x&&(!storyScene||storyExploreCard);
+  body.classList.toggle('card-open',show);
+  if (!show) { el.classList.remove('show'); return; }
   let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>`;
   if (x.kind === 'trip') {
     const color = typeColors[x.type];
@@ -1356,7 +1359,7 @@ function renderCard() {
     html += `<div class="card-kicker"><span class="dot"></span>${esc(x.type)} · 第 ${x.n} 次</div>
       <h2>${esc(x.title)}</h2>
       <div class="card-date">${esc(x.date ? x.date.label : '日期未知')}${x.date && x.date.days ? ` <span>· ${x.date.days} 天</span>` : ''}</div>
-      ${x.inferredConnections?`<p class="hint">${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，虚线为推测连接，交通方式未知。</p>`:''}
+      ${x.inferredConnections?`<p class="hint">${x.memoryCount>0?`${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，`:''}记录地点间的虚线为推测连接，交通方式未知。</p>`:''}
       ${x.origin ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
       <ol class="stops">${x.stops.map(s => stopHTML(s.place, s.note, color)).join('')}</ol>
       <div class="card-nav"><button data-act="prev"${idx <= 0 ? ' disabled' : ''}>‹ 上一次</button>
@@ -1374,7 +1377,7 @@ function renderCard() {
   }
   el.innerHTML = html;
   el.scrollTop = 0;
-  requestAnimationFrame(() => el.classList.add('show'));
+  requestAnimationFrame(() => {if(body.classList.contains('card-open')&&state.sel===x.id)el.classList.add('show');});
 }
 
 function updateSelectionUI() {
@@ -1388,6 +1391,7 @@ function updateSelectionUI() {
 
 function select(id, { fly = true } = {}) {
   storyExperience?.pauseForInteraction();
+  if(storyScene)storyExploreCard=true;
   const x = byId(id);
   if (!x) return;
   state.sel = id;
@@ -1736,13 +1740,13 @@ async function boot() {
   geocodeMissing();
   storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>state.year?{type:'year',year:state.year}:life.adapter.scope,
     reducedMotion,cancel:()=>pauseOverviewMotion(),
-    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay};}life=bridge;state.year=null;state.sel=null;body.classList.add('story-readonly');
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
-    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{
-      if(signal.aborted)return;storyScene=item;signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});
+      if(signal.aborted)return;storyScene=item;storyExploreCard=false;$('#toast').classList.remove('show');signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});
       state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
       if(item.tripId)state.sel=item.tripId;refresh();
       const duration=instant?0:Math.min(2.4,1.8/speed);

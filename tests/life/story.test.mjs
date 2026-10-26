@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {composeStory,setStoryMemories} from '../../src/life/story/compose.js';
+import {composeStory,setStoryMemories,storyYears} from '../../src/life/story/compose.js';
 import {validateStory,visualContext} from '../../src/life/story/schema.js';
 import {projectShare,parseArtifact,cleanJPEG,Publisher} from '../../src/life/story/share.js';
 import {storyFixture} from './story-fixtures.mjs';
@@ -24,7 +24,7 @@ test('share projection removes private records, raw IDs, paths, notes and eviden
   for(const value of ['私人旅行','秘密地点','PRIVATE_','123 单元',f.data.id,f.trip.id,f.overlap])assert.equal(json.includes(value),false,value);
   assert.equal(json.includes('39.912345'),false);assert.equal(json.includes('1.312345'),false);
   assert.ok(a.places.some(p=>p.coordinates?.latitude===39.9));assert.ok(a.places.some(p=>p.coordinates===null));
-  assert.equal(a.trips.every(t=>t.routeKind==='inferred'),true);assert.deepEqual(parseArtifact(JSON.stringify(a)),a);
+  assert.deepEqual(parseArtifact(JSON.stringify(a)),a);
   story.privacySettings.excludedTripIds=[f.trip.id];const less=projectShare(f.data,story);
   assert.equal(less.trips.length,1);assert.equal(JSON.stringify(less).includes('北京实习'),false);
   story.privacySettings.locationMode='hidden';assert.equal(projectShare(f.data,story).places.every(p=>p.coordinates===null),true);
@@ -51,4 +51,36 @@ test('artifact validation rejects unsupported versions, private payloads, malfor
 });
 test('hosted publishing is explicitly unavailable until a real Publisher is configured',async()=>{
   await assert.rejects(new Publisher().publish(),/Hosted Sharing/);
+});
+test('an unknown or hidden Stop cannot be presented as a known connection',()=>{
+  const f=storyFixture(),story=composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}),a=projectShare(f.data,story);
+  assert.equal(a.trips[0].routeKind,'unknown','A route with an unlocated Stop must retain unknown path status');
+  assert.equal(a.trips[1].routeKind,'inferred');
+  story.privacySettings.locationMode='hidden';assert.ok(projectShare(f.data,story).trips.every(t=>t.routeKind==='unknown'));
+});
+test('adding another Memory preserves existing edited Memory scenes and their position',()=>{
+  const f=storyFixture();let story=setStoryMemories(composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}),f.data,[f.photo]);
+  const index=story.orderedScenes.findIndex(s=>s.kind==='memory'),scene=story.orderedScenes.splice(index,1)[0];scene.description='手写回忆';story.orderedScenes.unshift(scene);
+  story=setStoryMemories(story,f.data,[f.photo,f.privatePhoto]);
+  assert.equal(story.orderedScenes[0].id,scene.id);assert.equal(story.orderedScenes[0].description,'手写回忆');
+});
+test('year selection covers cross-year records and dated observations without inventing Trip boundaries',()=>{
+  const f=storyFixture();f.trip.start={precision:'unknown',value:null};f.trip.end={precision:'unknown',value:null};
+  assert.deepEqual(storyYears(f.data),[2025,2026]);
+  const story=composeStory(f.data,{scope:{type:'year',year:2025}});assert.ok(story.selectedTripIds.includes(f.trip.id));
+  assert.equal(story.orderedScenes.find(s=>s.kind==='trip').start.precision,'unknown');
+  f.repeat.start={precision:'year',value:'2023'};f.repeat.end={precision:'year',value:'2026'};
+  assert.deepEqual(storyYears(f.data),[2023,2024,2025,2026]);
+});
+test('other Memory summaries preserve their kind without exposing local media, and unplayable artifacts fail validation',()=>{
+  const f=storyFixture();f.data.memories.find(m=>m.id===f.photo).kind='video';f.data.memories.find(m=>m.id===f.photo).text='明确选择分享的文字摘要';
+  const story=setStoryMemories(composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}),f.data,[f.photo]);story.privacySettings.includeNotes=true;
+  const a=projectShare(f.data,story);assert.equal(a.memories[0].kind,'video');assert.equal(a.memories[0].text,'明确选择分享的文字摘要');assert.equal(JSON.stringify(a).includes('file:///'),false);
+  const empty=structuredClone(a);empty.orderedScenes=[];assert.throws(()=>parseArtifact(empty),/镜头/);
+  const invalid=structuredClone(a);invalid.orderedScenes[1].chapterId=null;assert.throws(()=>parseArtifact(invalid),/关联/);
+});
+test('a Memory at a revisited Place remains inside its associated Trip narrative',()=>{
+  const f=storyFixture(),story=setStoryMemories(composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}),f.data,[f.photo]);
+  const memory=story.orderedScenes.findIndex(s=>s.kind==='memory'),repeat=story.orderedScenes.findIndex(s=>s.kind==='trip'&&s.tripId===f.repeat.id);
+  assert.ok(memory<repeat,'The 2025 Trip photo must not be attached to the same-city 2026 revisit');
 });

@@ -15,13 +15,13 @@ export function createStoryBridge(input){
       let trips=artifact.trips.filter(t=>scope.type==='chapter'?chapter.relatedTripIds.includes(t.id):scope.type==='trip'?t.id===scope.id:true).map((t,i)=>{
         let date=renderDate(t);if(!date){const dated=t.stops.filter(s=>dateBound(s.start)!==null).sort((a,b)=>dateBound(a.start)-dateBound(b.start));if(dated.length){date=renderDate({start:dated[0].start,end:dated.at(-1).end});date.label=`到访观测 ${date.label} · 旅行起止未知`;date.short=date.label;}}
         return {id:t.id,kind:'trip',title:t.title,type:t.type||'旅行',n:i+1,date,year:date?new Date(date.start).getUTCFullYear():null,endYear:date?new Date(date.end).getUTCFullYear():null,origin:null,inferredConnections:t.routeKind==='inferred',routeKind:t.routeKind,
-          stops:t.stops.map((s,index)=>({place:names.get(s.placeId),placeId:s.placeId,visitId:`${t.id}:${index}`,note:s.note})),memoryCount:artifact.memories.filter(m=>m.tripIds.includes(t.id)).length};
+          stops:t.stops.map((s,index)=>({place:names.get(s.placeId),placeId:s.placeId,visitId:`${t.id}:${index}`,note:s.note})),memoryCount:artifact.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length};
       });
       if(scope.type==='year')trips=trips.filter(t=>t.year!==null&&t.year<=scope.year&&t.endYear>=scope.year);
       const selected=chapter?[chapter]:artifact.chapters;
       const homes=selected.flatMap(c=>c.homeAnchors.map(id=>({id:`anchor:${c.id}:${id}`,anchor:true,kind:'home',title:names.get(id),place:names.get(id),placeId:id,type:'阶段地点',note:'分享的阶段地点',date:renderDate(c)})));
       const places=Object.create(null),placeIds=Object.create(null);
-      for(const p of artifact.places){const name=names.get(p.id);placeIds[name]=p.id;places[name]={status:p.coordinates?'confirmed':'unknown',lifePlaceId:p.id,sourceName:p.name,...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{})};}
+      for(const p of artifact.places){const name=names.get(p.id);placeIds[name]=p.id;places[name]={status:p.coordinates?'confirmed':'unknown',lifePlaceId:p.id,sourceName:p.name,granularity:p.granularity,...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{})};}
       const rows=[...trips.flatMap(t=>t.stops.map(s=>({place:s.place}))),...homes.map(h=>({place:h.place}))];
       return {rows,places,placeIds,trips,homes,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter):null,scope:clone(scope),focus:clone(focus)};
     }};
