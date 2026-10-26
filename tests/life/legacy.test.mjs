@@ -72,3 +72,9 @@ test('invalid coordinates abort before migration persistence',async()=>{
   await assert.rejects(repo.initialize({legacyStorage:{getItem:()=>JSON.stringify({...legacy,places:{北京:{lat:116,lon:39}}})},migrateLegacy}),/经纬度/);
   assert.equal(store.value,null);
 });
+test('legacy geocoder coordinates retain inferred provenance instead of becoming observations',()=>{
+  const d=migrateLegacy({...legacy,places:{北京:{lat:39,lon:116,status:'rough',label:'仅省级定位'}}});
+  const p=d.places[0],e=d.evidence.find(e=>p.evidenceIds.includes(e.id));
+  assert.equal(e.state,'inferred');assert.equal(e.source.legacyCoordinateStatus,'rough');
+  assert.equal(p.location.status,'rough');
+});

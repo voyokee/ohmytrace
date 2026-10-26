@@ -85,7 +85,8 @@ export function reconcileRows(data, rows, {source={kind:'legacy-editor'}, manual
       const requested=raw._lifePlaceId;
       place={id:requested&&!data.places.some(p=>p.id===requested)?requested:newId('place'),name:row.place,coordinates:clone(coordinates),
         location:clone(raw._location||{status:coordinates?'confirmed':'unknown'}),
-        evidenceIds:addEvidence(data,coordinates?'observed':'unknown',{...source,coordinateOrder:'latitude,longitude',...(raw._swapped?{normalization:'legacy-unambiguous-longitude-first'}:{})}),
+        evidenceIds:addEvidence(data,coordinates?(['auto','rough'].includes(raw._location?.status)?'inferred':'observed'):'unknown',
+          {...source,coordinateOrder:'latitude,longitude',...(raw._location?.status?{legacyCoordinateStatus:raw._location.status}:{}),...(raw._swapped?{normalization:'legacy-unambiguous-longitude-first'}:{})}),
         ...(raw._legacyPlaceKey?{legacyKey:raw._legacyPlaceKey}:{})};
       data.places.push(place);
     }
