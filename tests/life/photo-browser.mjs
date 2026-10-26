@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import {resolve,extname,sep} from 'node:path';import {tmpdir} from 'node:os';
 import {photoJPEG} from './photo-fixtures.mjs';
+import {browserTarget} from '../production/browser-target.mjs';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
-const root=fileURLToPath(new URL('../../',import.meta.url)),output=process.env.LIFE_BROWSER_OUTPUT||resolve(tmpdir(),'ohmytrace-photo-acceptance');await mkdir(output,{recursive:true});
+const root=process.env.LIFE_APP_ROOT?resolve(process.env.LIFE_APP_ROOT):fileURLToPath(new URL('../../',import.meta.url)),output=process.env.LIFE_BROWSER_OUTPUT||resolve(tmpdir(),'ohmytrace-photo-acceptance');await mkdir(output,{recursive:true});
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/\/$/,'/index.html'));if(!path.startsWith(root.endsWith(sep)?root:root+sep)){res.writeHead(403).end();return;}const bytes=await readFile(path);res.writeHead(200,{'Content-Type':({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'})[extname(path)]||'application/octet-stream','Cache-Control':'no-store'});res.end(bytes);}catch{res.writeHead(404).end();}});
-await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/`;
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const target=await browserTarget(`http://127.0.0.1:${server.address().port}/`),url=target.url;
 const browser=await chromium.launch({headless:true,...(process.env.LIFE_BROWSER_EXECUTABLE?{executablePath:process.env.LIFE_BROWSER_EXECUTABLE}:{}),args:['--enable-unsafe-swiftshader']});
 const ctx=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true,reducedMotion:'reduce'}),page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+await target.authorize(ctx);
 const legacy={rows:[{date:'2024~2026',trip:'',place:'新加坡',type:'现居地',note:''},{date:'2025-05-01~2025-05-03',trip:'CSV 北京旅行',place:'北京',type:'旅行',note:'手动内容'}],places:{新加坡:{lat:1.3,lon:103.8,status:'confirmed'},北京:{lat:39.90001,lon:116.40001,status:'confirmed',label:'手动校正'}}};
 await ctx.addInitScript(legacy=>{if(!sessionStorage.seeded){localStorage.setItem('footprints.v1',JSON.stringify(legacy));sessionStorage.seeded='1';}},legacy);
 const readDB=(name,store,key)=>page.evaluate(({name,store,key})=>new Promise((resolve,reject)=>{const req=indexedDB.open(name);req.onsuccess=()=>{const db=req.result,r=key===null?db.transaction(store).objectStore(store).getAll():db.transaction(store).objectStore(store).get(key);r.onsuccess=()=>{resolve(r.result);db.close();};r.onerror=()=>reject(r.error);};req.onerror=()=>reject(req.error);}),{name,store,key});

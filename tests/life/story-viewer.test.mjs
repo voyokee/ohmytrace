@@ -62,3 +62,18 @@ test('late packaged stories and slower file reads cannot replace the latest View
     assert.deepEqual(loads,[manual.title,latest.title]);
   }finally{globalThis.fetch=oldFetch;if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);else delete globalThis.document;}
 });
+
+test('offline package download uses four bounded workers while preserving ZIP entry order',async()=>{
+  const f=storyFixture(),artifact=projectShare(f.data,composeStory(f.data));
+  const paths=['app.js','styles.css','story-viewer.html','src/life/story/schema.js','src/life/story/share.js','src/life/story/viewer.js','src/life/story/playback.js','src/life/story/player-ui.js'];
+  let active=0,maximum=0;const completed=[],progress=[];
+  const zip=await createSharePackage(artifact,{onProgress:message=>progress.push(message),fetchFile:async path=>{
+    if(path==='src/life/story/runtime-files.json')return new TextEncoder().encode(JSON.stringify(paths));
+    active++;maximum=Math.max(maximum,active);await new Promise(resolve=>setTimeout(resolve,path==='app.js'?20:1));active--;completed.push(path);return new TextEncoder().encode(path);
+  }});
+  assert.equal(maximum,4);assert.equal(active,0);assert.notEqual(completed[0],'app.js');
+  const bytes=Buffer.from(await zip.arrayBuffer()),names=[];let offset=0;
+  while(bytes.readUInt32LE(offset)===0x04034b50){const length=bytes.readUInt16LE(offset+26),extra=bytes.readUInt16LE(offset+28),size=bytes.readUInt32LE(offset+18);names.push(bytes.subarray(offset+30,offset+30+length).toString());offset+=30+length+extra+size;}
+  assert.deepEqual(names.slice(0,paths.length),paths.map(p=>p==='story-viewer.html'?'index.html':p));
+  assert.ok(progress.includes('正在打包地球资源 8 / 8'));
+});

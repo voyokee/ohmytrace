@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "test:production": "node --test tests/production/*.test.mjs",
     "test": "node tests/performance.mjs && node tests/camera-motion.mjs && node tests/rendering.mjs && node tests/terrain-handoff.mjs && node tests/scenery-ready.mjs && node tests/delivery.mjs && node tests/micro-world.mjs && node tests/terrain-picking.mjs && node tests/scenic-earth.mjs && node tests/draw-statistics.mjs && node tests/canopy-assets.mjs && node tests/sunlight.mjs && node tests/world-lod.mjs && node tests/surface-topology.mjs && node tests/forest-form.mjs && node tests/regional-forest.mjs && node tests/footprint-layout.mjs && node tests/geocoding-scope.mjs && node --test tests/life/*.test.mjs",
     "test:life": "node --test tests/life/*.test.mjs"
   },

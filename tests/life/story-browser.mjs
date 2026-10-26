@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import {resolve,extname,sep} from 'node:path';import {tmpdir} from 'node:os';import * as zlib from 'node:zlib';
 import {storyFixture} from './story-fixtures.mjs';import {exportLegacyCSV} from '../../src/life/legacy.js';import {photoJPEG} from './photo-fixtures.mjs';import {parseArtifact,cleanJPEG} from '../../src/life/story/share.js';
+import {browserTarget} from '../production/browser-target.mjs';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
-const root=fileURLToPath(new URL('../../',import.meta.url)),output=process.env.LIFE_BROWSER_OUTPUT||resolve(tmpdir(),'ohmytrace-story-acceptance');await mkdir(output,{recursive:true});
+const root=process.env.LIFE_APP_ROOT?resolve(process.env.LIFE_APP_ROOT):fileURLToPath(new URL('../../',import.meta.url)),output=process.env.LIFE_BROWSER_OUTPUT||resolve(tmpdir(),'ohmytrace-story-acceptance');await mkdir(output,{recursive:true});
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp','.svg':'image/svg+xml','.wasm':'application/wasm'};
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/\/$/,'/index.html'));if(!path.startsWith(root.endsWith(sep)?root:root+sep)){res.writeHead(403).end();return;}const bytes=await readFile(path);res.writeHead(200,{'Content-Type':mime[extname(path)]||'application/octet-stream','Cache-Control':'no-store'});res.end(bytes);}catch{res.writeHead(404).end();}});
-await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/`;
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const target=await browserTarget(`http://127.0.0.1:${server.address().port}/`),url=target.url;
 const browser=await chromium.launch({headless:true,...(process.env.LIFE_BROWSER_EXECUTABLE?{executablePath:process.env.LIFE_BROWSER_EXECUTABLE}:{}),args:['--enable-unsafe-swiftshader']});
 const ctx=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true,reducedMotion:'reduce'}),page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+await target.authorize(ctx);
 await ctx.route(url=>url.hostname.includes('nominatim'),route=>route.abort());
 const f=storyFixture();let publicContext,publicServer;
 const crc32=zlib.crc32||function(bytes){let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
 const dataset=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const req=indexedDB.open('ohmytrace.life',1);req.onsuccess=()=>{const db=req.result,r=db.transaction('datasets').objectStore('datasets').get('canonical');r.onsuccess=()=>{resolve(r.result);db.close();};r.onerror=()=>reject(r.error);};req.onerror=()=>reject(req.error);}));
-async function download(button,name){const promise=page.waitForEvent('download');await page.locator(button).click();const file=await promise,bytes=await readFile(await file.path());await writeFile(resolve(output,name),bytes);return bytes;}
+async function download(button,name){const promise=page.waitForEvent('download',{timeout:process.env.LIFE_APP_URL?180000:30000});await page.locator(button).click();const file=await promise,bytes=await readFile(await file.path());await writeFile(resolve(output,name),bytes);return bytes;}
 async function review(){await page.locator('[data-story-review]').click();await page.locator('[data-story-approve]').check();}
 function unpack(bytes){const entries=new Map();let offset=0;while(bytes.readUInt32LE(offset)===0x04034b50){const method=bytes.readUInt16LE(offset+8),crc=bytes.readUInt32LE(offset+14),size=bytes.readUInt32LE(offset+18),length=bytes.readUInt16LE(offset+26),extra=bytes.readUInt16LE(offset+28);assert.equal(method,0);const name=bytes.subarray(offset+30,offset+30+length).toString(),start=offset+30+length+extra,data=bytes.subarray(start,start+size);assert.equal(crc32(data),crc,name);entries.set(name,data);offset=start+size;}assert.equal(bytes.readUInt32LE(offset),0x02014b50);return entries;}
 try{

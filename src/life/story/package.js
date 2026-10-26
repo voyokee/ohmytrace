@@ -21,7 +21,15 @@ const allowed=path=>/^(assets\/|vendor\/cesium\/|src\/(rendering|scenery|perform
 export async function createSharePackage(input,{fetchFile=async path=>{const r=await fetch(new URL('../../../'+path,import.meta.url));if(!r.ok)throw new Error(`分享包资源缺失：${path}`);return new Uint8Array(await r.arrayBuffer());},onProgress=()=>{}}={}){
   const artifact=parseArtifact(input),manifest=JSON.parse(new TextDecoder().decode(await fetchFile('src/life/story/runtime-files.json'))),entries=[];
   if(!Array.isArray(manifest)||manifest.some(path=>typeof path!=='string'||!allowed(path)||path.includes('..'))||new Set(manifest).size!==manifest.length)throw new Error('分享运行时清单无效');
-  for(let i=0;i<manifest.length;i++){const path=manifest[i];entries.push([path==='story-viewer.html'?'index.html':path,await fetchFile(path)]);if(i%10===0)onProgress(`正在打包地球资源 ${i+1} / ${manifest.length}`);}
+  let next=0,completed=0,failed=false;
+  await Promise.all(Array.from({length:Math.min(4,manifest.length)},async()=>{
+    while(!failed&&next<manifest.length){
+      const i=next++,path=manifest[i];
+      try{entries[i]=[path==='story-viewer.html'?'index.html':path,await fetchFile(path)];}
+      catch(error){failed=true;throw error;}
+      completed++;if(completed%10===1||completed===manifest.length)onProgress(`正在打包地球资源 ${completed} / ${manifest.length}`);
+    }
+  }));
   const json=JSON.stringify(artifact,null,2),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(json)))].map(b=>b.toString(16).padStart(2,'0')).join('');
   entries.push(['story.json',json],['story.sha256',digest],['README.txt','OhMyTrace Life Story — static package\nExtract the ZIP and publish the entire folder to a static HTTPS host on a separate origin. No build step or login required. Open index.html through HTTP(S), not file://. For local testing: python -m http.server 8080\nIncludes only reviewed Story data, embedded approved thumbnails and public engine/assets. No personal database, CSV or original media files. External terrain/imagery is optional; the local globe remains usable when offline. No cloud upload was performed.\n']);
   onProgress('静态分享包已生成；未上传任何数据');return staticZip(entries);
