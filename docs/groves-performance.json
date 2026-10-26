@@ -1,0 +1,275 @@
+{
+  "baselineCommit": "31e69ef301d6e4d8d920f7f2e041ec6b71e07aca",
+  "method": "Same M1/IAB, Asia camera, viewport and actual render pixels; 1x pixels, continuous benchmark; median of last 10 ready two-second windows. Sequential runs are not isolated GPU benchmarks.",
+  "gpuCaveat": "Whole WebGL submission interval, may include CPU waits; CPU scopes are inclusive and must not be summed.",
+  "mobileCaveat": "Desktop hardware running the mobile quality budget, not phone hardware. Average FPS does not certify frame pacing; P95 remains unaccepted.",
+  "results": {
+    "desktopBefore": {
+      "source": "groves-before-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 11714070,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1448×1086",
+      "qualityProfile": "desktop",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "worldCanopy": null,
+      "fps": 60.0,
+      "p95FrameMs": 19.6,
+      "gpuMs": 8.255,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.8,
+      "renderMs": 0.8,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 5230.0,
+      "worldCandidates": 11725.0,
+      "worldSurfaceTriangles": 522030.0,
+      "worldChunks": 28.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "drawElements": 0.01,
+        "quadtree.beginFrame": 0.01,
+        "globe.update": 0.0,
+        "globe.render": 0.0,
+        "getQueryParameter": 0.0,
+        "drawElementsInstanced": 0.03,
+        "globe.beginFrame": 0.01,
+        "getParameter": 0.04
+      },
+      "gpuTriangles": {
+        "world-earth": 653102.0,
+        "vegetation": 664856.0
+      },
+      "gpuDrawCounts": {
+        "world-earth": 3.0,
+        "vegetation": 44.0
+      }
+    },
+    "desktopAfter": {
+      "source": "groves-desktop-after-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 11714070,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1448×1086",
+      "qualityProfile": "desktop",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1854,
+        "exposed": 56
+      },
+      "fps": 60.0,
+      "p95FrameMs": 19.65,
+      "gpuMs": 8.125,
+      "longTasks": 0.0,
+      "engineMs": 0.2,
+      "drawMs": 0.9,
+      "renderMs": 0.9,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 4265.0,
+      "worldCandidates": 9401.0,
+      "worldSurfaceTriangles": 522030.0,
+      "worldChunks": 28.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "drawElements": 0.01,
+        "quadtree.beginFrame": 0.01,
+        "globe.update": 0.0,
+        "globe.render": 0.0,
+        "getQueryParameter": 0.0,
+        "drawElementsInstanced": 0.025,
+        "globe.beginFrame": 0.01,
+        "getParameter": 0.04
+      },
+      "gpuTriangles": {
+        "world-earth": 653102.0,
+        "vegetation": 540460.0
+      },
+      "gpuDrawCounts": {
+        "world-earth": 3.0,
+        "vegetation": 44.0
+      }
+    },
+    "mobileBefore": {
+      "source": "groves-mobile-before-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 21528019,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "390×844",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "worldCanopy": null,
+      "fps": 30.0,
+      "p95FrameMs": 36.5,
+      "gpuMs": 2.335,
+      "longTasks": 0.0,
+      "engineMs": 0.2,
+      "drawMs": 1.25,
+      "renderMs": 1.25,
+      "effectsMs": 0.05,
+      "markersMs": 0.0,
+      "worldTrees": 715.0,
+      "worldCandidates": 2986.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "drawElements": 0.01,
+        "quadtree.beginFrame": 0.015,
+        "globe.update": 0.0,
+        "globe.render": 0.0,
+        "getQueryParameter": 0.0,
+        "drawElementsInstanced": 0.01,
+        "globe.beginFrame": 0.02,
+        "getParameter": 0.035
+      },
+      "gpuTriangles": {
+        "world-earth": 212000.0,
+        "vegetation": 95348.0
+      },
+      "gpuDrawCounts": {
+        "world-earth": 3.0,
+        "vegetation": 24.0
+      }
+    },
+    "mobileAfter": {
+      "source": "groves-mobile-after-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 21528019,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "390×844",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 596,
+        "upper": 303,
+        "coastal": 409,
+        "exposed": 8
+      },
+      "fps": 30.0,
+      "p95FrameMs": 37.2,
+      "gpuMs": 2.31,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.7,
+      "renderMs": 0.7,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 582.0,
+      "worldCandidates": 2390.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "drawElements": 0.01,
+        "quadtree.beginFrame": 0.01,
+        "globe.update": 0.0,
+        "globe.render": 0.0,
+        "getQueryParameter": 0.0,
+        "drawElementsInstanced": 0.02,
+        "globe.beginFrame": 0.02,
+        "getParameter": 0.04
+      },
+      "gpuTriangles": {
+        "world-earth": 212000.0,
+        "vegetation": 77328.0
+      },
+      "gpuDrawCounts": {
+        "world-earth": 3.0,
+        "vegetation": 23.0
+      }
+    }
+  },
+  "calibration": {
+    "mobile": {
+      "source": "groves-mobile-calibration-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 21528019,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "390×844",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 596,
+        "upper": 303,
+        "coastal": 409,
+        "exposed": 8
+      },
+      "fps": 30.0,
+      "p95FrameMs": 52.55,
+      "gpuMs": 2.27,
+      "longTasks": 0.0,
+      "engineMs": 0.15,
+      "drawMs": 1.05,
+      "renderMs": 1.05,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 582.0,
+      "worldCandidates": 2390.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "drawElements": 0.01,
+        "quadtree.beginFrame": 0.01,
+        "globe.update": 0.0,
+        "globe.render": 0.0,
+        "getQueryParameter": 0.0,
+        "drawElementsInstanced": 0.02,
+        "globe.beginFrame": 0.02,
+        "getParameter": 0.02
+      },
+      "gpuTriangles": {
+        "world-earth": 212000.0,
+        "vegetation": 77328.0
+      },
+      "gpuDrawCounts": {
+        "world-earth": 3.0,
+        "vegetation": 23.0
+      }
+    },
+    "note": "Earlier art calibration before the final snow adjustment, retained to show pacing variation; not a second final-build benchmark or proof of regression causality."
+  },
+  "remaining": [
+    "Global art fidelity and smaller alpine peaks",
+    "Regional-to-local vegetation scale bridge",
+    "Mobile frame pacing and real-device validation",
+    "Photo place labels and native App packaging"
+  ]
+}

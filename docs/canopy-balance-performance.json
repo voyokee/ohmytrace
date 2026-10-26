@@ -1,0 +1,1848 @@
+{
+  "date": "2026-10-26",
+  "baselineCommit": "297dd22aeb3ee7054b2928683d7c4afc19b392b3",
+  "device": "Apple M1 / ANGLE Metal, Codex in-app browser",
+  "method": "Sequential same-tab runs at 1280×720, fixed 105E/28N nadir camera, 17,079,823 m altitude, actual pixel ratio 1; last ten ready two-second windows. Two other normal previews remain idle in twelve recorded windows each. Mobile is a quality budget on this desktop, not phone hardware or phone viewport.",
+  "baselineHarness": "Git archive 297dd22 with only loading-time height percentiles and their performance-panel exposure backported. Baseline forest-form matches the original Git blob; rendering unchanged.",
+  "sourceHashes": {
+    "index.html": "b83b30246430e1777624116c1065ff4621593eb382477e458bffbe58709ebbe4",
+    "app.js": "fb4d5cab2022c2230450460f5f0819ad8612acbdbfb56c39a9884837fd5588c9",
+    "src/rendering/hero-earth.js": "f860886184db2d707e28f1435d106acbeb8b6830bc3da140946049f52b30bcd1",
+    "src/scenery/world-worker.js": "06cf76391402101984377d7ef3666cb2f07aa07ed3167c115f9dd616acb3a629",
+    "src/scenery/world-data.js": "e671436513cac58592c289e2cf60511a3350129df168e076f0a964293c0b453b",
+    "src/scenery/world-forest.js": "32856f05dc40cb3839d9ca76803096b217722dd01fd0efa853e758aa18c27163",
+    "src/scenery/forest-form.js": "41194058150471922085ade5cf742447f4fc8d0c3a8426b359f2c7e8b5df9f32",
+    "tests/forest-form.mjs": "c14e19446904d5ea560ae2df4f53471fedeb6af7924a67579f987b5ea0dc2d21",
+    "README.md": "c3cc2aef89a2137e9fc7dac60b5146e4012be2b0d4614fb0ddf2654f0ebcaefa",
+    "docs/MICRO_WORLD.md": "5f84c7e6b87dc9d41e9b7dd37884a27f25fc2fc7758d6caea170c67be8ce5500"
+  },
+  "benchmarkScreenshot": {
+    "file": "canopy-balance.jpg",
+    "sha256": "80d0953a211de1be183c2b1e534197e0cce59d270e8db9ed244d0998ebea61c4"
+  },
+  "runs": {
+    "desktop-before": {
+      "rawLocalFile": "balance-desktop-before-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "desktop",
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 19.1,
+        "gpuMs": 5.84,
+        "engineMs": 0.1,
+        "drawMs": 0.65,
+        "renderMs": 0.65,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 522030.0,
+        "longTasks": 0.0
+      },
+      "fpsRange": [
+        60,
+        60
+      ],
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 653102,
+        "vegetation": 540460,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 44,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 3561,
+          "p10": 73994,
+          "median": 113330,
+          "p90": 368668,
+          "max": 417345
+        },
+        "broadleaf": {
+          "count": 1823,
+          "p10": 59303,
+          "median": 95475,
+          "p90": 245884,
+          "max": 289957
+        },
+        "tropical": {
+          "count": 3916,
+          "p10": 65471,
+          "median": 109522,
+          "p90": 278910,
+          "max": 289997
+        },
+        "birch": {
+          "count": 101,
+          "p10": 63448,
+          "median": 107136,
+          "p90": 280921,
+          "max": 289915
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "samples": [
+        {
+          "fps": 60,
+          "p95FrameMs": 19.1,
+          "gpuMs": 5.7,
+          "engineMs": 0,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "drawElements": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.2,
+          "gpuMs": 5.8,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.8,
+          "gpuMs": 5.76,
+          "engineMs": 0.2,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.1,
+          "gpuMs": 6,
+          "engineMs": 0.1,
+          "drawMs": 1,
+          "renderMs": 1,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19,
+          "gpuMs": 5.88,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.6,
+          "gpuMs": 5.92,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.3,
+          "gpuMs": 5.54,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.5,
+          "gpuMs": 5.94,
+          "engineMs": 0.2,
+          "drawMs": 1,
+          "renderMs": 1,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.8,
+          "gpuMs": 5.57,
+          "engineMs": 0,
+          "drawMs": 0.5,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.7,
+          "gpuMs": 5.89,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.endFrame": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        }
+      ]
+    },
+    "desktop-after": {
+      "rawLocalFile": "balance-desktop-after-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "desktop",
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 18.75,
+        "gpuMs": 8.0,
+        "engineMs": 0.1,
+        "drawMs": 0.8,
+        "renderMs": 0.8,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 522030.0,
+        "longTasks": 0.0
+      },
+      "fpsRange": [
+        60,
+        60
+      ],
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 653102,
+        "vegetation": 540460,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 44,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 3561,
+          "p10": 105356,
+          "median": 161743,
+          "p90": 267644,
+          "max": 297012
+        },
+        "broadleaf": {
+          "count": 1823,
+          "p10": 85181,
+          "median": 137508,
+          "p90": 223319,
+          "max": 253030
+        },
+        "tropical": {
+          "count": 3916,
+          "p10": 94952,
+          "median": 158200,
+          "p90": 243163,
+          "max": 254673
+        },
+        "birch": {
+          "count": 101,
+          "p10": 95417,
+          "median": 157061,
+          "p90": 226321,
+          "max": 251930
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "samples": [
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 6.94,
+          "engineMs": 0.1,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.2,
+          "gpuMs": 8.23,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.endFrame": 0,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 8.11,
+          "engineMs": 0.1,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.9,
+          "gpuMs": 8.11,
+          "engineMs": 0.2,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.02,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.4,
+          "gpuMs": 7.92,
+          "engineMs": 0.2,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.1,
+          "gpuMs": 6.87,
+          "engineMs": 0.1,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 7.98,
+          "engineMs": 0.2,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0,
+            "globe.render": 0,
+            "globe.update": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19,
+          "gpuMs": 6.87,
+          "engineMs": 0.1,
+          "drawMs": 1,
+          "renderMs": 1,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.endFrame": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 8.91,
+          "engineMs": 0.2,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.8,
+          "gpuMs": 8.02,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        }
+      ]
+    },
+    "desktop-before-repeat": {
+      "rawLocalFile": "balance-desktop-before-repeat-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "desktop",
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 18.7,
+        "gpuMs": 5.485,
+        "engineMs": 0.15,
+        "drawMs": 0.95,
+        "renderMs": 0.95,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 522030.0,
+        "longTasks": 0.0
+      },
+      "fpsRange": [
+        59.5,
+        60.5
+      ],
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 653102,
+        "vegetation": 540460,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 44,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 3561,
+          "p10": 73994,
+          "median": 113330,
+          "p90": 368668,
+          "max": 417345
+        },
+        "broadleaf": {
+          "count": 1823,
+          "p10": 59303,
+          "median": 95475,
+          "p90": 245884,
+          "max": 289957
+        },
+        "tropical": {
+          "count": 3916,
+          "p10": 65471,
+          "median": 109522,
+          "p90": 278910,
+          "max": 289997
+        },
+        "birch": {
+          "count": 101,
+          "p10": 63448,
+          "median": 107136,
+          "p90": 280921,
+          "max": 289915
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "samples": [
+        {
+          "fps": 60,
+          "p95FrameMs": 18.6,
+          "gpuMs": 5.45,
+          "engineMs": 0.3,
+          "drawMs": 0.9,
+          "renderMs": 0.9,
+          "cpuMs": {
+            "drawElementsInstanced": 0.03,
+            "getParameter": 0.03,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.4,
+          "gpuMs": 5.53,
+          "engineMs": 0.2,
+          "drawMs": 1,
+          "renderMs": 1,
+          "cpuMs": {
+            "getParameter": 0.04,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.6,
+          "gpuMs": 5.53,
+          "engineMs": 0.2,
+          "drawMs": 0.8,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.02,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.render": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 5.68,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "drawElementsInstanced": 0.01,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19.8,
+          "gpuMs": 5.57,
+          "engineMs": 0.1,
+          "drawMs": 1.2,
+          "renderMs": 1.1,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.7,
+          "gpuMs": 5.35,
+          "engineMs": 0.2,
+          "drawMs": 1.1,
+          "renderMs": 1.1,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 59.5,
+          "p95FrameMs": 20.2,
+          "gpuMs": 5.46,
+          "engineMs": 0.1,
+          "drawMs": 0.5,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60.5,
+          "p95FrameMs": 18.7,
+          "gpuMs": 5.47,
+          "engineMs": 0.1,
+          "drawMs": 1.1,
+          "renderMs": 1.1,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "drawElements": 0.01,
+            "globe.beginFrame": 0,
+            "quadtree.beginFrame": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0,
+            "globe.render": 0,
+            "globe.update": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 18.5,
+          "gpuMs": 5.5,
+          "engineMs": 0.1,
+          "drawMs": 1.2,
+          "renderMs": 1.2,
+          "cpuMs": {
+            "drawElementsInstanced": 0.02,
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 60,
+          "p95FrameMs": 19,
+          "gpuMs": 5.46,
+          "engineMs": 0.2,
+          "drawMs": 0.9,
+          "renderMs": 0.9,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.update": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        }
+      ]
+    },
+    "mobile-before": {
+      "rawLocalFile": "balance-mobile-before-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "mobile",
+      "median": {
+        "fps": 30.0,
+        "p95FrameMs": 35.3,
+        "gpuMs": 3.12,
+        "engineMs": 0.1,
+        "drawMs": 0.75,
+        "renderMs": 0.75,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 1046.0,
+        "worldCandidates": 4204.0,
+        "worldChunks": 12.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 80928.0,
+        "longTasks": 0.0
+      },
+      "fpsRange": [
+        30,
+        30
+      ],
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 212000,
+        "vegetation": 141624,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 24,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 1605,
+          "p10": 74985,
+          "median": 115019,
+          "p90": 378418,
+          "max": 416215
+        },
+        "broadleaf": {
+          "count": 810,
+          "p10": 60345,
+          "median": 96076,
+          "p90": 244372,
+          "max": 289947
+        },
+        "tropical": {
+          "count": 1729,
+          "p10": 65148,
+          "median": 110620,
+          "p90": 280598,
+          "max": 289996
+        },
+        "birch": {
+          "count": 60,
+          "p10": 59787,
+          "median": 98725,
+          "p90": 227855,
+          "max": 289725
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "samples": [
+        {
+          "fps": 30,
+          "p95FrameMs": 33.8,
+          "gpuMs": 3.33,
+          "engineMs": 0.1,
+          "drawMs": 0.9,
+          "renderMs": 0.9,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.02,
+            "drawElementsInstanced": 0.02,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.2,
+          "gpuMs": 3.12,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 34.2,
+          "gpuMs": 2.97,
+          "engineMs": 0.1,
+          "drawMs": 0.9,
+          "renderMs": 0.9,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.3,
+          "gpuMs": 3.06,
+          "engineMs": 0.2,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElements": 0.02,
+            "globe.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.5,
+          "gpuMs": 3.37,
+          "engineMs": 0.1,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.02,
+            "drawElements": 0.02,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.02,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.2,
+          "gpuMs": 3.14,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.3,
+          "gpuMs": 3,
+          "engineMs": 0.1,
+          "drawMs": 0.9,
+          "renderMs": 0.9,
+          "cpuMs": {
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.02,
+            "drawElements": 0.02,
+            "getParameter": 0.01,
+            "drawElementsInstanced": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.2,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.3,
+          "gpuMs": 3.09,
+          "engineMs": 0.2,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "globe.beginFrame": 0.03,
+            "quadtree.beginFrame": 0.02,
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.02,
+            "drawElements": 0.01,
+            "globe.update": 0.01,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.3,
+          "gpuMs": 3.46,
+          "engineMs": 0,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.02,
+            "quadtree.beginFrame": 0.02,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.3,
+          "gpuMs": 3.12,
+          "engineMs": 0.2,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "drawElementsInstanced": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.update": 0,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        }
+      ]
+    },
+    "mobile-after": {
+      "rawLocalFile": "balance-mobile-after-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "mobile",
+      "median": {
+        "fps": 30.0,
+        "p95FrameMs": 33.85,
+        "gpuMs": 3.655,
+        "engineMs": 0.15,
+        "drawMs": 0.6,
+        "renderMs": 0.6,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 1046.0,
+        "worldCandidates": 4204.0,
+        "worldChunks": 12.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 80928.0,
+        "longTasks": 0.0
+      },
+      "fpsRange": [
+        30,
+        30
+      ],
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 212000,
+        "vegetation": 141624,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 24,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 1605,
+          "p10": 107004,
+          "median": 163918,
+          "p90": 274852,
+          "max": 296315
+        },
+        "broadleaf": {
+          "count": 810,
+          "p10": 87959,
+          "median": 138302,
+          "p90": 219883,
+          "max": 252999
+        },
+        "tropical": {
+          "count": 1729,
+          "p10": 94285,
+          "median": 158257,
+          "p90": 243050,
+          "max": 254575
+        },
+        "birch": {
+          "count": 60,
+          "p10": 90225,
+          "median": 138123,
+          "p90": 214931,
+          "max": 249526
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "samples": [
+        {
+          "fps": 30,
+          "p95FrameMs": 34.1,
+          "gpuMs": 3.14,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "drawElementsInstanced": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 35.1,
+          "gpuMs": 4.07,
+          "engineMs": 0.2,
+          "drawMs": 0.5,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElements": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "globe.update": 0.01,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 34.3,
+          "gpuMs": 3.24,
+          "engineMs": 0.1,
+          "drawMs": 0.8,
+          "renderMs": 0.8,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElements": 0.01,
+            "drawElementsInstanced": 0.01,
+            "globe.update": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 33.6,
+          "gpuMs": 4.47,
+          "engineMs": 0.2,
+          "drawMs": 0.5,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0,
+            "globe.update": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 33.7,
+          "gpuMs": 3.09,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "getQueryParameter": 0,
+            "globe.render": 0,
+            "globe.update": 0,
+            "globe.endFrame": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 34,
+          "gpuMs": 4.36,
+          "engineMs": 0.2,
+          "drawMs": 0.6,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0,
+            "globe.update": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 33.7,
+          "gpuMs": 3.04,
+          "engineMs": 0.2,
+          "drawMs": 0.7,
+          "renderMs": 0.7,
+          "cpuMs": {
+            "drawElementsInstanced": 0.01,
+            "getParameter": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 33.7,
+          "gpuMs": 4.22,
+          "engineMs": 0.2,
+          "drawMs": 0.5,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "globe.beginFrame": 0.01,
+            "globe.update": 0.01,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 34.8,
+          "gpuMs": 3.06,
+          "engineMs": 0.1,
+          "drawMs": 0.7,
+          "renderMs": 0.6,
+          "cpuMs": {
+            "getParameter": 0.03,
+            "drawElementsInstanced": 0.01,
+            "globe.update": 0.01,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElements": 0.01,
+            "globe.endFrame": 0,
+            "globe.render": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        },
+        {
+          "fps": 30,
+          "p95FrameMs": 33.6,
+          "gpuMs": 4.34,
+          "engineMs": 0.1,
+          "drawMs": 0.6,
+          "renderMs": 0.5,
+          "cpuMs": {
+            "getParameter": 0.02,
+            "globe.beginFrame": 0.01,
+            "quadtree.beginFrame": 0.01,
+            "drawElementsInstanced": 0.01,
+            "drawElements": 0.01,
+            "globe.update": 0,
+            "globe.render": 0,
+            "globe.endFrame": 0,
+            "getQueryParameter": 0
+          },
+          "maxProfileCallMs": 0.1,
+          "longTasks": 0
+        }
+      ]
+    }
+  },
+  "crossRegionChecks": {
+    "alps": {
+      "benchmarkCamera": {
+        "lon": 10,
+        "lat": 46,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 4462,
+      "worldCandidates": 9401,
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "balance-alps.jpg",
+        "sha256": "99880dbcb322ccaf8c3d4019ac9336abfb2dff10b812e8c6249a38b346a03bb0"
+      }
+    },
+    "americas": {
+      "benchmarkCamera": {
+        "lon": -75,
+        "lat": 5,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3330,
+      "worldCandidates": 9401,
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "balance-americas.jpg",
+        "sha256": "08fd43531aedce5b14930686a1d598f076296d682d1cdf2412226cd206aa0b63"
+      }
+    },
+    "steppe": {
+      "benchmarkCamera": {
+        "lon": 116,
+        "lat": 48,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 4547,
+      "worldCandidates": 9401,
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "balance-steppe.jpg",
+        "sha256": "3e1dda6903bc0a12662607d655f6d4a97ac94427d691ab325a0d5bb93e193dca"
+      }
+    },
+    "tropics": {
+      "benchmarkCamera": {
+        "lon": 110,
+        "lat": 5,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3446,
+      "worldCandidates": 9401,
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "balance-tropics.jpg",
+        "sha256": "7e6f65df776093eaa7c534efa1262aa73b2af077d07a9ec5bf5cb2d829f1f2b3"
+      }
+    },
+    "desert": {
+      "benchmarkCamera": {
+        "lon": 15,
+        "lat": 24,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3693,
+      "worldCandidates": 9401,
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "balance-desert.jpg",
+        "sha256": "65e4edc98aa5b3c7715498e13b05a968b96575caef59d1aeabc32633126dbb15"
+      }
+    }
+  },
+  "calibration": {
+    "calibration-desktop-after": {
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 19.2,
+        "gpuMs": 8.49,
+        "engineMs": 0.1,
+        "drawMs": 0.7,
+        "renderMs": 0.7,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 522030.0,
+        "longTasks": 0.0
+      },
+      "rawLocalFile": "balance-calibration-desktop-after-samples.json"
+    },
+    "calibration-mobile-after": {
+      "median": {
+        "fps": 30.0,
+        "p95FrameMs": 35.45,
+        "gpuMs": 3.21,
+        "engineMs": 0.1,
+        "drawMs": 0.6,
+        "renderMs": 0.6,
+        "maxProfileCallMs": 0.1,
+        "worldTrees": 1046.0,
+        "worldCandidates": 4204.0,
+        "worldChunks": 12.0,
+        "worldDetailed": 0.0,
+        "worldPending": 0.0,
+        "worldStaging": 0.0,
+        "worldSurfaceTriangles": 80928.0,
+        "longTasks": 0.0
+      },
+      "rawLocalFile": "balance-calibration-mobile-after-samples.json"
+    }
+  },
+  "notes": [
+    "No increase in candidates, resident chunks, draw calls, triangles, texture samples or asset size. Low crowns cover more pixels; final GPU intervals are higher. This is visual calibration, not a measured speed-up.",
+    "GPU intervals can include CPU waiting and are not exclusive shader time; CPU timers nest. Sequential runs cannot isolate all system variation. Baseline repeat is retained.",
+    "P95 frame intervals and average FPS do not certify full frame pacing or actual phones. No Android/iPhone measurements were made.",
+    "Cross-region screenshots inspect only these views, not every coastline/city pixel. Some European ridges remain visually soft or covered.",
+    "Original GLB silhouettes and terrain geometry retained; regional handoff remains opt-in and incomplete. Full Scenic Earth target is not complete."
+  ],
+  "normalReplay": {
+    "rawLocalFile": "balance-replay-samples.json",
+    "end": {
+      "cameraPhase": "global",
+      "selected": false,
+      "worldReady": true,
+      "instances": 0,
+      "sceneryModels": 0,
+      "mist": 0,
+      "particles": 0,
+      "terrainPickMiB": 0,
+      "terrainPickPending": 0
+    },
+    "maxObservedDrawMs": 738.3,
+    "minSampledFlightFPS": 27.6,
+    "note": "Adaptive native-terrain flight, no matched old/new flight comparison. Sampled loading stalls remain unresolved. Not included in fixed global FPS medians."
+  }
+}

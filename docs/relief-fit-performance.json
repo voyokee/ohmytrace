@@ -1,0 +1,1139 @@
+{
+  "date": "2026-10-26",
+  "baselineCommit": "10a04bf29719eee8fe7977ed0d59593e6a74fce8",
+  "device": "Apple M1 / ANGLE Metal, Codex in-app browser",
+  "method": "Sequential same-tab runs at actual 1280×720, pixel ratio 1; fixed 105E/28N nadir camera at 17,079,823 m. Median of last ten ready two-second windows. Two other previews each record twelve zero-redraw windows. Mobile is the desktop quality budget, not phone viewport or hardware.",
+  "baselineHarness": "Unmodified Git archive 10a04bf; renderer file hashes checked against Git blobs. No backported diagnostics.",
+  "sourceHashes": {
+    "index.html": "b77d8cf58880d8e46396a3c28bbf9856dcb917743b0c200eb683074e78ccdf2c",
+    "app.js": "61c5888e4fe9b5bfbd09f3acfdd1073736fdc453bf34cccf7a1597e1fd940ea6",
+    "src/rendering/hero-earth.js": "017ac543d275ea07097c5ca0b968fb9d2290c993cbceb004d640f61708c6d3af",
+    "src/rendering/earth-materials.js": "b8d477bd5d83da2d19a3c00ff4877819f6ed64611143db4ab1687bebcbf3e207",
+    "src/scenery/world-worker.js": "956d3354401786f0bc7429058bb3ad8697942c04878214cef754beb32692159e",
+    "src/scenery/world-data.js": "cb70313d57983d7405ad172df1eac014d8ebc990526409e4e897ad136b007e38",
+    "src/scenery/world-forest.js": "03a7e77263cd0a014f32435a782c643963725cca5ebb9ef39f0e1cc9c5105a51",
+    "src/scenery/forest-form.js": "27c6a0f43a8edd8946fd4bd9b3517f5dcfb568e77097960fd6f742f4157cd317",
+    "tests/forest-form.mjs": "12ff7ab8d3620c62ef27095c3a87fce59c4a785320e6b2829a9e1e41ddbe184d",
+    "tests/world-lod.mjs": "1639a5337622341dfb2b276b2b6a2451eed62b5512d2ce39c0b3fdfbdb46e226",
+    "README.md": "32446a7f637e51556ebe4357a136292feff5d7753d416d84a97ef59d8ce572b9",
+    "docs/MICRO_WORLD.md": "54200bf336ae7b15c61a68e0ea9cf3d2aa945a6e2ffb329e867ce9428870986c"
+  },
+  "runs": {
+    "desktop-before": {
+      "rawLocalFile": "relief-desktop-before-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "desktop",
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 18.65,
+        "gpuMs": 5.965,
+        "engineMs": 0.1,
+        "drawMs": 0.7,
+        "maxProfileCallMs": 0.1,
+        "longTasks": 0.0,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldSurfaceTriangles": 522030.0
+      },
+      "fpsRange": [
+        59.5,
+        60
+      ],
+      "cpuMedianMs": {
+        "globe.endFrame": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "globe.render": 0.0,
+        "drawElements": 0.01,
+        "drawElementsInstanced": 0.02,
+        "getParameter": 0.025,
+        "globe.update": 0.0,
+        "globe.beginFrame": 0.01,
+        "getQueryParameter": 0.0
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 44,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 653102,
+        "vegetation": 540460,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 3561,
+          "p10": 105356,
+          "median": 161743,
+          "p90": 267644,
+          "max": 297012
+        },
+        "broadleaf": {
+          "count": 1823,
+          "p10": 85181,
+          "median": 137508,
+          "p90": 223319,
+          "max": 253030
+        },
+        "tropical": {
+          "count": 3916,
+          "p10": 94952,
+          "median": 158200,
+          "p90": 243163,
+          "max": 254673
+        },
+        "birch": {
+          "count": 101,
+          "p10": 95417,
+          "median": 157061,
+          "p90": 226321,
+          "max": 251930
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "sampleColumns": [
+        "fps",
+        "p95FrameMs",
+        "gpuMs",
+        "engineMs",
+        "drawMs",
+        "maxProfileCallMs",
+        "longTasks"
+      ],
+      "samples": [
+        [
+          60,
+          18.4,
+          5.74,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          19.3,
+          5.88,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          18.6,
+          5.8,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          19.9,
+          5.64,
+          0.2,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          59.5,
+          18.6,
+          6.56,
+          0.2,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          19.4,
+          6.05,
+          0.2,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          18.4,
+          5.97,
+          0.1,
+          0.4,
+          0.1,
+          0
+        ],
+        [
+          60,
+          18.7,
+          6.06,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          59.5,
+          18.7,
+          5.96,
+          0,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          59.5,
+          17.8,
+          6.97,
+          0.1,
+          0.8,
+          0.1,
+          0
+        ]
+      ]
+    },
+    "desktop-after": {
+      "rawLocalFile": "relief-desktop-after-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "desktop",
+      "median": {
+        "fps": 60.0,
+        "p95FrameMs": 17.35,
+        "gpuMs": 5.635,
+        "engineMs": 0.2,
+        "drawMs": 0.8,
+        "maxProfileCallMs": 0.1,
+        "longTasks": 0.0,
+        "worldTrees": 4265.0,
+        "worldCandidates": 9401.0,
+        "worldChunks": 28.0,
+        "worldDetailed": 0.0,
+        "worldSurfaceTriangles": 522030.0
+      },
+      "fpsRange": [
+        60,
+        60
+      ],
+      "cpuMedianMs": {
+        "globe.endFrame": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "globe.render": 0.0,
+        "drawElements": 0.01,
+        "drawElementsInstanced": 0.02,
+        "getParameter": 0.03,
+        "globe.update": 0.0,
+        "globe.beginFrame": 0.01,
+        "getQueryParameter": 0.0
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 44,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 653102,
+        "vegetation": 540460,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 3561,
+          "p10": 96600,
+          "median": 156941,
+          "p90": 263633,
+          "max": 297012
+        },
+        "broadleaf": {
+          "count": 1823,
+          "p10": 76618,
+          "median": 128482,
+          "p90": 218693,
+          "max": 253030
+        },
+        "tropical": {
+          "count": 3916,
+          "p10": 86578,
+          "median": 148384,
+          "p90": 240299,
+          "max": 254673
+        },
+        "birch": {
+          "count": 101,
+          "p10": 95417,
+          "median": 155369,
+          "p90": 224316,
+          "max": 251930
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "sampleColumns": [
+        "fps",
+        "p95FrameMs",
+        "gpuMs",
+        "engineMs",
+        "drawMs",
+        "maxProfileCallMs",
+        "longTasks"
+      ],
+      "samples": [
+        [
+          60,
+          17.9,
+          5.66,
+          0.2,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          60,
+          18.3,
+          7.17,
+          0.2,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.4,
+          5.64,
+          0.3,
+          0.8,
+          0.2,
+          0
+        ],
+        [
+          60,
+          17.6,
+          5.55,
+          0.2,
+          0.9,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.3,
+          5.48,
+          0.2,
+          1.1,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.2,
+          7.11,
+          0.3,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.2,
+          5.54,
+          0.2,
+          1.1,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.2,
+          7.11,
+          0.3,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.6,
+          5.59,
+          0.3,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          60,
+          17.1,
+          5.63,
+          0.1,
+          0.7,
+          0.2,
+          0
+        ]
+      ]
+    },
+    "mobile-before": {
+      "rawLocalFile": "relief-mobile-before-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "mobile",
+      "median": {
+        "fps": 30.0,
+        "p95FrameMs": 34.25,
+        "gpuMs": 3.04,
+        "engineMs": 0.1,
+        "drawMs": 0.6,
+        "maxProfileCallMs": 0.1,
+        "longTasks": 0.0,
+        "worldTrees": 1046.0,
+        "worldCandidates": 4204.0,
+        "worldChunks": 12.0,
+        "worldDetailed": 0.0,
+        "worldSurfaceTriangles": 80928.0
+      },
+      "fpsRange": [
+        30,
+        30
+      ],
+      "cpuMedianMs": {
+        "globe.endFrame": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "globe.render": 0.0,
+        "drawElements": 0.01,
+        "drawElementsInstanced": 0.01,
+        "getParameter": 0.015,
+        "globe.update": 0.0,
+        "globe.beginFrame": 0.015,
+        "getQueryParameter": 0.0
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 24,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 212000,
+        "vegetation": 141624,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 1031,
+        "upper": 523,
+        "coastal": 773,
+        "exposed": 18
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 1605,
+          "p10": 107004,
+          "median": 163918,
+          "p90": 274852,
+          "max": 296315
+        },
+        "broadleaf": {
+          "count": 810,
+          "p10": 87959,
+          "median": 138302,
+          "p90": 219883,
+          "max": 252999
+        },
+        "tropical": {
+          "count": 1729,
+          "p10": 94285,
+          "median": 158257,
+          "p90": 243050,
+          "max": 254575
+        },
+        "birch": {
+          "count": 60,
+          "p10": 90225,
+          "median": 138123,
+          "p90": 214931,
+          "max": 249526
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "sampleColumns": [
+        "fps",
+        "p95FrameMs",
+        "gpuMs",
+        "engineMs",
+        "drawMs",
+        "maxProfileCallMs",
+        "longTasks"
+      ],
+      "samples": [
+        [
+          30,
+          33.6,
+          3.04,
+          0.2,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          33.6,
+          2.99,
+          0.2,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.6,
+          3.04,
+          0.2,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.2,
+          2.97,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.6,
+          3.26,
+          0.2,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          30,
+          33.9,
+          3.08,
+          0.1,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          33.7,
+          2.99,
+          0.1,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.8,
+          3.02,
+          0.1,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.2,
+          3.1,
+          0.1,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          33.9,
+          3.07,
+          0.1,
+          0.6,
+          0.1,
+          0
+        ]
+      ]
+    },
+    "mobile-after": {
+      "rawLocalFile": "relief-mobile-after-samples.json",
+      "readyWindows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "profile": "mobile",
+      "median": {
+        "fps": 30.0,
+        "p95FrameMs": 34.95,
+        "gpuMs": 2.96,
+        "engineMs": 0.1,
+        "drawMs": 0.75,
+        "maxProfileCallMs": 0.1,
+        "longTasks": 0.0,
+        "worldTrees": 1046.0,
+        "worldCandidates": 4204.0,
+        "worldChunks": 12.0,
+        "worldDetailed": 0.0,
+        "worldSurfaceTriangles": 80928.0
+      },
+      "fpsRange": [
+        30,
+        30
+      ],
+      "cpuMedianMs": {
+        "globe.endFrame": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "globe.render": 0.0,
+        "drawElements": 0.01,
+        "drawElementsInstanced": 0.01,
+        "getParameter": 0.025,
+        "globe.update": 0.0,
+        "globe.beginFrame": 0.02,
+        "getQueryParameter": 0.0
+      },
+      "gpuDrawCounts": {
+        "other-3": 1,
+        "other-5": 1,
+        "world-earth": 3,
+        "vegetation": 24,
+        "other-4": 1,
+        "other-1": 1,
+        "other-2": 1
+      },
+      "gpuTriangles": {
+        "other-3": 2,
+        "other-5": 6480,
+        "world-earth": 212000,
+        "vegetation": 141624,
+        "other-4": 2,
+        "other-1": 2,
+        "other-2": 2
+      },
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 1031,
+        "upper": 523,
+        "coastal": 773,
+        "exposed": 18,
+        "reliefFitted": 491
+      },
+      "worldCanopyHeights": {
+        "spruce": {
+          "count": 1605,
+          "p10": 103094,
+          "median": 160638,
+          "p90": 268840,
+          "max": 296315
+        },
+        "broadleaf": {
+          "count": 810,
+          "p10": 81151,
+          "median": 129007,
+          "p90": 214859,
+          "max": 252999
+        },
+        "tropical": {
+          "count": 1729,
+          "p10": 83785,
+          "median": 149527,
+          "p90": 240836,
+          "max": 254518
+        },
+        "birch": {
+          "count": 60,
+          "p10": 87922,
+          "median": 138123,
+          "p90": 214860,
+          "max": 249526
+        }
+      },
+      "controls": {
+        "defaultControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        },
+        "personalControl": {
+          "windows": 12,
+          "fps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "quality": "still"
+        }
+      },
+      "sampleColumns": [
+        "fps",
+        "p95FrameMs",
+        "gpuMs",
+        "engineMs",
+        "drawMs",
+        "maxProfileCallMs",
+        "longTasks"
+      ],
+      "samples": [
+        [
+          30,
+          34.8,
+          2.95,
+          0,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.2,
+          2.94,
+          0.2,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.9,
+          2.95,
+          0.2,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.3,
+          2.97,
+          0.2,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.4,
+          2.98,
+          0.2,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          33.9,
+          3.05,
+          0,
+          0.6,
+          0.1,
+          0
+        ],
+        [
+          30,
+          34.2,
+          2.95,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.4,
+          3,
+          0.1,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35.1,
+          3,
+          0.1,
+          0.8,
+          0.1,
+          0
+        ],
+        [
+          30,
+          35,
+          2.95,
+          0.1,
+          0.7,
+          0.1,
+          0
+        ]
+      ]
+    }
+  },
+  "crossRegionChecks": {
+    "alps": {
+      "benchmarkCamera": {
+        "lon": 10,
+        "lat": 46,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 4462,
+      "worldCandidates": 9401,
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "relief-alps-after.jpg",
+        "sha256": "80ea5c626d7286d67d68a6c8eac7d200a4cb232c2426b0d5fd38f33cc421855f"
+      }
+    },
+    "americas": {
+      "benchmarkCamera": {
+        "lon": -75,
+        "lat": 5,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3330,
+      "worldCandidates": 9401,
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "relief-americas-after.jpg",
+        "sha256": "fa48c860de06a5d97d5394f159a8d9223d95ed0b443e718eede908cd095ff16d"
+      }
+    },
+    "steppe": {
+      "benchmarkCamera": {
+        "lon": 116,
+        "lat": 48,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 4547,
+      "worldCandidates": 9401,
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "relief-steppe-after.jpg",
+        "sha256": "bdece508b512c3b757228640746467ba67e97f0dea4829ce75435f15765919de"
+      }
+    },
+    "tropics": {
+      "benchmarkCamera": {
+        "lon": 110,
+        "lat": 5,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3446,
+      "worldCandidates": 9401,
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "relief-tropics-after.jpg",
+        "sha256": "4ceb45fe215a2ef798c63fecc4daa43e00fec32c85ed727ca2c768d99cce1e94"
+      }
+    },
+    "desert": {
+      "benchmarkCamera": {
+        "lon": 15,
+        "lat": 24,
+        "height": 10000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "worldTrees": 3693,
+      "worldCandidates": 9401,
+      "worldCanopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1952,
+        "exposed": 56,
+        "reliefFitted": 1214
+      },
+      "worldReady": true,
+      "worldFailures": 0,
+      "screenshot": {
+        "file": "relief-desert-after.jpg",
+        "sha256": "25e70cdd920dbfce246a5cd4859f85d37ed618a8401b2314981cc34e9094a335"
+      }
+    }
+  },
+  "offlinePlacementCheck": {
+    "localFile": "relief-placement-check.json",
+    "note": "Both versions consume the same independently Pillow-decoded JPEG maps; all surviving plant lon/lat/ground/species/angle/aspect match. Pillow and browser Canvas decoding produce different candidate counts, so offline counts do not replace browser metrics."
+  },
+  "notes": [
+    "The same four footprint DEM probes now also constrain uphill canopy reach. No added placement samples, candidates, tree meshes, surface geometry, model budgets or texture fetches.",
+    "Snow recovery uses bright-neutral historical albedo, local positive curvature, ruggedness, latitude/elevation and slope/land gates. It is not live snow data; no global snowline shift.",
+    "GPU timing is a submission interval and can include CPU waits; nested CPU timers cannot be summed. Small sequential differences do not prove speed-up.",
+    "Fixed global FPS does not certify native-terrain flights, complete frame pacing or actual Android/iPhone performance. Prior sampled native-terrain loading stalls remain unresolved.",
+    "Only the pictured viewpoints were checked; exact global ecological/coastal classification is unproven. Fine foliage, mountain relief, atmosphere/sea artifacts and complete global/native handoff remain unfinished. Regional layer remains opt-in."
+  ],
+  "normalReplay": {
+    "rawLocalFile": "relief-replay-samples.json",
+    "end": {
+      "cameraPhase": "global",
+      "cameraGeneration": 7,
+      "selected": false,
+      "worldReady": true,
+      "worldPending": 0,
+      "worldStaging": 0,
+      "instances": 0,
+      "sceneryModels": 0,
+      "mist": 0,
+      "particles": 0,
+      "terrainPickMeshes": 0,
+      "terrainPickMiB": 0,
+      "terrainPickPending": 0
+    },
+    "note": "Complete four-trip sample replay ended with original play-button state, global camera, no selected trip and released local/query resources. Not a matched native-flight performance comparison."
+  },
+  "screenshot": {
+    "file": "relief-fit.jpg",
+    "sha256": "80ea5c626d7286d67d68a6c8eac7d200a4cb232c2426b0d5fd38f33cc421855f"
+  }
+}

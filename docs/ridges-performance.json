@@ -1,0 +1,351 @@
+{
+  "baselineCommit": "0d02e300489a455c3c9539d6cb9fdda46d9d34c5",
+  "method": "Same Apple M1 / IAB, fixed Asia global or Alps 4,000 km density camera, the browser default 1280x720 offscreen viewport, actual 1x render pixels, continuous benchmark. Mobile is the quality configuration at that same pixel budget. Last ten ready two-second windows per run. Final desktop/mobile pairs also require twelve zero-redraw windows from the normal preview. Exact git archive 0d02e30 baseline for desktop/mobile pairs, without harness or renderer modifications. Density pair uses the current canopy/relief revision before and after only the 0.96 to 0.72 spacing change. Sequential runs are not isolated GPU tests.",
+  "deliverySourceHashes": {
+    "app.js": "a1538ff5aa9cc7e7eff488a0f0a162ee72800e340ecfd3d1a4dfbfa45d80614a",
+    "src/scenery/world-elevation.js": "3bd90eb9427c04cd88a480838c96081f30680abff42a5d9a0cd3c4481f93e0ac",
+    "src/scenery/forest-form.js": "cb002c74ce254249b6ede0d431dca82f0896194644d4f6195e69559688129888",
+    "src/scenery/world-data.js": "0c03feb40e972abf49806151ca7d002aa6bb49459f2e60ae2e382ce98dbdf457",
+    "src/scenery/vegetation-assets.js": "94a93ad0ac079413f18c61497cdbdbfd55eac10f5b5cf310f54e439933aff076",
+    "src/rendering/earth-materials.js": "256fb284d20b36db48c417968964c7542f424651a0e755fcad8a805714397c39",
+    "src/rendering/hero-earth.js": "06f538c4e5a8870d82795b9a84676b00b474f4eb8046badb8d9c88227eb4b125",
+    "src/scenery/world-forest.js": "90870b7e6e8bf6a5fc78ea09730252eff8d58993a8e0fc45af27ee4d874d55fe",
+    "assets/models/vegetation.glb": "25e913aa28ba882cccf70166e897039aee0bf9203cb295d48340a23ac115eb96",
+    "assets/models/vegetation-low.glb": "4776ad6080efe28b69fbd44e987aadd28b95151d6f1698ee1134ad49e6bbca5b",
+    "src/performance/camera-motion.js": "23ae36c0e87ea2ec17da563351e2c676cfa4946fbe13ee1a0e2e84763b49c95c",
+    "tests/camera-motion.mjs": "0ce42223694936b7769c631b67544fc2b4fe49682afccc598ef6fbdaad6dff3e",
+    "tests/forest-form.mjs": "01139edf75b35aaa55120ac736b1114daf71d7eb359addbadebc4a47e032a479"
+  },
+  "results": {
+    "desktopBefore": {
+      "source": "ridges-desktop-before-default-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "desktop",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1739,
+        "exposed": 56
+      },
+      "fps": 60.0,
+      "p95FrameMs": 18.4,
+      "gpuMs": 6.325,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.8,
+      "renderMs": 0.75,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 4265.0,
+      "worldSurfaceTriangles": 522030.0,
+      "worldChunks": 28.0,
+      "drawCommands": 49.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "getQueryParameter": 0.0,
+        "globe.update": 0.0,
+        "drawElements": 0.0,
+        "getParameter": 0.0,
+        "globe.render": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "drawElementsInstanced": 0.02,
+        "globe.beginFrame": 0.015
+      },
+      "previewControl": {
+        "source": "ridges-desktop-before-preview-control.json",
+        "windows": 12,
+        "fps": 0,
+        "quality": "still"
+      }
+    },
+    "desktopAfter": {
+      "source": "ridges-desktop-after-default-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "desktop",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 2324,
+        "upper": 1188,
+        "coastal": 1787,
+        "exposed": 56
+      },
+      "fps": 60.0,
+      "p95FrameMs": 19.3,
+      "gpuMs": 7.155,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.65,
+      "renderMs": 0.65,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 4265.0,
+      "worldSurfaceTriangles": 522030.0,
+      "worldChunks": 28.0,
+      "drawCommands": 49.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "getQueryParameter": 0.0,
+        "globe.update": 0.0,
+        "drawElements": 0.0,
+        "getParameter": 0.0,
+        "globe.render": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "drawElementsInstanced": 0.02,
+        "globe.beginFrame": 0.01
+      },
+      "previewControl": {
+        "source": "ridges-desktop-after-preview-control.json",
+        "windows": 12,
+        "fps": 0,
+        "quality": "still"
+      }
+    },
+    "mobileBefore": {
+      "source": "ridges-mobile-before-default-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 596,
+        "upper": 303,
+        "coastal": 402,
+        "exposed": 8
+      },
+      "fps": 30.0,
+      "p95FrameMs": 35.85,
+      "gpuMs": 4.025,
+      "longTasks": 0.0,
+      "engineMs": 0.2,
+      "drawMs": 1.3,
+      "renderMs": 1.2,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 582.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "drawCommands": 28.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "getQueryParameter": 0.0,
+        "globe.update": 0.0,
+        "drawElements": 0.02,
+        "getParameter": 0.0,
+        "globe.render": 0.0,
+        "quadtree.beginFrame": 0.02,
+        "drawElementsInstanced": 0.03,
+        "globe.beginFrame": 0.02
+      },
+      "previewControl": {
+        "source": "ridges-mobile-before-preview-control.json",
+        "windows": 12,
+        "fps": 0,
+        "quality": "still"
+      }
+    },
+    "mobileAfter": {
+      "source": "ridges-mobile-after-default-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 105,
+        "lat": 28,
+        "height": 17079823,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 1031,
+        "upper": 523,
+        "coastal": 671,
+        "exposed": 18
+      },
+      "fps": 30.0,
+      "p95FrameMs": 34.35,
+      "gpuMs": 3.905,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.5,
+      "renderMs": 0.5,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 1046.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "drawCommands": 29.0,
+      "cpuMs": {
+        "globe.endFrame": 0.0,
+        "getQueryParameter": 0.0,
+        "globe.update": 0.0,
+        "drawElements": 0.01,
+        "getParameter": 0.0,
+        "globe.render": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "drawElementsInstanced": 0.01,
+        "globe.beginFrame": 0.01
+      },
+      "previewControl": {
+        "source": "ridges-mobile-after-preview-control.json",
+        "windows": 12,
+        "fps": 0,
+        "quality": "still"
+      }
+    },
+    "densityBefore": {
+      "source": "density-mobile-before-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 10,
+        "lat": 46,
+        "height": 4000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 596,
+        "upper": 303,
+        "coastal": 389,
+        "exposed": 8
+      },
+      "fps": 30.0,
+      "p95FrameMs": 35.25,
+      "gpuMs": 15.505,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.6,
+      "renderMs": 0.6,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 407.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "drawCommands": 19.0,
+      "cpuMs": {
+        "provider.showTileThisFrame": 0.01,
+        "quadtree.render": 0.08,
+        "getQueryParameter": 0.0,
+        "drawElements": 0.0,
+        "getParameter": 0.0,
+        "globe.beginFrame": 0.01,
+        "provider.endUpdate": 0.03,
+        "quadtree.update": 0.0,
+        "globe.endFrame": 0.0,
+        "quadtree.endFrame": 0.0,
+        "globe.update": 0.01,
+        "globe.render": 0.085,
+        "provider.beginUpdate": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "drawElementsInstanced": 0.005
+      },
+      "note": "Density calibration before the normal-preview idle fix; native terrain and other preview activity were not isolated. Useful for instance/visual density comparison, not an acceleration claim."
+    },
+    "densityAfter": {
+      "source": "density-mobile-after-samples.json",
+      "windows": 10,
+      "windowSeconds": 2,
+      "camera": {
+        "lon": 10,
+        "lat": 46,
+        "height": 4000000,
+        "heading": 6.283185,
+        "pitch": -1.570796
+      },
+      "renderPixels": "1280×720",
+      "qualityProfile": "mobile",
+      "gpuRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "canopy": {
+        "enabled": true,
+        "clearings": 1031,
+        "upper": 523,
+        "coastal": 671,
+        "exposed": 18
+      },
+      "fps": 30.0,
+      "p95FrameMs": 34.15,
+      "gpuMs": 13.815,
+      "longTasks": 0.0,
+      "engineMs": 0.1,
+      "drawMs": 0.7,
+      "renderMs": 0.6,
+      "effectsMs": 0.0,
+      "markersMs": 0.0,
+      "worldTrees": 703.0,
+      "worldSurfaceTriangles": 80928.0,
+      "worldChunks": 12.0,
+      "drawCommands": 19.0,
+      "cpuMs": {
+        "provider.showTileThisFrame": 0.005,
+        "quadtree.render": 0.07,
+        "drawElements": 0.01,
+        "getParameter": 0.0,
+        "globe.beginFrame": 0.01,
+        "provider.endUpdate": 0.03,
+        "quadtree.update": 0.01,
+        "globe.endFrame": 0.0,
+        "quadtree.endFrame": 0.0,
+        "globe.update": 0.01,
+        "globe.render": 0.07,
+        "provider.beginUpdate": 0.0,
+        "quadtree.beginFrame": 0.01,
+        "drawElementsInstanced": 0.0
+      },
+      "note": "Density calibration before the normal-preview idle fix; native terrain and other preview activity were not isolated. Useful for instance/visual density comparison, not an acceleration claim."
+    }
+  },
+  "gpuCaveat": "WebGL submission interval includes CPU waits. CPU scopes are inclusive and must not be summed.",
+  "mobileCaveat": "Apple M1 running the mobile quality budget, at 1280x720 rather than phone hardware or a phone-sized viewport; average FPS does not certify smoothness.",
+  "preIdleRuns": {
+    "prefix": "ridges-pre-idle-",
+    "note": "Earlier default-viewport runs did not verify zero redraws in the other normal preview; the idle diagnostic later found motion quality and extra redraws. Kept separately; final desktop/mobile pairs are recollected after recording twelve zero-redraw control windows in the normal preview."
+  },
+  "discarded": {
+    "source": "ridges-alps-misaligned-before-samples.json",
+    "screenshot": "ridges-alps-misaligned-before.jpg",
+    "reason": "Initial baseline camera differed from the fixed Alps location; reset through the Home UI and recollected. None of this misframed run appears in results."
+  },
+  "remaining": [
+    "Further natural forest and smaller alpine silhouette calibration",
+    "Global-to-local vegetation and terrain continuity; regional prototype remains opt-in",
+    "Real phone hardware and sustained frame pacing validation",
+    "Photo place labels and native App packaging"
+  ]
+}

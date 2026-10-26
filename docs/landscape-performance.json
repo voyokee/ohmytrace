@@ -1,0 +1,285 @@
+{
+  "baselineCommit": "45c8f146eb7395721866d6b6b9d9561ff15f9f5f",
+  "scope": "Global P0 art direction; region-to-local vegetation continuity is deferred, not completed.",
+  "hardware": "Apple M1 / ANGLE Metal / in-app browser",
+  "method": "Last ten ready two-second windows. Identical fixed camera and 1x pixels; new normal framing is excluded from the comparison. Sequential FPS changes are not attributed to an optimization. GPU interval includes waits; mobile budget runs on desktop hardware, no phone hardware result.",
+  "desktopBefore": {
+    "source": "landscape-before-samples.json",
+    "windows": 10,
+    "renderPixels": "1448\u00d71086",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 11714070,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 5230,
+    "medians": {
+      "fps": 58.0,
+      "p95FrameMs": 21.85,
+      "gpuMs": 9.0,
+      "drawMs": 0.7,
+      "engineMs": 0.1,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-5": 6480,
+      "world-earth": 540672,
+      "vegetation": 664856,
+      "other-6": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-5": 1,
+      "world-earth": 3,
+      "vegetation": 44,
+      "other-6": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 409600,
+    "surfaceVertices": null,
+    "mountainCells": null
+  },
+  "desktopAfter": {
+    "source": "landscape-asia-samples.json",
+    "windows": 10,
+    "renderPixels": "1448\u00d71086",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 11714070,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 5230,
+    "medians": {
+      "fps": 60.0,
+      "p95FrameMs": 19.8,
+      "gpuMs": 8.385,
+      "drawMs": 0.8,
+      "engineMs": 0.15,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-6": 6480,
+      "world-earth": 653102,
+      "vegetation": 664856,
+      "other-5": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-6": 1,
+      "world-earth": 3,
+      "vegetation": 44,
+      "other-5": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 522030,
+    "surfaceVertices": 261979,
+    "mountainCells": 14336,
+    "cadenceClock": "animation"
+  },
+  "mobileBefore": {
+    "source": "landscape-baseline-mobile-live-samples.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 38.65,
+      "gpuMs": 2.2,
+      "drawMs": 0.95,
+      "engineMs": 0.15,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-6": 6480,
+      "world-earth": 196608,
+      "vegetation": 95348,
+      "other-7": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-6": 1,
+      "world-earth": 3,
+      "vegetation": 24,
+      "other-7": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 65536,
+    "surfaceVertices": null,
+    "mountainCells": null,
+    "cadenceClock": "performance"
+  },
+  "mobileAfter": {
+    "source": "landscape-mobile-samples.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 50.45,
+      "gpuMs": 2.39,
+      "drawMs": 0.95,
+      "engineMs": 0.15,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-5": 6480,
+      "world-earth": 212000,
+      "vegetation": 95348,
+      "other-6": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-5": 1,
+      "world-earth": 3,
+      "vegetation": 24,
+      "other-6": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 80928,
+    "surfaceVertices": 40849,
+    "mountainCells": 1638,
+    "cadenceClock": "animation"
+  },
+  "desktopSurfaceTriangleRatio": 1.2744873046875,
+  "mobileSurfaceTriangleRatio": 1.23486328125,
+  "mobileBeforeClockChange": {
+    "source": "landscape-mobile-original-clock-retest.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 48.5,
+      "gpuMs": 2.505,
+      "drawMs": 0.7,
+      "engineMs": 0.1,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-5": 6480,
+      "world-earth": 212000,
+      "vegetation": 95348,
+      "other-6": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-5": 1,
+      "world-earth": 3,
+      "vegetation": 24,
+      "other-6": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 80928,
+    "surfaceVertices": 40849,
+    "mountainCells": 1638,
+    "cadenceClock": "performance"
+  },
+  "mobileTraceRun": {
+    "source": "landscape-mobile-traced-samples.json",
+    "windows": 10,
+    "renderPixels": "390\u00d7844",
+    "camera": {
+      "lon": 105,
+      "lat": 28,
+      "height": 21528019,
+      "heading": 6.283185,
+      "pitch": -1.570796
+    },
+    "instances": 715,
+    "medians": {
+      "fps": 30.0,
+      "p95FrameMs": 37.7,
+      "gpuMs": 2.325,
+      "drawMs": 1.1,
+      "engineMs": 0.2,
+      "effectsMs": 0.0
+    },
+    "gpuTriangles": {
+      "other-3": 2,
+      "other-5": 6480,
+      "world-earth": 212000,
+      "vegetation": 95348,
+      "other-6": 144,
+      "other-4": 2,
+      "other-1": 2,
+      "other-2": 2
+    },
+    "gpuDrawCounts": {
+      "other-3": 1,
+      "other-5": 1,
+      "world-earth": 3,
+      "vegetation": 24,
+      "other-6": 1,
+      "other-4": 1,
+      "other-1": 1,
+      "other-2": 1
+    },
+    "surfaceTriangles": 80928,
+    "surfaceVertices": 40849,
+    "mountainCells": 1638,
+    "cadenceClock": "animation"
+  },
+  "mobileSmoothness": "Not accepted: 30 FPS average, but clean-run CPU wall-clock P95 remains variable; trace run is diagnostic, not a replacement for the clean benchmark.",
+  "traceEvidence": {
+    "source": "landscape-frame-trace.json",
+    "updatesBetweenRenders": 2,
+    "renderRafP95Ms": 35.2,
+    "renderCpuP95Ms": 37.7,
+    "note": "Last four-second diagnostic window only; not proof of all-session smoothness."
+  }
+}

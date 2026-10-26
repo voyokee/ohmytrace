@@ -1,0 +1,56 @@
+[
+  {
+    "file": "day.jpg",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-topography-bathymetry/august/world.topo.bathy.200408.3x5400x2700.jpg",
+    "bytes": 2308163,
+    "sha256": "f76d7b94445e8975a755c849ddaa93ed07b7e01118fb0b7e6bc5546a68c18d5c"
+  },
+  {
+    "file": "height.jpg",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/topography/gebco_08_rev_elev_5400x2700.jpg",
+    "bytes": 1244508,
+    "sha256": "97828a87bcb6549a527232455e478c5f9e4556f761b37d620a46446da17593ab"
+  },
+  {
+    "file": "depth.jpg",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bathymetry/gebco_08_rev_bath_5400x2700.jpg",
+    "bytes": 2940609,
+    "sha256": "d2e5de09ccd154fdde4f8c45473f311b12230b0d998a19b0cdc042833f0e963e"
+  },
+  {
+    "file": "night.jpg",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg",
+    "bytes": 779638,
+    "sha256": "d87de751a264e4f8ff69c68de5dab9606daee87a6f15ae743c93200743bd7ec1"
+  },
+  {
+    "file": "stars.jpg",
+    "source": "https://svs.gsfc.nasa.gov/vis/a000000/a003800/a003895/starmap_4k.jpg",
+    "bytes": 2349902,
+    "sha256": "0b33503895abebeb92fd89d3332e3ca62515b8cc458d243f208e4ca5d8c1452d"
+  },
+  {
+    "file": "day-mobile.jpg",
+    "source": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/bmng/bmng-topography-bathymetry/august/world.topo.bathy.200408.3x5400x2700.jpg?w=2048&h=1024&fit=clip",
+    "bytes": 247627,
+    "sha256": "b7d261c1a0fef2fb57a4a49cfe0cee1ae5ffca6219f61108ac576bafc11c1ab3"
+  },
+  {
+    "file": "height-mobile.jpg",
+    "source": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/bmng/topography/gebco_08_rev_elev_5400x2700.jpg?w=2048&h=1024&fit=clip",
+    "bytes": 87068,
+    "sha256": "472d3b4574adb57da9575531cb7c54da7b30ec8275c47d10fce7369dc691c09c"
+  },
+  {
+    "file": "depth-mobile.jpg",
+    "source": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/bmng/bathymetry/gebco_08_rev_bath_5400x2700.jpg?w=2048&h=1024&fit=clip",
+    "bytes": 203762,
+    "sha256": "12f39329108a7e707fc3c75653c6ab2a928313ea656bde1735397c3c9067de6d"
+  },
+  {
+    "file": "night-mobile.jpg",
+    "source": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg?w=2048&h=1024&fit=clip",
+    "bytes": 117858,
+    "sha256": "e927fdb873e5cbe87bba3094f867b9352500b87f7d519daa5937179caa204709"
+  }
+]
