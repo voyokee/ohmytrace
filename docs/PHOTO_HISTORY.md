@@ -46,7 +46,7 @@ and the author-maintained [ExifTool GPS tag reference](https://exiftool.org/TagN
 
 ## 使用流程
 
-工具栏 **照** → 选择照片 → 查看诊断及候选 → 修改标题/地点名称、关联已有 Trip
+工具栏图片图标 **导入照片** → 选择照片 → 查看诊断及候选 → 修改标题/地点名称、关联已有 Trip
 或选择只保存记忆 → 按地点/照片拆分，或选中多个候选合并 → 选择已有 Chapter →
 **预览变更 / Dry Run** → **确认写入人生数据**。排除候选可以恢复。
 

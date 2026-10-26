@@ -150,7 +150,7 @@ invent a residence or a travel departure origin.
 Timeline year ticks follow the scoped Trip records, matching the year filter;
 residence and Chapter spans retain their bands without adding empty year ticks.
 
-Start the usual static server, then click the toolbar **章** entry (“人生阶段”).
+Start the usual static server, then click the toolbar book icon (“人生阶段”).
 Import your CSV, create a title/type and partial start/end, choose associated
 places/Trips, and save. Create overlapping Chapters or associate a Trip with
 several Chapters. Click a Chapter in the editor or the row above the year filter
@@ -185,6 +185,26 @@ Use **全部阶段** / **全部年份** to return to the whole dataset.
   inferred provenance, changed destinations, appended Stops, render-cache
   persistence, all-years reset, no-Trip timeline and synthetic residence inference.
   A browser regression also proves a closed Chapter dialog releases map clicks.
+
+The toolbar uses a book icon for “人生阶段” and an image icon for “导入照片”, with
+full accessible names and hover/focus labels. `src/life/timeline-layout.js` derives
+the timeline from the scoped dated Trips: only recorded years consume slots;
+Residence and Chapter periods are clipped overlays. A Chapter without Trips
+retains its period band. Year view uses the months actually covered by its Trips.
+Long histories retain readable spacing and scroll horizontally (touch, trackpad,
+scrollbar or keyboard arrows/Home/End). Initial load, new data and scope changes
+start at the latest end; selection and ordinary refresh preserve browsing position.
+Resize follows the latest end only if the user was already there.
+
+The isolated browser regression `node tests/life/timeline-browser.mjs` uses the
+same host Playwright/Chrome variables as below. On the original code its first
+assertion failed because the first 2022 Trip was at 64.5753% of a domain expanded
+by 2015–2021 residences. It also checks sparse years, overflow, newest positioning,
+mouse-wheel/keyboard scrolling, selection, resize, reload and month bounds, and
+saves desktop/mobile screenshots. Pure layout cases run with the Life test suite.
+Validation for this change: the full test command passed all 18 existing scripts
+and 52 Life tests. The timeline browser regression and both existing Life/Photo
+browser acceptance scripts passed, including real IndexedDB failure/reload cases.
 
 Run `npm test` or `npm run test:life` with Node >=20. The optional browser test
 requires a host-installed Playwright and Chrome/Chromium:
