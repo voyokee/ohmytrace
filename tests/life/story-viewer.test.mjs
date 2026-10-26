@@ -5,6 +5,7 @@ import {composeStory,setStoryMemories} from '../../src/life/story/compose.js';
 import {projectShare,parseArtifact} from '../../src/life/story/share.js';
 import {createStoryBridge} from '../../src/life/story/viewer-bridge.js';
 import {staticZip,crc32,createSharePackage} from '../../src/life/story/package.js';
+import {mountStandaloneViewer} from '../../src/life/story/viewer.js';
 
 test('Viewer uses only an independent Artifact, preserves scoped identities and never opens storage',()=>{
   const f=storyFixture(),a=projectShare(f.data,composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}));
@@ -35,4 +36,29 @@ test('package whitelist excludes personal persistence, editors, source fixtures 
   const f=storyFixture(),artifact=projectShare(f.data,composeStory(f.data,{scope:{type:'chapter',id:f.chapter}}));
   await assert.rejects(createSharePackage(artifact,{fetchFile:async()=>new TextEncoder().encode('["src/life/repository.js"]')}),/清单/);
   const demo=parseArtifact(await readFile(new URL('../../src/life/story/demo.story.json',import.meta.url),'utf8'));assert.equal(demo.chapters.length,2);assert.ok(demo.memories[0].image);assert.equal(JSON.stringify(demo).includes('PRIVATE_'),false);
+});
+
+test('late packaged stories and slower file reads cannot replace the latest Viewer selection',async()=>{
+  const f=storyFixture(),artifact=projectShare(f.data,composeStory(f.data));
+  const manual={...artifact,title:'Explicit selection'},latest={...artifact,title:'Latest file'};
+  const nodes=new Map(),handlers=new Map(),loads=[];let resolveDefault;
+  const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',hidden:false});return nodes.get(selector);};
+  const panel={innerHTML:'',querySelector:node,addEventListener:(type,handler)=>handlers.set(type,handler)};
+  const oldDocument=Object.getOwnPropertyDescriptor(globalThis,'document'),oldFetch=globalThis.fetch;
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:()=>panel,body:{append(){}},querySelector:node}});
+  globalThis.fetch=path=>path==='./story.json'?new Promise(resolve=>{resolveDefault=resolve;}):Promise.resolve({ok:false});
+  try{
+    const viewer=mountStandaloneViewer({onLoad:async a=>loads.push(a.title),onStop(){}});
+    await viewer.load(manual);
+    resolveDefault({ok:true,headers:{get:()=>null},text:async()=>JSON.stringify(artifact)});
+    await new Promise(setImmediate);
+    assert.equal(node('#brand h1').textContent,manual.title,'A late automatic fetch must not replace a deliberately loaded work');
+    assert.deepEqual(loads,[manual.title]);
+    let resolveFirst;
+    const first=handlers.get('change')({target:{files:[{size:1,text:()=>new Promise(resolve=>{resolveFirst=resolve;})}],value:'first'}});
+    await handlers.get('change')({target:{files:[{size:1,text:async()=>JSON.stringify(latest)}],value:'second'}});
+    resolveFirst(JSON.stringify(manual));await first;
+    assert.equal(node('#brand h1').textContent,latest.title,'A slow previous file read must not replace the most recent file');
+    assert.deepEqual(loads,[manual.title,latest.title]);
+  }finally{globalThis.fetch=oldFetch;if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);else delete globalThis.document;}
 });

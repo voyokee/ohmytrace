@@ -74,6 +74,20 @@ try{
   await viewer.goto(publicURL+'?dataset=ohmytrace.life&demo=private&artifact=/private.json&perf');await viewer.waitForSelector('#story-player:not([hidden])');
   await viewer.waitForFunction(()=>document.querySelector('#globe canvas').dataset.storyTerrain==='fallback');
   assert.equal(await viewer.evaluate(()=>window.storageReads),0);assert.ok(requests.map(r=>new URL(r).pathname).every(path=>!path.includes('repository.js')&&!path.includes('app-bridge.js')&&!path.includes('/media/')&&!path.includes('private.json')));
+  // A packaged story may still be fetching when a visitor chooses a different
+  // work. The explicit file selection must own the view and cancel the old fetch.
+  const race=await publicContext.newPage(),raceErrors=[];race.on('pageerror',e=>raceErrors.push(e.message));
+  let releaseDefault,defaultRequested;
+  const heldDefault=new Promise(resolve=>{releaseDefault=resolve;}),requestedDefault=new Promise(resolve=>{defaultRequested=resolve;});
+  await race.route(publicURL+'story.json',async route=>{defaultRequested();await heldDefault;await route.fulfill({contentType:'application/json',body:entries.get('story.json')}).catch(()=>{});});
+  await race.goto(publicURL);await requestedDefault;
+  const cancelledDefault=race.waitForEvent('requestfailed',{predicate:r=>r.url()===publicURL+'story.json'});
+  const explicit={...artifact,title:'明确选择的另一份故事'};
+  await race.locator('[data-story-file]').setInputFiles({name:'explicit.story.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(explicit))});
+  await race.waitForFunction(title=>document.querySelector('#brand h1').textContent===title,explicit.title);
+  releaseDefault();await cancelledDefault;
+  assert.equal(await race.locator('#brand h1').innerText(),explicit.title);assert.equal(await race.evaluate(()=>window.storageReads),0);
+  await race.close();assert.deepEqual(raceErrors,[]);
   assert.equal(await viewer.locator('[data-story-scene-title]').innerText(),attack);assert.equal(await viewer.evaluate(()=>window.STORY_XSS),undefined);
   await viewer.locator('[data-story-play]').click();await viewer.locator('[data-story-jump]').selectOption('2');await viewer.locator('[data-story-jump]').selectOption('5');await viewer.locator('[data-story-jump]').selectOption('1');
   assert.equal(await viewer.locator('#story-player').getAttribute('data-status'),'paused');
@@ -104,7 +118,7 @@ try{
   await viewer.close();
   if(viewerErrors.length)console.error('Viewer errors:',viewerErrors);
   assert.deepEqual(errors,[]);assert.deepEqual(viewerErrors,[]);
-  const result={result:'PASS',csvOnly:true,overlappingChapters:true,sceneEditing:true,fullPlayback:true,fullLifePlayback:true,sharedTripAcrossChapters:true,transport:true,privacyProjection:true,staticZipFiles:entries.size,staticZipBytes:zip.length,independentViewer:true,storageReads:0,externalResourcesBlocked:true,mobile:true,approvedPhoto:true,normalMotionCancellation:true,closeLifecycle:true,pageErrors:[],output};
+  const result={result:'PASS',csvOnly:true,overlappingChapters:true,sceneEditing:true,fullPlayback:true,fullLifePlayback:true,sharedTripAcrossChapters:true,transport:true,privacyProjection:true,staticZipFiles:entries.size,staticZipBytes:zip.length,independentViewer:true,storageReads:0,externalResourcesBlocked:true,mobile:true,approvedPhoto:true,normalMotionCancellation:true,latestSelectionWins:true,closeLifecycle:true,pageErrors:[],output};
   await writeFile(resolve(output,'story-acceptance.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
 }catch(error){await page.screenshot({path:resolve(output,'failure-private.png')}).catch(()=>{});console.error('Page errors:',errors,'Composer error:',await page.locator('[data-story-error]').allTextContents());throw error;}
 finally{await publicContext?.close();if(publicServer)await new Promise(r=>publicServer.close(r));await ctx.close();await browser.close();await new Promise(r=>server.close(r));}
