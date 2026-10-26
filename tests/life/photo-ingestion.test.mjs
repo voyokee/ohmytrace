@@ -60,3 +60,8 @@ test('invalid media backup cannot replace valid metadata with fabricated UTC sem
   bad.assets[0].extractedTime.utcEpochMs=Date.now();await assert.rejects(manifest.restore(bad),/时间/);assert.deepEqual(await manifest.backup(),before);
   const malformed=structuredClone(before);malformed.batches[0].review={version:1,candidates:[{}]};await assert.rejects(manifest.restore(malformed),/审核/);assert.deepEqual(await manifest.backup(),before);
 });
+test('worker startup failure falls back to bounded yielding analysis instead of hanging the next file',async()=>{
+  const manifest=new MemoryManifest(),worker={postMessage(){setTimeout(()=>this.onerror({message:'worker blocked',preventDefault(){}}),0);},terminate(){this.terminated=true;}};
+  const scanner=new PhotoScanner(manifest,{workerFactory:()=>worker});
+  const result=await scanner.scan([photoFile({nonce:1}),photoFile({nonce:2})]);assert.equal(result.failureCount,0);assert.ok(worker.terminated);assert.ok((await manifest.listAssets()).every(a=>a.coordinates));
+});
