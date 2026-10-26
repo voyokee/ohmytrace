@@ -2,12 +2,12 @@
 // parser internals; both TIFF byte orders and malformed offsets are exercised.
 import {readFileSync} from 'node:fs';
 const image=readFileSync(new URL('./fixtures/photo-base.jpg',import.meta.url));
-export function photoJPEG({time='2025:05:01 10:30:00',offset='+08:00',lat=39.9,lon=116.4,altitude=50,orientation=6,little=true,nonce=0}={}) {
+export function photoJPEG({time='2025:05:01 10:30:00',offset='+08:00',lat=39.9,lon=116.4,altitude=50,orientation=6,little=true,nonce=0,subsecond=null}={}) {
   const text=s=>[...new TextEncoder().encode(s+'\0')];
   const dms=value=>{const total=Math.round(Math.abs(value)*3600*1e6),d=Math.floor(total/(3600*1e6)),rest=total-d*3600*1e6,m=Math.floor(rest/(60*1e6));return [d,1,m,1,rest-m*60*1e6,1e6];};
   const root=[[0x112,3,[orientation]],[0x8769,4,[0]],[0x8825,4,[0]]];
   const exif=[];if(time!==null)exif.push([0x9003,2,text(time)]);if(offset!==null)exif.push([0x9011,2,text(offset)]);
-  exif.push([0x9291,2,text(String(nonce).padStart(6,'0'))]);
+  exif.push([0xc7a1,4,[nonce]]);if(subsecond!==null)exif.push([0x9291,2,text(subsecond)]);
   const gps=[];
   if(lat!==null&&lon!==null)gps.push([1,2,text(lat<0?'S':'N')],[2,5,dms(lat)],[3,2,text(lon<0?'W':'E')],[4,5,dms(lon)]);
   if(altitude!==null)gps.push([5,1,[altitude<0?1:0]],[6,5,[Math.abs(altitude)*100,100]]);
