@@ -14,11 +14,25 @@ export async function browserTarget(fallback){
     });
     token=input.token;if(typeof token!=='string'||!token)throw new Error('Missing private Site access token');
   }
-  return {url,async authorize(context){
+  return {url,async fetch(input){
+    let address=new URL(input,url);
+    for(let redirects=0;redirects<6;redirects++){
+      let response;try{response=await fetch(address,{redirect:'manual',headers:token&&address.origin===origin?{'OAI-Sites-Authorization':'Bearer '+token}:{},signal:AbortSignal.timeout(30000)});}catch{throw new Error('Site resource request failed');}
+      if([301,302,303,307,308].includes(response.status)&&response.headers.get('location')){address=new URL(response.headers.get('location'),address);continue;}
+      return response;
+    }
+    throw new Error('Too many Site redirects');
+  },async authorize(context){
     if(!token)return;
     await context.route(value=>value.origin===origin,async route=>{
       try{
-        const response=await route.fetch({maxRedirects:0,headers:{...route.request().headers(),'OAI-Sites-Authorization':'Bearer '+token}});
+        const headers={...route.request().headers(),'OAI-Sites-Authorization':'Bearer '+token};
+        let response=await route.fetch({maxRedirects:0,headers});
+        for(let redirects=0;redirects<5&&['GET','HEAD'].includes(route.request().method())&&[301,302,303,307,308].includes(response.status());redirects++){
+          const location=response.headers()['location'];if(!location)break;
+          const next=new URL(location,response.url());if(next.origin!==origin)break;
+          response=await context.request.fetch(next.href,{method:route.request().method(),maxRedirects:0,headers});
+        }
         await route.fulfill({response});
       }catch{await route.abort().catch(()=>{});}
     });
