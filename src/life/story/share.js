@@ -1,5 +1,6 @@
 import {clone,validateDataset,validatePeriod} from '../schema.js';
 import {validateStory,validateScene,keys,list,ids,text} from './schema.js';
+import {tripCountsAsTravel,visiblePlace} from '../travel-policy.js';
 
 const date=d=>({precision:d.precision,value:d.value});
 const period=e=>({start:date(e.start),end:date(e.end)});
@@ -8,15 +9,17 @@ export const COORDINATE_RULE='0.1-degree-grid (~11 km latitude); not an administ
 export function projectShare(data,story,{images={}}={}){
   validateDataset(data);validateStory(story);
   const policy=story.privacySettings;
-  const chapters=data.chapters.filter(c=>story.selectedChapterIds.includes(c.id));
-  const trips=data.trips.filter(t=>story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id));
+  const chapters=data.chapters.filter(c=>!c.hidden&&story.selectedChapterIds.includes(c.id)).map(c=>({...c,homeAnchors:c.homeAnchors.filter(id=>visiblePlace(data,id))}));
+  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>{const v=data.visits.find(v=>v.id===id);return !v.hidden&&visiblePlace(data,v.placeId);})}));
   if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id)))throw new Error('原始人生记录已改变，请重新生成故事');
-  const selectedMemories=data.memories.filter(m=>story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&
+  if(story.selectedChapterIds.some(id=>data.chapters.find(c=>c.id===id)?.hidden)||story.selectedTripIds.some(id=>!tripCountsAsTravel(data,data.trips.find(t=>t.id===id))))throw new Error('原始人生记录已改变，请重新生成故事');
+  const selectedMemories=data.memories.filter(m=>!m.hidden&&story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&
     (m.tripIds.some(id=>trips.some(t=>t.id===id))||chapters.some(c=>c.memoryIds.includes(m.id)))&&
     (m.kind==='photo'?policy.includePhotos:policy.includeNotes));
   const visitIds=new Set(trips.flatMap(t=>t.visitIds)),visits=data.visits.filter(v=>visitIds.has(v.id));
-  const placeIds=new Set([...visits.map(v=>v.placeId),...chapters.flatMap(c=>c.homeAnchors),...selectedMemories.flatMap(m=>m.placeIds)]);
-  const places=data.places.filter(p=>placeIds.has(p.id));
+  const standalonePlaces=story.orderedScenes.filter(s=>s.kind==='place'&&!s.tripId&&!s.chapterId).map(s=>s.placeId);
+  const placeIds=new Set([...visits.map(v=>v.placeId),...chapters.flatMap(c=>c.homeAnchors),...selectedMemories.flatMap(m=>m.placeIds),...standalonePlaces]);
+  const places=data.places.filter(p=>!p.hidden&&placeIds.has(p.id));
   const map=(items,prefix)=>new Map(items.map((e,i)=>[e.id,`${prefix}${i+1}`]));
   const pm=map(places,'p'),tm=map(trips,'t'),cm=map(chapters,'c'),mm=map(selectedMemories,'m');
   const homes=new Set(data.residences.map(r=>r.placeId));chapters.forEach(c=>c.homeAnchors.forEach(id=>homes.add(id)));

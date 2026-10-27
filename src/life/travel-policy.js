@@ -1,0 +1,14 @@
+// One policy for cards, statistics, replay and export. Original observations stay intact.
+const nonTravel=value=>['transit','pass-through','home','past','路过','转机','现居地','曾居地'].includes(value);
+export const visiblePlace=(data,id)=>data.places.some(p=>p.id===id&&!p.hidden);
+export function visitCountsAsTravel(data,visit,trip=null){
+  if(!visit||visit.hidden||!visiblePlace(data,visit.placeId)||trip?.hidden||nonTravel(trip?.visitType)||nonTravel(trip?.type))return false;
+  const place=data.places.find(p=>p.id===visit.placeId);
+  return !nonTravel(place.visitType)&&!nonTravel(visit.legacy.type);
+}
+export function tripCountsAsTravel(data,trip){
+  return !!trip&&!trip.hidden&&!nonTravel(trip.visitType)&&!nonTravel(trip.type)&&trip.visitIds.some(id=>visitCountsAsTravel(data,data.visits.find(v=>v.id===id),trip));
+}
+export function memoryVisibleOnMap(data,memory){
+  return !memory.hidden&&memory.placeIds.some(id=>visiblePlace(data,id))&&(!memory.tripIds.length||memory.tripIds.some(id=>data.trips.some(t=>t.id===id&&!t.hidden)));
+}

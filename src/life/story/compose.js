@@ -1,5 +1,6 @@
 import {validateDataset,newId,clone,dateBound,partialDate} from '../schema.js';
 import {validateStory,unknown} from './schema.js';
+import {tripCountsAsTravel,visiblePlace} from '../travel-policy.js';
 
 function coverage(entity,data){
   const visits=(entity.visitIds||[]).map(id=>data.visits.find(v=>v.id===id));
@@ -8,33 +9,38 @@ function coverage(entity,data){
   const end=dateBound(entity.end,true)??(observedEnds.length?Math.max(...observedEnds):dateBound(entity.start,true));
   return start===null?null:{start,end:end??start};
 }
-export function storyYears(data){const years=new Set();for(const t of data.trips){const d=coverage(t,data);if(d)for(let y=new Date(d.start).getUTCFullYear();y<=new Date(d.end).getUTCFullYear();y++)years.add(y);}return [...years].sort((a,b)=>a-b);}
+export function storyYears(data){const years=new Set();for(const t of data.trips.filter(t=>tripCountsAsTravel(data,t))){const d=coverage(t,data);if(d)for(let y=new Date(d.start).getUTCFullYear();y<=new Date(d.end).getUTCFullYear();y++)years.add(y);}return [...years].sort((a,b)=>a-b);}
 
 export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回顾',chapterIds,tripIds}={}){
   validateDataset(data);
   const byYear=e=>{const d=coverage(e,data),year={precision:'year',value:String(scope.year).padStart(4,'0')};return d!==null&&d.start<=dateBound(year,true)&&d.end>=dateBound(year);};
-  if(!['all','chapter','trip','year','range'].includes(scope.type))throw new Error('未知故事范围');
+  if(!['all','chapter','trip','year','range','place','residence'].includes(scope.type))throw new Error('未知故事范围');
+  const place=scope.type==='place'?data.places.find(p=>p.id===scope.id&&!p.hidden):null;
+  const residence=scope.type==='residence'?data.residences.find(r=>r.id===scope.id&&!r.hidden&&visiblePlace(data,r.placeId)):null;
+  if(scope.type==='place'&&!place||scope.type==='residence'&&!residence)throw new Error('故事范围不存在');
   // A range is inclusive at month or day precision, e.g. {start:'2025-03',end:'2025-09'}.
   const from=scope.type==='range'?dateBound(partialDate(scope.start)):null,to=scope.type==='range'?dateBound(partialDate(scope.end),true):null;
   if(scope.type==='range'&&(from===null||to===null||from>to))throw new Error('请选择有效的开始和结束时间');
   const byRange=e=>{const d=coverage(e,data);return d!==null&&d.start<=to&&d.end>=from;},inScope=e=>scope.type==='year'?byYear(e):scope.type==='range'&&byRange(e);
   if(scope.type==='chapter'&&!data.chapters.some(c=>c.id===scope.id)||scope.type==='trip'&&!data.trips.some(t=>t.id===scope.id))throw new Error('故事范围不存在');
   if(scope.type==='year'&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效故事年份');
-  const chapters=data.chapters.filter(c=>chapterIds?chapterIds.includes(c.id):scope.type==='chapter'?c.id===scope.id:scope.type==='all'||inScope(c));
-  const trips=data.trips.filter(t=>tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:['year','range'].includes(scope.type)?inScope(t):true)
+  const chapters=data.chapters.filter(c=>!c.hidden&&(chapterIds?chapterIds.includes(c.id):scope.type==='chapter'?c.id===scope.id:scope.type==='all'||inScope(c)));
+  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&(tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:scope.type==='place'?t.visitIds.some(id=>{const v=data.visits.find(v=>v.id===id);return !v.hidden&&v.placeId===place.id;}):scope.type==='residence'?((coverage(t,data)?.start??Infinity)<=(dateBound(residence.end,true)??Infinity)&&(coverage(t,data)?.end??-Infinity)>=(dateBound(residence.start)??-Infinity)):['year','range'].includes(scope.type)?inScope(t):true))
     .sort((a,b)=>(dateBound(a.start)??Infinity)-(dateBound(b.start)??Infinity));
   if(chapterIds?.some(id=>!chapters.some(c=>c.id===id))||tripIds?.some(id=>!trips.some(t=>t.id===id)))throw new Error('故事选择包含不存在的记录');
   const scenes=[];
   const add=(kind,title,entity={},refs={})=>scenes.push({id:newId('scene'),kind,title,description:'',start:clone(entity.start||unknown()),end:clone(entity.end||unknown()),chapterId:null,tripId:null,placeId:null,memoryId:null,...refs,duration:kind==='place'?4:3});
   add('globe',title);
+  if(place)add('place',place.name,{}, {placeId:place.id});
+  if(residence){const p=data.places.find(p=>p.id===residence.placeId);add('place',p.name,residence,{placeId:p.id});}
   const seen=new Set();
   function tripScenes(t,chapterId=null){
     seen.add(t.id);add('trip',t.title,t,{tripId:t.id,chapterId});
-    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
+    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(!v.hidden&&!p.hidden)add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
   }
   for(const c of chapters){
     add('chapter',c.title,c,{chapterId:c.id});
-    for(const id of c.homeAnchors){const p=data.places.find(p=>p.id===id);add('place',p.name,c,{chapterId:c.id,placeId:id});}
+    for(const id of c.homeAnchors){const p=data.places.find(p=>p.id===id);if(!p.hidden)add('place',p.name,c,{chapterId:c.id,placeId:id});}
     for(const t of trips.filter(t=>c.relatedTripIds.includes(t.id)))tripScenes(t,c.id);
   }
   for(const t of trips.filter(t=>!seen.has(t.id)))tripScenes(t);

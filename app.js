@@ -3,6 +3,7 @@
 const publicViewer=document.body.hasAttribute('data-story-viewer');
 const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
+const {mountRecordCard}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
@@ -204,7 +205,7 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI, photoUI;
+let life, lifeSnapshot, lifeUI, photoUI, recordCard;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
@@ -235,6 +236,12 @@ async function load() {
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
     photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
       onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+    recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,
+      onClose:()=>deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>syncRecordSelection(target),
+      onReplay:scope=>storyExperience?.replay(scope.type+':'+scope.id),
+      onShare:scope=>storyExperience?.composer.open({source:scope.type+':'+scope.id}),
+      onExplore:id=>{const name=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===id);if(name)focusCardPlace(name);},
+      thumbnail:(memory,options)=>photoUI.thumbnail(memory,options)});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
 async function importCsvText(text,mode) {
@@ -343,7 +350,7 @@ function buildModel() {
 const byId = id => trips.find(t => t.id === id) || homes.find(h => h.id === id) || null;
 const inYear = t => matchesYear(t,state.year);
 const visibleHomes = () => homes.filter(inYear);
-const visibleTrips = () => trips.filter(inYear);
+const visibleTrips = () => trips.filter(t=>t.countsAsTravel!==false&&inYear(t));
 const located = name => { const p = state.places[name]; return p && p.lat != null; };
 
 /* ================= geocoding ================= */
@@ -1113,6 +1120,7 @@ function onMarkerClick(name,info) {
 let lastTap={x:innerWidth/2,y:innerHeight/2,element:null},lastCluster={key:'',at:0};
 document.addEventListener('pointerup',e=>{lastTap={x:e.clientX,y:e.clientY,element:e.target.closest?.('.mk,.mk-cluster')||null};},true);
 function showCity(name,info,anchor,element) {
+  if(recordCard&&!storyBaseLife&&!publicViewer){openRecord({kind:'place',id:lifeSnapshot.placeIds[name]});return;}
   pauseOverviewMotion();
   state.sel=null;state.city=name;expandedCardId=null;
   life?.adapter.focusPlace(lifeSnapshot.placeIds[name]);renderCard();updateSelectionUI();
@@ -1389,7 +1397,29 @@ function focusCardPlace(name) {
 }
 
 let expandedCardId=null;
+function syncRecordSelection(target){
+  state.sel=null;state.city=null;mapChooser?.close();
+  if(target?.kind==='place')state.city=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===target.id)||null;
+  else if(target?.kind==='trip'||target?.kind==='residence')state.sel=target.id;
+  else if(target?.kind==='chapter'){state.year=null;life.adapter.setScope({type:'chapter',id:target.id});lifeUI?.renderStrip();}
+  refresh();updateSelectionUI();
+}
+function openRecord(target,{fly=true}={}){
+  if(!recordCard||publicViewer||storyBaseLife)return;
+  storyExperience?.pauseForInteraction();pauseOverviewMotion();mapChooser?.close();
+  recordCard.open(target);syncRecordSelection(target);
+  if(isMobile())body.classList.remove('list-open');
+  if(!fly)return;
+  const item=byId(target.id);
+  if(item)flyToItem(item);
+  else if(target.kind==='chapter')homeView(1.8);
+  else{
+    const name=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===target.id);
+    if(name&&posOf(name))flyToPoints([posOf(name)],{placeName:name});
+  }
+}
 function renderCard() {
+  if(recordCard&&!publicViewer&&!storyBaseLife){recordCard.render();return;}
   const el = $('#card');
   const x = byId(state.sel);
   const show=!!x&&(!storyScene||storyExploreCard);
@@ -1444,6 +1474,7 @@ function select(id, { fly = true } = {}) {
   if(storyScene)storyExploreCard=true;
   const x = byId(id);
   if (!x) return;
+  if(recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:x.anchor?'place':x.kind==='trip'?'trip':'residence',id:x.anchor?x.placeId:id},{fly});return;}
   if(state.sel!==id)expandedCardId=null;
   state.city=null;mapChooser?.close();
   state.sel = id;
@@ -1455,6 +1486,7 @@ function select(id, { fly = true } = {}) {
 }
 
 function deselect({ home = true } = {}) {
+  if(recordCard&&!publicViewer&&!storyBaseLife)recordCard.close();
   expandedCardId=null;
   state.city=null;
   state.sel = null;
@@ -1473,6 +1505,7 @@ function step(dir) {
 function setYear(y) {
   const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!state.city&&!flying&&!orbit&&!scenery.name)return;
   if(next!=null&&!yearOptions(trips).includes(next))return;
+  recordCard?.close();
   stopPlay();mapChooser?.close();state.city=null;state.year=next;
   life?.adapter.setScope({type:'all'});lifeUI?.renderStrip();
   state.sel=null;refresh();
@@ -1482,6 +1515,8 @@ function setYear(y) {
 }
 
 function setChapter(id) {
+  if(id&&recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:'chapter',id});return;}
+  recordCard?.close();
   stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;
   life.adapter.setScope(id?{type:'chapter',id}:{type:'all'});refresh();
   if(id)body.classList.add('list-open');

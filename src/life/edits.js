@@ -116,7 +116,8 @@ function split(data,{kind,id,visitIds,title}){
   for(const c of data.chapters)if(c.relatedTripIds.includes(id))c.relatedTripIds.push(newTrip.id);
   return {id:newTrip.id};
 }
-const operations={rename,classify,merge,split};
+function hide(data,{target}){const e=entity(data,target?.kind,target?.id);e.hidden=true;return {kind:target.kind,id:e.id};}
+const operations={rename,classify,merge,split,delete:hide};
 function changesBetween(before,after){
   return entityCollections.flatMap(collection=>{
     const previous=new Map(before[collection].map((value,index)=>[value.id,{value,index}])),next=new Map(after[collection].map((value,index)=>[value.id,{value,index}]));
