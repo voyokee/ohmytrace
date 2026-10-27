@@ -26,7 +26,7 @@ export function batchSummary(assets){
 }
 
 export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},download}) {
-  const dialog=document.querySelector('#photo-dialog');let batch=null,review=null,assets=[],preview=null,busy=false,urls=[],focusedPreviewId=null,shown=CANDIDATE_PAGE,progressFrame=0,retain=false,gallery=false,galleryShown=12,restorePreview=null,storageStats=null,renderGeneration=0,inputController=null;
+  const dialog=document.querySelector('#photo-dialog');let manage=false,batch=null,review=null,assets=[],preview=null,busy=false,urls=[],focusedPreviewId=null,shown=CANDIDATE_PAGE,progressFrame=0,retain=false,gallery=false,galleryShown=12,restorePreview=null,storageStats=null,renderGeneration=0,inputController=null;
   const mobile=globalThis.matchMedia?.('(pointer:coarse)').matches||/Android|iPhone|iPad/i.test(globalThis.navigator?.userAgent||'');
   const folderSupported=!mobile&&'webkitdirectory' in HTMLInputElement.prototype;
   const selected=new Set(),release=()=>{urls.forEach(url=>URL.revokeObjectURL(url));urls=[];};let work=Promise.resolve(),initialized=false;
@@ -51,23 +51,25 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   }
   function render(){
     release();const generation=++renderGeneration,data=currentData();
-    dialog.innerHTML=`<div class="dlg-head"><h3>从相册恢复足迹</h3><button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
-      <div class="dlg-body scroll"><p class="muted">支持 JPG、HEIC、PNG、WebP，一次最多 ${MEDIA_LIMITS.maxFiles.toLocaleString()} 张。在本机解析照片中实际存在的拍摄时间与 GPS；照片可能含拍摄位置。原图默认不上传、不保存。缺失的位置可能需要人工补充，系统相册选择器也可能移除 GPS。</p>
+    dialog.innerHTML=`<div class="dlg-head">${manage?'<button class="photo-back" type="button" data-photo-manage aria-label="返回选择照片">‹</button><h3>备份与存储</h3>':'<h3>从相册恢复足迹</h3>'}<button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
+      <div class="dlg-body scroll">${manage?`
+      <p class="hint">照片记忆保存在这个浏览器里，浏览器清理网站数据时可能丢失，建议定期下载统一备份。原图不在备份内，也不会上传。</p>
+      ${storageStats?`<p class="hint">已用 ${(storageStats.bytes/1048576).toFixed(1)} / ${(storageStats.budgetBytes/1048576).toFixed(0)} MiB · ${storageStats.count} 张缩略图</p>`:''}
+      <div class="row-actions"><button class="btn" type="button" data-photo-library-backup>下载统一备份 ZIP</button><label class="btn">检查并恢复统一备份<input type="file" data-photo-library-restore accept=".zip,application/zip" hidden></label></div>
+      ${restorePreview?`<section data-photo-restore-preview><h4>恢复前预览</h4><p>备份时间：${esc(restorePreview.summary.createdAt)} · ${restorePreview.summary.places} 个地点 · ${restorePreview.summary.trips} 次旅行 · ${restorePreview.summary.memories} 条记忆 · ${restorePreview.summary.thumbnails} 张缩略图。</p><p class="hint">校验全部文件的 SHA-256；合并无冲突记录，保留已有本地内容。原图不在备份内。</p>${restorePreview.conflicts.length?`<p role="alert">${restorePreview.conflicts.length} 项内容与本地冲突，为保留本地修订，本次不会恢复。</p>`:'<button class="btn primary" type="button" data-photo-library-restore-confirm>确认恢复已校验备份</button>'}</section>`:''}
+      <p role="status" data-photo-progress></p>
+      <details data-photo-manage-advanced><summary>高级</summary><div class="row-actions"><button class="btn" type="button" data-photo-gc>清理未引用缩略图</button><button class="btn" type="button" data-photo-backup>备份媒体索引</button><label class="btn">恢复媒体索引<input type="file" data-photo-restore accept=".json,application/json" hidden></label></div><p class="hint">统一 ZIP 包含人生数据、媒体索引及已保留缩略图，不含原图，不会自动上传。下方旧媒体索引 JSON 仅含元数据与审核草稿，仍可独立恢复。</p></details>`:`<p class="muted">选择旅行照片，我们在你的设备上读取拍摄时间和地点，把去过的地方放到地球上。原图不会上传。</p>
       <p class="hint" data-photo-step>${service.scanner.running?'2 / 4 · 分析':review?'3 / 4 · 审核（确认前不会改动地图）':batch?.status==='committed'||gallery?'4 / 4 · 已保存记忆，可在地球上查看':'1 / 4 · 选择照片，无需 CSV 或账号'}</p>
       <label class="btn primary">选择或追加照片<input type="file" data-photo-files multiple accept="image/*" hidden ${service.scanner.running?'disabled':''}></label>
       ${folderSupported?`<label class="btn">选择文件夹<input type="file" data-photo-folder webkitdirectory multiple hidden ${service.scanner.running?'disabled':''}></label>`:''}
       <label class="btn">导入照片 ZIP<input type="file" data-photo-zip accept=".zip,application/zip" hidden></label>
-      <button class="btn" type="button" data-photo-cancel ${!service.scanner.running?'disabled':''}>取消扫描</button>
-      <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${statusText[batch.status]||'待检查'} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:'读取拍摄时间、GPS、海拔与方向；不支持的文件只记录原因，不猜测信息。'}</p>
+      <button class="btn" type="button" data-photo-cancel ${service.scanner.running?'':'hidden'}>取消扫描</button>
+      <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${statusText[batch.status]||'待检查'} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:''}</p>
       ${batch?`<details><summary>本次已选择 ${batch.total} 个文件</summary><ul>${batch.filePlan.slice(0,50).map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>${batch.total>50?'<p class="hint">仅列出前 50 个；完整清单保存在本地批次中。</p>':''}</details>`:''}
-      <label><input type="checkbox" data-photo-retain ${retain?'checked':''} ${service.scanner.running?'disabled':''}>确认时保留小尺寸照片缩略图（最长边 512 px，每张 ≤100 KB）</label>
-      <p class="hint">缩略图会去除 EXIF/XMP。浏览器无法解码时仅保留元数据。浏览器网站存储可能被清理；请下载统一备份。${storageStats?`已用 ${(storageStats.bytes/1048576).toFixed(1)} / ${(storageStats.budgetBytes/1048576).toFixed(0)} MiB · ${storageStats.count} 张`:''}</p>
+      <label><input type="checkbox" data-photo-retain ${retain?'checked':''} ${service.scanner.running?'disabled':''}>同时保存小缩略图，方便以后回看（会去掉位置等元数据）</label>
       ${review?summaryHTML():''}
-      <div class="row-actions"><button class="btn" type="button" data-photo-gallery>查看已保存照片</button><button class="btn" type="button" data-photo-library-backup>下载统一备份 ZIP</button><label class="btn">检查并恢复统一备份<input type="file" data-photo-library-restore accept=".zip,application/zip" hidden></label><button class="btn" type="button" data-photo-gc>清理未引用缩略图</button></div>
-      ${restorePreview?`<section data-photo-restore-preview><h4>恢复前预览</h4><p>备份时间：${esc(restorePreview.summary.createdAt)} · ${restorePreview.summary.places} 个地点 · ${restorePreview.summary.trips} 次旅行 · ${restorePreview.summary.memories} 条记忆 · ${restorePreview.summary.thumbnails} 张缩略图。</p><p class="hint">校验全部文件的 SHA-256；合并无冲突记录，保留已有本地内容。原图不在备份内。</p>${restorePreview.conflicts.length?`<p role="alert">${restorePreview.conflicts.length} 项内容与本地冲突，为保留本地修订，本次不会恢复。</p>`:'<button class="btn primary" type="button" data-photo-library-restore-confirm>确认恢复已校验备份</button>'}</section>`:''}
+      <div class="photo-footer"><button type="button" data-photo-gallery>查看已保存照片</button><button type="button" data-photo-history>导入记录</button><button type="button" data-photo-manage>备份与存储 →</button></div>
       ${gallery?`<section data-photo-gallery-list><h4>已保存的照片记忆</h4><div class="photo-memory-grid">${data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('media:')).slice(galleryShown-12,galleryShown).map(m=>`<figure><span data-photo-stored-image="${esc(m.uri.slice(6))}">正在读取缩略图…</span><figcaption>${esc(m.title)} · ${esc(m.start.value||'日期未知')}<br>${esc(m.placeIds.map(id=>data.places.find(p=>p.id===id)?.name).filter(Boolean).join(' / ')||'未定位记忆')}</figcaption></figure>`).join('')||'<p class="hint">还没有确认保存的照片记忆。</p>'}</div>${galleryShown>12?'<button class="btn" data-photo-gallery-previous>上一页照片</button>':''}${data.memories.filter(m=>m.kind==='photo').length>galleryShown?'<button class="btn" data-photo-gallery-more>下一页照片</button>':''}<button class="btn" data-photo-globe>在地球上查看</button></section>`:''}
-      <div class="row-actions"><button class="btn" type="button" data-photo-backup>备份媒体索引</button><label class="btn">恢复媒体索引<input type="file" data-photo-restore accept=".json,application/json" hidden></label><button class="btn" type="button" data-photo-history>历史批次</button></div>
-      <p class="hint">统一 ZIP 包含人生数据、媒体索引及已保留缩略图，不含原图，不会自动上传。下方旧媒体索引 JSON 仅含元数据与审核草稿，仍可独立恢复。</p>
       <div data-photo-history-list></div>
       ${review?`<p class="hint">${review.timeOrderBasis==='local-order-uncertain'?'部分拍摄时间没有时区：按相机日期分组，先后可能不确定。':'按照片记录的时区排序。'} 地点名称可直接修改；地点之间只是推测连接，交通方式未知。</p>
       <div class="row-actions"><button class="btn" type="button" data-photo-merge>合并选中候选</button><button class="btn primary" type="button" data-photo-preview>预览变更 / Dry Run</button></div>
@@ -86,11 +88,12 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       ${review.unlocatedAssetIds.length?`<p class="hint">无 GPS 的 ${review.unlocatedAssetIds.length} 张照片已过滤，不会上地图。</p><label><input type="checkbox" data-photo-unlocated ${review.includeUnlocated?'checked':''}>仍然把它们保存为未定位记忆</label>`:''}
       <details><summary>需要注意的文件（${assets.filter(problem).length}）</summary><div class="photo-diagnostics">${assets.filter(problem).slice(0,DIAGNOSTIC_LIST_LIMIT).map(a=>`<p>${esc(a.originalFile.name)}${a.format&&a.format!=='unknown'?` · ${esc(a.format.toUpperCase())}`:''} · ${a.diagnostics.map(d=>esc(diagnosticText[d]||d)).join(' / ')||'元数据已解析'}${a.possibleDuplicateAssetIds?.length?' · 疑似重复，未自动合并':''}${a.extractedTime?` · ${esc(a.extractedTime.raw)} ${esc(a.extractedTime.offsetRaw||'时区未知')}`:''} </p>`).join('')}${assets.filter(problem).length>DIAGNOSTIC_LIST_LIMIT?`<p class="hint">仅列出前 ${DIAGNOSTIC_LIST_LIMIT} 个。</p>`:''}</div></details>
       <section data-photo-dry-run>${preview?`<h4>确认前预览</h4><p>将新增 <b>${preview.summary.createPlaces}</b> 个地点、<b>${preview.summary.createVisits}</b> 条到访、<b>${preview.summary.createTrips}</b> 次旅行、<b>${preview.summary.createMemories}</b> 条照片记忆。</p><p>其中 ${preview.summary.unlocatedMemories} 条记忆没有位置；关联 ${preview.summary.chapterAssociations.length} 项人生阶段关系。已有旅行的手动字段与地点坐标保持原值。</p><details><summary>查看完整变更明细</summary><pre>${esc(JSON.stringify(preview.summary,null,2))}</pre></details><button class="btn primary" type="button" data-photo-commit>确认写入人生数据</button><p class="hint">本次确认会原子保存人生记录；照片位置间的连线为推测连接。</p>`:''}</section>`:''}
-      <p role="alert" data-photo-error></p></div>`;
+      `}<p role="alert" data-photo-error></p></div>`;
     void hydrate(generation);
   }
-  async function open(){if(!initialized){await service.recover();initialized=true;}if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
-  document.querySelector('#btn-photos').addEventListener('click',()=>run(open));
+  // Backup and storage tools live on their own page so the first screen is only about choosing photos.
+  async function open({storage=false}={}){manage=storage;if(!initialized){await service.recover();initialized=true;}if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
+  document.querySelector('#btn-photos').addEventListener('click',()=>run(()=>open()));
   // Chrome/Firefox cannot decode HEIC; keep the parsed GPS/time and say why there is no picture.
   dialog.addEventListener('error',event=>{if(event.target.matches?.('img.photo-thumb'))event.target.replaceWith(Object.assign(document.createElement('span'),{className:'hint',textContent:'此浏览器无法显示这种格式的预览，时间和位置已读取。'}));},true);
   dialog.addEventListener('close',()=>{renderGeneration++;inputController?.abort();release();if(service.scanner.running)service.scanner.cancel();});
@@ -98,9 +101,9 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   dialog.addEventListener('change',event=>{
     const target=event.target;
     if(target.hasAttribute('data-photo-files')||target.hasAttribute('data-photo-folder')||target.hasAttribute('data-photo-zip')){let files=target.hasAttribute('data-photo-folder')?mediaFilesFrom(target.files):Array.from(target.files);run(async()=>{
-      inputController=new AbortController();const progress=dialog.querySelector('[data-photo-progress]');progress.textContent='正在本机检查照片 / 安全解包 ZIP…';dialog.querySelector('[data-photo-cancel]').disabled=false;files=await preparePhotoInput(files,{signal:inputController.signal,onProgress:n=>{progress.textContent=`已安全解包 ${n} 张照片`;}});inputController=null;if(!files.length)throw new Error('没有找到可导入的照片文件');
+      inputController=new AbortController();const progress=dialog.querySelector('[data-photo-progress]');progress.textContent='正在本机检查照片 / 安全解包 ZIP…';Object.assign(dialog.querySelector('[data-photo-cancel]'),{disabled:false,hidden:false});files=await preparePhotoInput(files,{signal:inputController.signal,onProgress:n=>{progress.textContent=`已安全解包 ${n} 张照片`;}});inputController=null;if(!files.length)throw new Error('没有找到可导入的照片文件');
       preview=null;review=null;batch=null;render();
-      let latest=null;const paint=()=>{progressFrame=0;if(!service.scanner.running)return;const el=dialog.querySelector('[data-photo-progress]');if(el&&latest)el.textContent=`正在读取 ${latest.processed} / ${latest.total} · 重复 ${latest.duplicateCount} · 失败 ${latest.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;};
+      let latest=null;const paint=()=>{progressFrame=0;if(!service.scanner.running)return;const el=dialog.querySelector('[data-photo-progress]');if(el&&latest)el.textContent=`正在读取 ${latest.processed} / ${latest.total} · 重复 ${latest.duplicateCount} · 失败 ${latest.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)Object.assign(cancel,{disabled:false,hidden:false});};
       // Progress is painted at most once per frame; thousands of files must not mean thousands of layouts.
       onScanning(true);let scanning;
       try{scanning=service.scanner.scan(files,{resumeBatchId:dialog.dataset.resumeBatch||null,onProgress:p=>{latest=p;if(!progressFrame)progressFrame=requestAnimationFrame(paint);}});render();
@@ -110,7 +113,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     });return;}
     if(target.hasAttribute('data-photo-retain')){retain=target.checked;preview=null;if(review){review.retainThumbnails=retain;run(save);}return;}
     if(target.hasAttribute('data-photo-library-restore')){const file=target.files[0];if(file)run(async()=>{if(!service.backups)throw new Error('统一备份存储不可用');restorePreview=await service.backups.inspect(file);render();});return;}
-    if(target.hasAttribute('data-photo-restore')){const file=target.files[0];if(file)run(async()=>{const input=JSON.parse(await file.text());if(!confirm('用此媒体索引替换当前媒体索引？人生数据与原图不会被此操作替换。'))return;await service.restoreManifest(input);batch=null;review=null;preview=null;render();});return;}
+    if(target.hasAttribute('data-photo-restore')){const file=target.files[0];if(file)run(async()=>{const input=JSON.parse(await file.text());if(!confirm('用此媒体索引替换当前媒体索引？人生数据与原图不会被此操作替换。'))return;await service.restoreManifest(input);manage=false;batch=null;review=null;preview=null;render();});return;}
     if(!review)return;
     const row=target.closest('[data-candidate]'),id=row?.dataset.candidate;
     if(target.hasAttribute('data-photo-select')){target.checked?selected.add(id):selected.delete(id);return;}
@@ -126,11 +129,12 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     run(async()=>{
       const row=button.closest('[data-candidate]'),id=row?.dataset.candidate;
       if(button.hasAttribute('data-photo-globe')){dialog.close();return;}
+      if(button.hasAttribute('data-photo-manage')){manage=!manage;render();dialog.querySelector('.dlg-body')?.scrollTo(0,0);return;}
       if(button.hasAttribute('data-photo-gallery')){gallery=!gallery;galleryShown=12;render();}
       if(button.hasAttribute('data-photo-gallery-previous')){galleryShown=Math.max(12,galleryShown-12);render();}
       if(button.hasAttribute('data-photo-gallery-more')){galleryShown+=12;render();}
       if(button.hasAttribute('data-photo-library-backup')){if(!service.backups)throw new Error('统一备份存储不可用');saveBlob('OhMyTrace-Backup.zip',await service.backups.create());}
-      if(button.hasAttribute('data-photo-library-restore-confirm')){if(service.readOnly)throw new Error('演示模式不能恢复数据');await service.backups.restore(restorePreview);restorePreview=null;batch=null;review=null;preview=null;gallery=true;storageStats=await service.thumbnails.stats();await onCommitted({tripId:null});render();dialog.querySelector('[data-photo-progress]').textContent='统一备份已校验并恢复，照片记忆可刷新查看。';}
+      if(button.hasAttribute('data-photo-library-restore-confirm')){if(service.readOnly)throw new Error('演示模式不能恢复数据');await service.backups.restore(restorePreview);restorePreview=null;manage=false;batch=null;review=null;preview=null;gallery=true;storageStats=await service.thumbnails.stats();await onCommitted({tripId:null});render();dialog.querySelector('[data-photo-progress]').textContent='统一备份已校验并恢复，照片记忆可刷新查看。';}
       if(button.hasAttribute('data-photo-gc')){const referenced=[...new Set([...currentData().memories.filter(m=>m.uri?.startsWith('media:')).map(m=>m.uri.slice(6)),...(await service.manifest.listBatches()).filter(b=>b.status!=='committed').flatMap(b=>b.assetIds)])];storageStats=await service.thumbnails.gc(referenced);render();}
       if(button.dataset.photoOnlineName){const visit=review.candidates.find(c=>c.id===id)?.visits.find(v=>v.id===button.dataset.photoOnlineName);if(!visit||!confirm('将这一个地点的 GPS 发送给 Nominatim / OpenStreetMap 查询名称？不发送照片；导入其他照片不会触发在线查询。'))return;const name=await geoNameProvider.reverse(visit.coordinates,{online:true,consent:true});if(name){editVisitName(review,id,visit.id,name.displayName);visit.geoName=name;await save();}}
       if(button.dataset.photoPreviewAsset){focusedPreviewId=button.dataset.photoPreviewAsset;render();}

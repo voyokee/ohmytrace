@@ -204,7 +204,7 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI;
+let life, lifeSnapshot, lifeUI, photoUI;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
@@ -233,7 +233,7 @@ async function load() {
     const onScanning=active=>{if(!viewer)return;
       if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
-    mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
+    photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
       onCommitted:result=>{stopPlay();state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
@@ -246,7 +246,7 @@ function download(name,text,type='text/csv;charset=utf-8') {
   a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
 function exportCsv() { if(life)download('我的足迹.csv',life.exportCSV()); }
-function exitDemo() { if(!life?.exitDemo())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
+function exitDemo() { if(!life?.exitDemo?.())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
 
 async function readFileText(file) {
   const buf = await file.arrayBuffer();
@@ -1192,7 +1192,7 @@ function refresh() {
   if(state.sel&&!byId(state.sel))state.sel=null;
   if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
-  if(!publicViewer)$('#empty-demo').hidden=!life?.canPreviewDemo();
+  if(!publicViewer)$('#empty-demo').hidden=!life?.canPreviewDemo?.();
   renderStats();
   renderChips();
   renderList();
@@ -1241,13 +1241,20 @@ function statusOf(p) {
 }
 const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.places[n].status !== 'confirmed');
 
+// One tap replays what the visitor is looking at: the chosen year, else the latest trip.
+function replayTarget() {
+  if(state.year!=null&&trips.some(t=>matchesYear(t,state.year)))return {source:`year:${state.year}`,label:` ${state.year} 年`};
+  const latest=[...trips].sort((a,b)=>(b.date?.end??-Infinity)-(a.date?.end??-Infinity))[0];
+  return latest?{source:`trip:${latest.id}`,label:`「${latest.title.length>8?latest.title.slice(0,8)+'…':latest.title}」`}:null;
+}
 function renderChips() {
   const out = [];
-  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读分享 · 不会读取你的数据':'只读故事预览 · 未改动人生数据'}</span>`;return;}
+  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读分享 · 不会读取你的数据':'回放中'}</span>`;return;}
   const demo=life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo;
   if(demo)out.push('<button class="chip" data-act="exit-demo" aria-label="退出示例，回到开始">示例 · 退出</button><button class="chip" data-act="demo-photos">用我的照片开始 →</button>');
-  // Stories are made from the visitor's own footprints, so the entry waits for real trips.
-  if(life&&!sceneDemo&&!demo&&trips.length)out.push(`<button class="chip" data-story-compose ${storyExperience?'':'disabled'}>${storyExperience?'生成人生故事 →':'故事准备中…'}</button>`);
+  // Replays are made from the visitor's own footprints, so the entry waits for real trips.
+  const replay=life&&!sceneDemo&&!demo?replayTarget():null;
+  if(replay)out.push(`<button class="chip chip-replay" data-story-quick="${esc(replay.source)}" ${storyExperience?'':'disabled'}>${storyExperience?`▶ 回放${esc(replay.label)}`:'回放准备中…'}</button>`);
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
@@ -1365,8 +1372,9 @@ function renderCard() {
   if (!show) { el.classList.remove('show','expanded'); return; }
   const expanded=expandedCardId===x.id;el.classList.toggle('expanded',expanded);
   const primary=x.kind==='trip'?x.stops.find(s=>located(s.place))?.place:x.place;
-  const mobileActions=`<div class="card-mobile-actions">${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
-  let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>`;
+  const replayButton=x.kind==='trip'&&!storyScene&&!publicViewer&&!storyBaseLife&&life?.repository?.getDataset().meta.origin!=='demo'?`<button class="card-replay" data-story-quick="trip:${esc(x.id)}">▶ 回放</button>`:'';
+  const mobileActions=`<div class="card-mobile-actions">${replayButton}${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
+  let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>${storyScene?'<button class="card-story-back" data-act="story-back">‹ 回到回放</button>':''}`;
   if (x.kind === 'trip') {
     const color = typeColors[x.type];
     const list = visibleTrips(), idx = list.indexOf(x);
@@ -1569,6 +1577,7 @@ function renderTab() {
       <div class="row-actions">
         <button class="btn" data-act="template">下载模板</button>
         <button class="btn" data-act="export">导出当前数据（含坐标）</button>
+        ${photoUI?'<button class="btn" data-act="photo-storage">照片备份与存储</button>':''}
         <button class="btn danger" data-act="clear">清空全部</button>
       </div>`;
     const drop = $('#drop');
@@ -1673,7 +1682,7 @@ function bindEvents() {
         const el=$('#card'),expanded=el.classList.toggle('expanded');expandedCardId=expanded?state.sel:null;
         t.setAttribute('aria-expanded',String(expanded));t.textContent=expanded?'收起详情 ▴':'地点与详情 ▾';footprintOverlay?.invalidate();return;
       }
-      case 'close': deselect(); return;
+      case 'close': case 'story-back': deselect({home:!storyScene}); return;
       case 'prev': step(-1); return;
       case 'next': step(1); return;
       case 'exit-demo': exitDemo(); return;
@@ -1686,6 +1695,7 @@ function bindEvents() {
       case 'import': doImport(); return;
       case 'template': download('足迹模板.csv', TEMPLATE_CSV); return;
       case 'export': exportCsv(); return;
+      case 'photo-storage': closeModal(); photoUI?.open({storage:true}); return;
       case 'clear':
         if (confirm('确定清空全部足迹与人生阶段吗？建议先下载 JSON 备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
         return;
@@ -1743,7 +1753,7 @@ function bindEvents() {
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
   $('#empty-import').addEventListener('click', () => openModal('import'));
   $('#empty-photos')?.addEventListener('click', () => $('#btn-photos').click());
-  $('#empty-demo')?.addEventListener('click', () => { if(life?.previewDemo()){ stopPlay(); state.sel=null; state.year=null; refresh(); sampleHeights(); homeView(); } });
+  $('#empty-demo')?.addEventListener('click', () => { if(life?.previewDemo?.()){ stopPlay(); state.sel=null; state.year=null; refresh(); sampleHeights(); homeView(); } });
   $('#btn-play').addEventListener('click', play);
   $('.tl-main').addEventListener('scroll',()=>{const e=$('.tl-main');if(Math.abs(e.clientWidth-timelineViewportWidth)<=1)timelineAtLatest=e.scrollWidth-e.clientWidth-e.scrollLeft<2;},{passive:true});
   new ResizeObserver(()=>{if(Math.abs($('.tl-main').clientWidth-timelineViewportWidth)>1)renderTimeline();}).observe($('.tl-main'));
@@ -1769,6 +1779,7 @@ async function boot() {
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
     restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    onError:error=>toast('回放失败：'+error.message,5000),
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{
       if(signal.aborted)return;storyScene=item;storyExploreCard=false;$('#toast').classList.remove('show');signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});

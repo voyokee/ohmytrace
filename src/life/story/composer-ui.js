@@ -4,9 +4,9 @@ import {esc,periodText} from './schema.js';
 import {storyThumbnail} from './thumbnail.js';
 import {createPublishingPanel} from './publishing/panel.js';
 
-const sceneNames={globe:'全球概览',chapter:'人生阶段',trip:'旅行概览',place:'地点飞入',memory:'记忆时刻',closing:'结束'};
+const sceneNames={globe:'开场',chapter:'人生阶段',trip:'旅行概览',place:'地点飞入',memory:'记忆时刻',closing:'结束'};
 export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPreview,onExportPackage,saveBlob,publisher=null}){
-  const dialog=document.createElement('dialog');dialog.id='story-composer';dialog.className='dialog glass';dialog.setAttribute('aria-label','生成人生故事');document.body.append(dialog);
+  const dialog=document.createElement('dialog');dialog.id='story-composer';dialog.className='dialog glass';dialog.setAttribute('aria-label','编辑与分享回放');document.body.append(dialog);
   let story=null,images={},review=null,approved=false,source='all',busy=false;
   const publishing=createPublishingPanel({publisher,getArtifact:()=>review,isApproved:()=>approved&&!!review});
   const data=()=>getDataset();
@@ -25,16 +25,18 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   function render(){
     const d=data(),years=storyYears(d);
     const placeIds=new Set(story?[...d.chapters.filter(c=>story.selectedChapterIds.includes(c.id)).flatMap(c=>c.homeAnchors),...d.visits.filter(v=>story.selectedTripIds.includes(v.tripId)).map(v=>v.placeId),...d.memories.filter(m=>story.includedMemories.includes(m.id)).flatMap(m=>m.placeIds)]:[]);
-    dialog.innerHTML=`<div class="dlg-head"><h3>生成人生故事</h3><button class="x" data-story-composer-close aria-label="关闭故事编辑">×</button></div><div class="dlg-body scroll">
-      <p class="hint">确定性地组织已有记录，不添加未经记录的经历。作品预览和分享均使用下方隐私范围。</p>
-      <div class="story-source"><label class="life-field">故事范围<select data-story-source><option value="all">完整人生（全部现有记录）</option>
+    // Re-rendering replaces the markup; keep the optional scene list as the visitor left it.
+    const scenesOpen=dialog.querySelector('[data-story-scene-list]')?.open?' open':'';
+    dialog.innerHTML=`<div class="dlg-head"><h3>编辑与分享</h3><button class="x" data-story-composer-close aria-label="关闭故事编辑">×</button></div><div class="dlg-body scroll">
+      <p class="hint">回放只使用你已记录的足迹，不会编造经历。分享前请在下方确认隐私范围。</p>
+      <div class="story-source"><label class="life-field">回放范围<select data-story-source><option value="all">全部足迹</option>
         ${d.chapters.map(c=>`<option value="chapter:${esc(c.id)}">人生阶段 · ${esc(c.title)}</option>`).join('')}
         ${years.map(y=>`<option value="year:${y}">${y} 年</option>`).join('')}
-        ${d.trips.map(t=>`<option value="trip:${esc(t.id)}">旅行 · ${esc(t.title)}</option>`).join('')}</select></label><button class="btn" data-story-generate>生成镜头</button></div>
-      ${story?`<label class="life-field">故事标题<input data-story-field="title" value="${esc(story.title)}" maxlength="200"></label>
-      <label class="life-field">故事说明<textarea data-story-field="description" maxlength="4000" rows="2">${esc(story.description)}</textarea></label>
+        ${d.trips.map(t=>`<option value="trip:${esc(t.id)}">旅行 · ${esc(t.title)}</option>`).join('')}</select></label><button class="btn" data-story-generate>按此范围重新生成</button></div>
+      ${story?`<label class="life-field">标题<input data-story-field="title" value="${esc(story.title)}" maxlength="200"></label>
+      <label class="life-field">说明<textarea data-story-field="description" maxlength="4000" rows="2">${esc(story.description)}</textarea></label>
       <label class="life-field">视觉主题<select data-story-field="visualTheme">${Object.entries({atlas:'金色足迹',night:'夜景灯火',paper:'素笺叙事'}).map(([v,t])=>`<option value="${v}" ${story.visualTheme===v?'selected':''}>${t}</option>`).join('')}</select></label>
-      <details open><summary>镜头顺序 · ${story.orderedScenes.length}</summary><ol class="story-scenes">${story.orderedScenes.map((s,i)=>`<li data-story-scene="${i}"><div class="story-scene-heading"><span>${i+1} · ${sceneNames[s.kind]}</span><span><button class="btn sm" data-story-move="-1" ${i===0?'disabled':''} aria-label="上移镜头">↑</button><button class="btn sm" data-story-move="1" ${i===story.orderedScenes.length-1?'disabled':''} aria-label="下移镜头">↓</button><button class="btn sm" data-story-remove>移除</button></span></div>
+      <details data-story-scene-list${scenesOpen}><summary>调整每一段 · ${story.orderedScenes.length}</summary><ol class="story-scenes">${story.orderedScenes.map((s,i)=>`<li data-story-scene="${i}"><div class="story-scene-heading"><span>${i+1} · ${sceneNames[s.kind]}</span><span><button class="btn sm" data-story-move="-1" ${i===0?'disabled':''} aria-label="上移镜头">↑</button><button class="btn sm" data-story-move="1" ${i===story.orderedScenes.length-1?'disabled':''} aria-label="下移镜头">↓</button><button class="btn sm" data-story-remove>移除</button></span></div>
         <label class="life-field">标题<input data-story-scene-field="title" maxlength="200" value="${esc(s.title)}"></label><label class="life-field">说明<textarea data-story-scene-field="description" maxlength="4000" rows="1">${esc(s.description)}</textarea></label><small>${esc(periodText(s))}</small></li>`).join('')}</ol></details>
       <fieldset class="story-privacy"><legend>分享范围与隐私</legend>
       <label class="life-field">地点精度<select data-story-policy="locationMode"><option value="city" ${story.privacySettings.locationMode==='city'?'selected':''}>区域模糊：0.1° 网格（纬向约 11 km）</option><option value="hidden" ${story.privacySettings.locationMode==='hidden'?'selected':''}>隐藏全部坐标</option><option value="precise" ${story.privacySettings.locationMode==='precise'?'selected':''}>公开精确坐标（包括所选住宅）</option></select></label>
@@ -53,7 +55,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
     if(story){dialog.querySelector('.dlg-body').append(publishing.element);publishing.refresh();}
   }
   function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='all'?{type}:{type,id:rest.join(':')};}
-  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?`${entity.title} · 人生故事`:s.type==='year'?`${s.year} 年的足迹`:'我的人生故事'});images={};dirty();render();}
+  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:'我的足迹'});images={};dirty();render();}
   dialog.addEventListener('input',e=>editText(e.target));
   dialog.addEventListener('change',async e=>{
     const el=e.target;if(publishing.element.contains(el))return;try{
@@ -81,5 +83,8 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       if(b.hasAttribute('data-story-package')&&approved&&review){busy=true;await onExportPackage(review,message=>{dialog.querySelector('[data-story-progress]').textContent=message;});busy=false;}
     }catch(e){busy=false;error(e);}
   });
-  return {open({resume=false}={}){document.querySelector('#life-dialog')?.close();if(!resume){const s=getScope();source=s.type==='chapter'?`chapter:${s.id}`:s.type==='year'?`year:${s.year}`:s.type==='trip'?`trip:${s.id}`:'all';generate();}else render();dialog.showModal();}};
+  return {
+    // Quick replay composes with the same defaults so "编辑与分享" resumes exactly what was played.
+    prepare(value){source=value;generate();return structuredClone(story);},
+    open({resume=false}={}){document.querySelector('#life-dialog')?.close();if(!resume){const s=getScope();source=s.type==='chapter'?`chapter:${s.id}`:s.type==='year'?`year:${s.year}`:s.type==='trip'?`trip:${s.id}`:'all';generate();}else render();dialog.showModal();}};
 }
