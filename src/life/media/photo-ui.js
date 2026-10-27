@@ -1,3 +1,4 @@
+import {preparePhotoInput} from '../../platform/web-photo-capability.js';
 import {clone} from '../schema.js';
 import {editCandidate,editVisitName,mergeCandidates,splitCandidate} from './reconstruction.js';
 import {MEDIA_LIMITS} from './config.js';
@@ -47,10 +48,11 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   }
   function render(){
     release();const data=currentData();
-    dialog.innerHTML=`<div class="dlg-head"><h3>照片历史 · 本地重建</h3><button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
+    dialog.innerHTML=`<div class="dlg-head"><h3>从相册恢复足迹</h3><button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
       <div class="dlg-body scroll"><p class="muted">支持 JPG、HEIC、PNG、WebP，一次最多 ${MEDIA_LIMITS.maxFiles.toLocaleString()} 张。只在本机读取每张照片开头的拍摄时间和 GPS，原图不上传、不保存。有 GPS 的照片自动归入地点和旅行；没有 GPS 的会被过滤，并告诉你数量。</p>
-      <label class="btn primary">选择照片<input type="file" data-photo-files multiple accept="image/*,.jpg,.jpeg,.heic,.heif,.png,.webp,.dng" hidden ${service.scanner.running?'disabled':''}></label>
+      <label class="btn primary">选择或追加照片<input type="file" data-photo-files multiple accept="image/*,.jpg,.jpeg,.heic,.heif,.png,.webp,.dng,.zip" hidden ${service.scanner.running?'disabled':''}></label>
       ${folderSupported?`<label class="btn">选择文件夹<input type="file" data-photo-folder webkitdirectory multiple hidden ${service.scanner.running?'disabled':''}></label>`:''}
+      <label class="btn">导入照片 ZIP<input type="file" data-photo-zip accept=".zip,application/zip" hidden></label>
       <button class="btn" type="button" data-photo-cancel ${!service.scanner.running?'disabled':''}>取消扫描</button>
       <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${statusText[batch.status]||'待检查'} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:'读取拍摄时间、GPS、海拔与方向；不支持的文件只记录原因，不猜测信息。'}</p>
       ${review?summaryHTML():''}
@@ -84,8 +86,8 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   dialog.addEventListener('cancel',()=>{if(service.scanner.running)service.scanner.cancel();});
   dialog.addEventListener('change',event=>{
     const target=event.target;
-    if(target.hasAttribute('data-photo-files')||target.hasAttribute('data-photo-folder')){const files=target.hasAttribute('data-photo-folder')?mediaFilesFrom(target.files):Array.from(target.files);run(async()=>{
-      if(!files.length)throw new Error('没有找到可导入的照片文件');
+    if(target.hasAttribute('data-photo-files')||target.hasAttribute('data-photo-folder')||target.hasAttribute('data-photo-zip')){let files=target.hasAttribute('data-photo-folder')?mediaFilesFrom(target.files):Array.from(target.files);run(async()=>{
+      files=await preparePhotoInput(files);if(!files.length)throw new Error('没有找到可导入的照片文件');
       preview=null;review=null;batch=null;render();
       let latest=null;const paint=()=>{progressFrame=0;if(!service.scanner.running)return;const el=dialog.querySelector('[data-photo-progress]');if(el&&latest)el.textContent=`正在读取 ${latest.processed} / ${latest.total} · 重复 ${latest.duplicateCount} · 失败 ${latest.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;};
       // Progress is painted at most once per frame; thousands of files must not mean thousands of layouts.
