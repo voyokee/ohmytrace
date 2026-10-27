@@ -4,7 +4,7 @@ import {GeoNameProvider} from '../../src/life/geocoding/provider.js';import {Pla
 const load=async path=>JSON.parse(await readFile(new URL('../../src/life/geocoding/data/'+path,import.meta.url),'utf8'));
 test('actual offline packs locate Hangzhou in Zhejiang and label city match as nearby, never observed',async()=>{
  const loads=[],resolver=new OfflineAdminResolver({load:async p=>{loads.push(p);return load(p);}});
- const r=await resolver.reverse({latitude:30.2741,longitude:120.1551});assert.match(r.country,/中国|中华人民共和国/);assert.match(r.admin1,/浙江/);assert.equal(r.city,'Hangzhou');assert.equal(r.precision,'nearby-city');assert.equal(r.cityMatch,'nearest-centre-not-boundary');assert.equal(r.state,'inferred');assert.equal(r.crs,'WGS84');assert.ok(r.distanceKm<5);
+ const r=await resolver.reverse({latitude:30.2741,longitude:120.1551});assert.match(r.country,/中国|中华人民共和国/);assert.match(r.admin1,/浙江/);assert.equal(r.city,'杭州');assert.equal(r.precision,'nearby-city');assert.equal(r.cityMatch,'nearest-centre-not-boundary');assert.equal(r.state,'inferred');assert.equal(r.crs,'WGS84');assert.ok(r.distanceKm<5);
  assert.ok(loads.includes('CHN.json'));assert.ok(!loads.includes('USA.json'));await assert.rejects(resolver.reverse({latitude:30,longitude:120,crs:'GCJ-02'}));assert.equal(await resolver.reverse({latitude:0,longitude:-140}),null);
 });
 test('polygon holes, multipolygons and exact borders do not become false city containment',()=>{

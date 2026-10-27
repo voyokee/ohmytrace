@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {emptyDataset,validateDataset} from '../../src/life/schema.js';
-import {applyAutoImport,nameCells,cellKey,normalizeObservation} from '../../src/life/media/auto-import.js';
+import {applyAutoImport,nameCells,cellKey,normalizeObservation,placeRenames,applyPlaceRenames} from '../../src/life/media/auto-import.js';
 
 // Fictional offline names by rough region; the ocean resolves to nothing.
 const geonames={async reverse({latitude,longitude}){
@@ -22,7 +22,7 @@ function library(){
   out.push(photo('2026-05-04',10,0,0),photo('2026-05-04',11,10,170),{uri:'android-media:external_primary/no-time',latitude:22.5,longitude:114.05});
   return out;
 }
-async function run(data,input){const names=await nameCells(input.map(normalizeObservation).filter(Boolean),geonames);return applyAutoImport(data,input,names);}
+async function run(data,input,names=geonames){return applyAutoImport(data,input,await nameCells(input.map(normalizeObservation).filter(Boolean),names));}
 
 test('one-tap import merges places per city, splits trips at home and keeps pointers only',async()=>{
   const data=emptyDataset('new'),summary=await run(data,library());validateDataset(data);
@@ -74,4 +74,18 @@ test('the first one-tap run regroups the old review-based photo import but keeps
   assert.deepEqual(data.trips.map(t=>t.title).sort(),['巴厘之旅','独库公路'].sort());
   assert.ok(!data.places.some(p=>p.id==='place_old_photo'));assert.deepEqual(data.chapters[0].memoryIds,[]);assert.equal(data.chapters[0].relatedTripIds.length,1);
   assert.equal(summary.photos,1);assert.equal(removeLegacyPhotoData(data).memories,0,'nothing left to regroup');
+});
+
+test('places imported with English offline names are renamed to Chinese everywhere they show',async()=>{
+  const data=emptyDataset('new');await run(data,library());
+  const zh={Shenzhen:'深圳',Denpasar:'登巴萨',Ubud:'乌布',Kyoto:'京都'};
+  const chinese={async reverse(point){const g=await geonames.reverse(point);return g&&{...g,city:zh[g.city]||g.city};}};
+  const renames=await placeRenames(data,chinese);assert.equal(renames.size,4);
+  applyPlaceRenames(data,renames);validateDataset(data);
+  assert.deepEqual(data.places.map(p=>p.name).sort(),['乌布','京都','深圳','登巴萨'].sort());
+  assert.equal(data.residences[0].title,'深圳');
+  assert.ok(data.memories.every(m=>/^(深圳|登巴萨|乌布|京都) · /.test(m.title)),'photo titles follow the place name');
+  assert.ok(data.visits.every(v=>/^(深圳|登巴萨|乌布|京都)$/.test(v.legacy.place)));
+  assert.equal((await placeRenames(data,chinese)).size,0,'renaming is idempotent');
+  const more=await run(data,[photo('2026-04-08',9,-8.66,115.22)],chinese);assert.equal(more.newPlaces,0,'later imports reuse the renamed place');
 });

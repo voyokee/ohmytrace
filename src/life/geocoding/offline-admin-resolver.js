@@ -18,8 +18,9 @@ export function containsPoint(geometry,point){
 }
 /** Generalized admin polygons are suggestions. Cities have no boundary dataset. */
 export class OfflineAdminResolver {
- id='natural-earth-v5.1.2';
- constructor({load=async path=>{const url=new URL('./data/'+path,import.meta.url);let cache=null;try{cache=await globalThis.caches?.open('ohmytrace.geonames-v5.1.2');const saved=await cache?.match(url);if(saved)return saved.json();}catch{/* Cache Storage may be unavailable in private browsing. */}const r=await fetch(url);if(!r.ok)throw new Error('离线地名包读取失败');try{await cache?.put(url,r.clone());}catch{/* Naming remains usable without a cache write. */}return r.json();},maxPacks=8,maxCityKm=80}={}){this.load=load;this.maxPacks=maxPacks;this.maxCityKm=maxCityKm;this.packs=new Map();}
+ // "-zh": city packs carry NAME_ZH; the new id/cache name retires English labels cached on devices.
+ id='natural-earth-v5.1.2-zh';
+ constructor({load=async path=>{const url=new URL('./data/'+path,import.meta.url);let cache=null;try{cache=await globalThis.caches?.open('ohmytrace.geonames-v5.1.2-zh');const saved=await cache?.match(url);if(saved)return saved.json();}catch{/* Cache Storage may be unavailable in private browsing. */}const r=await fetch(url);if(!r.ok)throw new Error('离线地名包读取失败');try{await cache?.put(url,r.clone());}catch{/* Naming remains usable without a cache write. */}return r.json();},maxPacks=8,maxCityKm=80}={}){this.load=load;this.maxPacks=maxPacks;this.maxCityKm=maxCityKm;this.packs=new Map();}
  async pack(code){if(!this.packs.has(code)){if(this.packs.size>=this.maxPacks)this.packs.delete(this.packs.keys().next().value);this.packs.set(code,this.load(code+'.json').catch(e=>{this.packs.delete(code);throw e;}));}return this.packs.get(code);}
  async reverse(point){
   if(!valid(point)||point.crs&&point.crs!=='WGS84')throw new Error('只接受有效 WGS84 坐标');

@@ -33,6 +33,8 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   // In the Android app the whole flow is one button: read the album, drop what has no
   // usable location, group by city and save. The reviewable file flow stays for the Web.
   const autoImporter=native?new AndroidAutoImport(service.repository,native):null;let autoState=null;
+  // Places saved with older (English) offline names are renamed quietly after start-up.
+  if(autoImporter)setTimeout(()=>{autoImporter.localize().catch(()=>{});},3000);
   const scanningNow=()=>service.scanner.running||!!nativeImporter?.running;
   let nativePermission=null,nativeStart='',nativeEnd='',nativeIncremental=true,nativeResume=false,nativePreviews=0;
   const dialog=document.querySelector('#photo-dialog');let manage=false,batch=null,review=null,assets=[],preview=null,busy=false,urls=[],focusedPreviewId=null,shown=CANDIDATE_PAGE,progressFrame=0,retain=false,gallery=false,galleryShown=12,restorePreview=null,storageStats=null,renderGeneration=0,inputController=null;

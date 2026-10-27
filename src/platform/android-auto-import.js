@@ -1,4 +1,4 @@
-import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData} from '../life/media/auto-import.js';
+import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData,placeRenames,applyPlaceRenames} from '../life/media/auto-import.js';
 import {geoNameProvider} from '../life/geocoding/provider.js';
 import {NativeScanStore} from './native-scan-store.js';
 
@@ -11,6 +11,13 @@ export class AndroidAutoImport {
   /** Results of the earlier review-based import are regrouped on the next run. */
   hasLegacy(){return this.repository.getDataset().memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:'));}
   hasImported(){return this.repository.getDataset().memories.some(m=>m.uri?.startsWith('android-media:'));}
+  /** Renames imported places after the offline names change (English to Chinese); returns the count. */
+  async localize(){
+    if(this.running||!this.hasImported())return 0;
+    const renames=await placeRenames(this.repository.getDataset(),this.geonames);
+    if(renames.size&&!this.running)await this.repository.update(d=>{applyPlaceRenames(d,renames);});
+    return renames.size;
+  }
   async run({onProgress=()=>{}}={}){
     if(this.running)throw new Error('正在导入');
     this.running=true;this.controller=new AbortController();const {signal}=this.controller;
@@ -29,8 +36,8 @@ export class AndroidAutoImport {
       onProgress({phase:'placing',scanned,total});
       const names=await nameCells(fresh.map(normalizeObservation).filter(Boolean),this.geonames,{signal});
       let summary={photos:0,newTrips:0,newPlaces:0,tripIds:[],latestTripId:null};
-      const legacy=this.hasLegacy();
-      if(fresh.length||legacy)await this.repository.update(d=>{if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names);});
+      const legacy=this.hasLegacy(),renames=await placeRenames(this.repository.getDataset(),this.geonames);
+      if(fresh.length||legacy||renames.size)await this.repository.update(d=>{applyPlaceRenames(d,renames);if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names);});
       if(checkpoint)await this.store.put('auto-checkpoint',checkpoint);
       return {...summary,scanned};
     }finally{this.running=false;this.controller=null;}

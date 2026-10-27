@@ -1,6 +1,6 @@
 """Reproduce country packs from pinned Natural Earth v5.1.2 GeoJSON sources.
 Download ne_50m_admin_0_countries, ne_10m_admin_1_states_provinces and
-ne_10m_populated_places_simple into INPUT as countries.json/admin1-full.json/cities.json.
+ne_10m_populated_places (full, for NAME_ZH) into INPUT as countries.json/admin1-full.json/cities.json.
 No invented rectangles or city boundaries. Coordinates quantized to 4 decimals.
 """
 import json, pathlib, sys
@@ -36,10 +36,14 @@ for f in load('admin1-full'):
  p=f['properties'];code=p['adm0_a3']
  if code in packs and f['geometry']:
   g=geom(f['geometry']);packs[code]['admins'].append({'name':p.get('name_zh') or p['name'],'geometry':g,'bounds':[bbox({'type':'Polygon','coordinates':poly}) for poly in polygons(g)]})
-# Cities are point samples, never containment evidence. English source names are preserved.
+# Cities are point samples, never containment evidence. The app is Chinese: NAME_ZH is
+# shown when present and the English source name is preserved as nameEn.
 for f in load('cities'):
- p=f['properties'];code=p['adm0_a3']
- if code in packs:packs[code]['cities'].append({'name':p['name'],'admin':p.get('adm1name'),'coordinates':{'latitude':p['latitude'],'longitude':p['longitude']}})
+ p={k.upper():v for k,v in f['properties'].items()};code=p['ADM0_A3']
+ if code in packs:
+  zh=(p.get('NAME_ZH') or '').strip();zh=zh[:-1] if len(zh)>2 and zh.endswith('市') else zh;city={'name':zh or p['NAME'],'admin':p.get('ADM1NAME'),'coordinates':{'latitude':p['LATITUDE'],'longitude':p['LONGITUDE']}}
+  if zh:city['nameEn']=p['NAME']
+  packs[code]['cities'].append(city)
 for code,pack in packs.items():write(out/(code+'.json'),pack)
 write(out/'index.json',{'source':'Natural Earth v5.1.2','license':'Public Domain','crs':'WGS84','countries':index})
 print(len(packs),'country packs;',sum(p.stat().st_size for p in out.glob('*.json')),'bytes')

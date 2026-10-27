@@ -47,7 +47,8 @@ try{
   assert.ok(located>7500&&located<8000,`about two thirds of 12,000 photos are located: ${located}`);
   assert.ok(saved.memories.every(m=>/^android-media:external_primary\/\d+$/.test(m.uri)),'only album pointers are stored');
   assert.ok(saved.places.length<=6,`places are merged per city: ${saved.places.map(p=>p.name)}`);
-  assert.equal(saved.residences.length,1,'the dominant city becomes the inferred home');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'Shenzhen');
+  assert.equal(saved.residences.length,1,'the dominant city becomes the inferred home');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'深圳','offline city names are Chinese');
+  assert.ok(saved.places.every(p=>!/[A-Za-z]/.test(p.name)),`no English place names: ${saved.places.map(p=>p.name)}`);
   assert.deepEqual(saved.trips.map(t=>t.title).sort(),['日本之旅','印度尼西亚之旅'].sort());
   assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
   await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
