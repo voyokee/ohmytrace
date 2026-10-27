@@ -209,7 +209,7 @@ let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,s
 let storyFallbackLayer=null;
 function storageError(error) {
   const el=$('#life-storage-error');el.hidden=false;
-  el.textContent='Life Atlas：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
+  el.textContent='OnceHere：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
   toast('保存失败：'+error.message,6000);
 }
 async function mutateLife(action) {
@@ -222,9 +222,9 @@ async function load() {
   try {
     life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
     lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
-      status:()=>life.status(),onBackup:()=>download('LifeAtlas.json',life.repository.backup(),'application/json'),
-      onRestore:async file=>{const text=await file.text();if(!confirm('用此 JSON 备份替换当前 Life Atlas？建议先下载当前 JSON 备份。'))return;
-        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('JSON 备份已恢复');}});
+      status:()=>life.status(),onBackup:()=>download('OnceHere-records.json',life.repository.backup(),'application/json'),
+      onRestore:async file=>{const text=await file.text();if(!confirm('用此记录备份替换当前人生记录？建议先下载当前备份。'))return;
+        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
     // The dialog covers the globe while a scan runs; pausing its render loop keeps
@@ -245,7 +245,7 @@ function download(name,text,type='text/csv;charset=utf-8') {
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([type==='application/json'?text:'\uFEFF'+text],{type}));
   a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
-function exportCsv() { if(life)download('我的足迹.csv',life.exportCSV()); }
+function exportCsv() { if(life)download('OnceHere.csv',life.exportCSV()); }
 function exitDemo() { if(!life?.exitDemo?.())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
 
 async function readFileText(file) {
@@ -1277,7 +1277,7 @@ function renderChips() {
   // Replays are made from the visitor's own footprints, so the entry waits for real trips.
   const replay=life&&!sceneDemo&&!demo?replayTarget():null;
   if(replay)out.push(`<button class="chip chip-replay" data-story-quick="${esc(replay.source)}" ${storyExperience?'':'disabled'}>${storyExperience?`▶ 回放${esc(replay.label)}`:'回放准备中…'}</button>`);
-  if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
+  if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回 OnceHere</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
   const n = pendingPlaces().length;
@@ -1724,7 +1724,7 @@ function bindEvents() {
       case 'export': exportCsv(); return;
       case 'photo-storage': closeModal(); photoUI?.open({storage:true}); return;
       case 'clear':
-        if (confirm('确定清空全部足迹与人生阶段吗？建议先下载 JSON 备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
+        if (confirm('确定清空全部足迹与人生阶段吗？建议先下载完整备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
         return;
       case 'add-row': draft.push({ date: '', trip: '', place: '', type: '旅行', note: '' }); renderTab(); return;
       case 'del-row': draft.splice(+t.dataset.i, 1); renderTab(); return;

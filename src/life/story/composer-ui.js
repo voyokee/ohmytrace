@@ -49,9 +49,9 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       <details><summary>逐张选择记忆（默认全部排除）</summary><div class="life-options">${availableMemories().map(m=>`<div><label><input type="checkbox" data-story-memory="${esc(m.id)}" ${story.includedMemories.includes(m.id)?'checked':''}>${esc(m.title||'未命名记忆')} · ${esc(m.kind)}</label>${m.kind==='photo'&&story.includedMemories.includes(m.id)?`<label class="btn sm">${images[m.id]?'重新选择已授权图片':'选择获准分享的图片'}<input type="file" accept="image/jpeg,image/png,image/webp" data-story-image="${esc(m.id)}" hidden></label><small>${images[m.id]?'已生成去除 EXIF 的缩略图':'不选择文件时仅分享记忆文字和地点，不包含照片'}</small>`:''}</div>`).join('')||'<p class="hint">没有照片也能完整生成人生故事。</p>'}</div></details>
       </fieldset>
       <div class="row-actions"><button class="btn" data-story-review>审查最终分享内容</button><button class="btn primary" data-story-preview>预览最终回放</button></div>
-      <section data-story-review-panel>${review?`<h4>这份作品将包含</h4><p>${review.chapters.length} 个人生阶段 · ${review.trips.length} 次旅行 · ${review.places.length} 个地点 · ${review.memories.length} 条记忆 · ${review.memories.filter(m=>m.image).length} 张缩略图</p><p class="hint">${review.privacySettings.includeNotes?'包含所选记录的原始备注。':'不含原始备注。'}${review.privacySettings.locationMode==='precise'?'公开所选地点精确坐标。':'未公开精确坐标。'} 下面是实际导出内容。</p><details><summary>检查作品 JSON</summary><pre>${esc(JSON.stringify(review,null,2))}</pre></details><label><input type="checkbox" data-story-approve ${approved?'checked':''}>我已逐项检查，确认这些内容可公开</label>`:''}</section>
-      <div class="row-actions"><button class="btn" data-story-json ${!approved?'disabled':''}>导出 Story JSON</button><button class="btn" data-story-package ${!approved||busy?'disabled':''}>导出静态分享包</button></div>
-      <p class="hint">分享包需部署到静态网站，在线发布只上传经审核的作品。修改任意内容后须重新审查。编辑草稿仅在本页保留。每份作品最多 64 张缩略图（最长边 768 像素、每张 256 KiB），JSON 上限 24 MiB。</p>`:''}<p data-story-progress role="status"></p><p data-story-error role="alert"></p></div>`;
+      <section data-story-review-panel>${review?`<h4>这份作品将包含</h4><p>${review.chapters.length} 个人生阶段 · ${review.trips.length} 次旅行 · ${review.places.length} 个地点 · ${review.memories.length} 条记忆 · ${review.memories.filter(m=>m.image).length} 张缩略图</p><p class="hint">${review.privacySettings.includeNotes?'包含所选记录的原始备注。':'不含原始备注。'}${review.privacySettings.locationMode==='precise'?'公开所选地点精确坐标。':'未公开精确坐标。'} 下面是实际导出内容。</p><details><summary>检查作品内容</summary><pre>${esc(JSON.stringify(review,null,2))}</pre></details><label><input type="checkbox" data-story-approve ${approved?'checked':''}>我已逐项检查，确认这些内容可公开</label>`:''}</section>
+      <div class="row-actions"><button class="btn" data-story-json ${!approved?'disabled':''}>导出分享文件</button><button class="btn" data-story-package ${!approved||busy?'disabled':''}>导出静态分享包</button></div>
+      <p class="hint">分享包需部署到静态网站，在线发布只上传经审核的作品。修改任意内容后须重新审查。编辑草稿仅在本页保留。每份作品最多 64 张缩略图（最长边 768 像素、每张 256 KiB），分享文件上限 24 MiB。</p>`:''}<p data-story-progress role="status"></p><p data-story-error role="alert"></p></div>`;
     dialog.querySelector('[data-story-source]').value=source;
     if(story){dialog.querySelector('.dlg-body').append(publishing.element);publishing.refresh();}
   }
@@ -90,7 +90,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
     }finally{busy=false;render();if(shared?.file){const el=dialog.querySelector('[data-story-progress]');if(el)el.textContent='分享文件已生成，可以发给朋友用足迹分享页打开。';}}
   }
   function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='range'?{type,start:rest[0],end:rest[1]}:type==='all'?{type}:{type,id:rest.join(':')};}
-  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:s.type==='range'?`${s.start} 至 ${s.end}`:'我的足迹'});images={};dirty();render();}
+  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:s.type==='range'?`${s.start} 至 ${s.end}`:'OnceHere 足迹回顾'});images={};dirty();render();}
   dialog.addEventListener('input',e=>editText(e.target));
   dialog.addEventListener('change',e=>{const el=e.target;if(!el.matches('[data-share-from],[data-share-to]'))return;
     custom[el.hasAttribute('data-share-from')?'from':'to']=el.value;
@@ -123,7 +123,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       if(b.hasAttribute('data-story-remove')){story.orderedScenes.splice(index,1);dirty();render();return;}
       if(b.hasAttribute('data-story-review')){review=projectShare(data(),story,{images});approved=false;render();return;}
       if(b.hasAttribute('data-story-preview')){const a=projectShare(data(),story,{images});if(!a.orderedScenes.length)throw new Error('至少保留一个镜头');dialog.close();await onPreview(a);return;}
-      if(b.hasAttribute('data-story-json')&&approved&&review)saveBlob('LifeStory.json',new Blob([JSON.stringify(review,null,2)],{type:'application/json'}));
+      if(b.hasAttribute('data-story-json')&&approved&&review)saveBlob('OnceHere-story.json',new Blob([JSON.stringify(review,null,2)],{type:'application/json'}));
       if(b.hasAttribute('data-story-package')&&approved&&review){busy=true;await onExportPackage(review,message=>{dialog.querySelector('[data-story-progress]').textContent=message;});busy=false;}
     }catch(e){busy=false;error(e);}
   });

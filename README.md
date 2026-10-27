@@ -1,6 +1,6 @@
 <div align="center">
 
-# Oh My Trace
+# OnceHere
 
 **把你走过的地方，点亮在 3D 地球上。**
 
@@ -152,7 +152,7 @@ npm test
 ## 数据与隐私
 
 - 人生记录与本地照片索引保存在当前浏览器的 IndexedDB；旧版 localStorage 作为兼容迁移来源保留。应用不自动上传个人数据库或原始照片。
-- 清除浏览器数据会把它一起清掉。完整人生数据用 Life Atlas JSON 备份，CSV 用于足迹交换；Story JSON 只包含审查后的分享内容，不能替代私人数据库备份。
+- 清除浏览器数据会把它一起清掉。完整人生数据用 完整记录备份，CSV 用于足迹交换；Story JSON 只包含审查后的分享内容，不能替代私人数据库备份。
 - 自动定位时，地名会发送给 OpenStreetMap 的 Nominatim 服务。
 
 ## 数据来源与致谢

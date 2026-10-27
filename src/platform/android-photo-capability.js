@@ -54,7 +54,7 @@ export class AndroidPhotoCapability {
     if(!['authorized','limited'].includes(permission.photos))permission=await this.requestPermission();
     if(!['authorized','limited'].includes(permission.photos))throw new Error('PHOTO_PERMISSION_REQUIRED：未获相册访问授权，本次未扫描。请在系统设置中允许访问照片后重试。');
     if(permission.location!=='authorized')permission=await this.requestPermission({location:true});
-    if(permission.location!=='authorized')throw new Error('GPS_PERMISSION_REQUIRED：未获照片位置授权，本次未扫描。请允许读取照片 GPS；若系统不再提示，请到设置 → 应用 → Oh My Trace → 权限中调整后重新扫描。');
+    if(permission.location!=='authorized')throw new Error('GPS_PERMISSION_REQUIRED：未获照片位置授权，本次未扫描。请允许读取照片 GPS；若系统不再提示，请到设置 → 应用 → OnceHere → 权限中调整后重新扫描。');
     return permission;
   }
   async page(options){return this.bridge.call('enumerate',options,{signal:options.signal});}

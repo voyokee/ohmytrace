@@ -40,17 +40,17 @@ if __name__ == '__main__':
             try:
                 with urllib.request.urlopen(url, timeout=2) as response:
                     page = response.read(16000).decode('utf-8')
-                    running = 'id="globe"' in page and '<title>我的足迹</title>' in page
+                    running = 'id="globe"' in page and '<title>OnceHere</title>' in page
             except Exception:
                 pass
         if not running:
             parser.exit(1, f'Port {args.port} is unavailable. Try --port 8766.\n')
-        print(f'Oh My Trace is already running: {url}')
+        print(f'OnceHere is already running: {url}')
         if args.open:
             webbrowser.open(url)
         raise SystemExit(0)
     with server:
-        print(f'Oh My Trace: http://127.0.0.1:{args.port}/ (development cache disabled)', flush=True)
+        print(f'OnceHere: http://127.0.0.1:{args.port}/ (development cache disabled)', flush=True)
         if args.open:
             timer = threading.Timer(0.5, webbrowser.open, args=(url,))
             timer.daemon = True

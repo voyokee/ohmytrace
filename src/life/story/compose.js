@@ -10,7 +10,7 @@ function coverage(entity,data){
 }
 export function storyYears(data){const years=new Set();for(const t of data.trips){const d=coverage(t,data);if(d)for(let y=new Date(d.start).getUTCFullYear();y<=new Date(d.end).getUTCFullYear();y++)years.add(y);}return [...years].sort((a,b)=>a-b);}
 
-export function composeStory(data,{scope={type:'all'},title='我的足迹',chapterIds,tripIds}={}){
+export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回顾',chapterIds,tripIds}={}){
   validateDataset(data);
   const byYear=e=>{const d=coverage(e,data),year={precision:'year',value:String(scope.year).padStart(4,'0')};return d!==null&&d.start<=dateBound(year,true)&&d.end>=dateBound(year);};
   if(!['all','chapter','trip','year','range'].includes(scope.type))throw new Error('未知故事范围');

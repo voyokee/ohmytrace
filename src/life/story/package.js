@@ -31,6 +31,6 @@ export async function createSharePackage(input,{fetchFile=async path=>{const r=a
     }
   }));
   const json=JSON.stringify(artifact,null,2),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(json)))].map(b=>b.toString(16).padStart(2,'0')).join('');
-  entries.push(['story.json',json],['story.sha256',digest],['README.txt','OhMyTrace Life Story — static package\nExtract the ZIP and publish the entire folder to a static HTTPS host on a separate origin. No build step or login required. Open index.html through HTTP(S), not file://. For local testing: python -m http.server 8080\nIncludes only reviewed Story data, embedded approved thumbnails and public engine/assets. No personal database, CSV or original media files. External terrain/imagery is optional; the local globe remains usable when offline. No cloud upload was performed.\n']);
+  entries.push(['story.json',json],['story.sha256',digest],['README.txt','OnceHere — static story package\nExtract the ZIP and publish the entire folder to a static HTTPS host on a separate origin. No build step or login required. Open index.html through HTTP(S), not file://. For local testing: python -m http.server 8080\nIncludes only reviewed Story data, embedded approved thumbnails and public engine/assets. No personal database, CSV or original media files. External terrain/imagery is optional; the local globe remains usable when offline. No cloud upload was performed.\n']);
   onProgress('静态分享包已生成；未上传任何数据');return staticZip(entries);
 }
