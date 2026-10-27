@@ -271,6 +271,7 @@
     "src/life/geocoding/provider.js",
     "src/life/legacy.js",
     "src/life/media/archive.js",
+    "src/life/media/auto-grouping.js",
     "src/life/media/auto-import.js",
     "src/life/media/config.js",
     "src/life/media/exif.js",

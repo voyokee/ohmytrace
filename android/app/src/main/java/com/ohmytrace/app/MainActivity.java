@@ -105,8 +105,17 @@ public final class MainActivity extends Activity {
             } catch (Exception error) { respond(reply, id, null, error.getMessage()); }
         });
         // API 35 edge-to-edge: keep the photo dialog clear of system bars.
-        if (Build.VERSION.SDK_INT >= 30) web.setOnApplyWindowInsetsListener((view, insets) -> { android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()); view.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets; });
-        setContentView(web); web.loadUrl(ORIGIN + "/assets/index.html");
+        // API 35 is edge-to-edge and a WebView does not move its page for its own padding,
+        // so the toolbar sat under the status bar / camera cutout. The page lives in a
+        // container inset by the bars and cutout; the inset area shows the app background.
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.setBackgroundColor(0xFF04060B); web.setBackgroundColor(0xFF04060B);
+        root.addView(web, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+        if (Build.VERSION.SDK_INT >= 30) root.setOnApplyWindowInsetsListener((view, insets) -> {
+            android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom); return android.view.WindowInsets.CONSUMED;
+        });
+        setContentView(root); web.loadUrl(ORIGIN + "/assets/index.html");
     }
     private boolean local(Uri uri) { return "https".equals(uri.getScheme()) && "appassets.androidplatform.net".equals(uri.getHost()) && uri.getPath() != null && uri.getPath().startsWith("/assets/"); }
     private void requestPermission(String id, boolean location, JavaScriptReplyProxy reply) throws Exception {

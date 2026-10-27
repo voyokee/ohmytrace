@@ -22,7 +22,7 @@ const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
 const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-touch');
-const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
+const {createMapChooser,cityHistory}=await import('./src/ui/map-chooser.js?v=20261027-city');
 const {GEOCODER_VERSION,needsGeocoding:legacyNeedsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
@@ -187,7 +187,7 @@ function toast(msg, ms = 2600) {
 
 /* ================= state ================= */
 
-const state = { rows: [], places: {}, sel: null, year: null, playing: false };
+const state = { rows: [], places: {}, sel: null, city: null, year: null, playing: false };
 let trips = [], homes = [], typeColors = {};
 let viewer, scene, terrainReady = false;
 let flying = false, flightGeneration = 0, orbit = null, lastInput = 0, pickName = null, playToken = 0;
@@ -234,7 +234,7 @@ async function load() {
       if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
     photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
-      onCommitted:result=>{stopPlay();state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+      onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
 async function importCsvText(text,mode) {
@@ -1096,6 +1096,10 @@ function renderMarkers() {
     if(!markerInfo.has(h.place))markerInfo.set(h.place,{trips:[],homes:[]});
     markerInfo.get(h.place).homes.push(h);
   }
+  for(const p of lifeSnapshot?.photoPlaces||[]){
+    if(!markerInfo.has(p.place))markerInfo.set(p.place,{trips:[],homes:[]});
+    const info=markerInfo.get(p.place);(info.photos||=[]).push(p);
+  }
   updateMarkerClasses();
 }
 function markerTarget(info) {
@@ -1103,32 +1107,49 @@ function markerTarget(info) {
 }
 function onMarkerClick(name,info) {
   storyExperience?.pauseForInteraction();
-  const target=markerTarget(info);if(!target)return;
-  const sel=byId(state.sel);
-  if(sel&&(sel.kind==='trip'?sel.stops.some(s=>s.place===name):sel.place===name)) {
-    flyToPoints([posOf(name)],{close:true,placeName:name});return;
-  }
-  select(target.id);
+  if(!info)return;
+  showCity(name,info,lastTap,lastTap.element);
+}
+let lastTap={x:innerWidth/2,y:innerHeight/2,element:null},lastCluster={key:'',at:0};
+document.addEventListener('pointerup',e=>{lastTap={x:e.clientX,y:e.clientY,element:e.target.closest?.('.mk,.mk-cluster')||null};},true);
+function showCity(name,info,anchor,element) {
+  pauseOverviewMotion();
+  state.sel=null;state.city=name;expandedCardId=null;
+  life?.adapter.focusPlace(lifeSnapshot.placeIds[name]);renderCard();updateSelectionUI();
+  const history=cityHistory(info,name,{year:state.year});
+  const residenceGroup=(title,items)=>({title,items:items.map(h=>({title:h.title,meta:h.date?.label||'时间未填写',select:()=>select(h.id,{fly:false})}))});
+  const groups=[];
+  if(history.current.length)groups.push(residenceGroup('现住',history.current));
+  if(history.past.length)groups.push(residenceGroup('曾住',history.past));
+  groups.push({title:'旅行到访',items:history.journeys.map(({trip,date})=>({title:trip.title,meta:date?.label||'到访日期未知',select:()=>select(trip.id)})),empty:history.journeys.length?'':'没有关联的旅行记录'});
+  if(isMobile())body.classList.remove('list-open');
+  flyToPoints([posOf(name)],{placeName:name});
+  mapChooser.open({title:coreName(name),subtitle:`${history.category} · ${state.year==null?'全部记录':state.year+' 年'} · ${history.journeys.length} 次旅程`,anchor,element,type:'city',groups,
+    primary:{title:'近看这里',select:()=>flyToPoints([posOf(name)],{close:true,placeName:name})}});
 }
 function showPlaceCluster(names,anchor,element) {
   storyExperience?.pauseForInteraction();
   pauseOverviewMotion();
+  // First tap zooms in so the cities in this area light up separately; the list is
+  // for a second tap on the same cluster when the cities still overlap.
+  const key=[...names].sort().join('|');
+  if(key!==lastCluster.key||Date.now()-lastCluster.at>15000){lastCluster={key,at:Date.now()};flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:1.6});return;}
+  lastCluster={key:'',at:0};
   mapChooser.open({title:`这一带 · ${names.length} 个地点`,subtitle:'放大地图展开足迹，或直接选择地点',anchor,element,
-    items:names.map(name=>{const info=markerInfo.get(name),target=markerTarget(info),count=info.trips.filter(inYear).length,st=statusOf(state.places[name]);
-      return {title:name,meta:(count?`${count} 次旅行`:(target?.anchor?'阶段地点':target?.kind==='home'?'现居地':'曾居地'))+(st.pending?` · ${st.text}`:''),select:()=>{
-        if(target)select(target.id,{fly:false});flyToPoints([posOf(name)],{placeName:name});
-      }};}),primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
+    items:names.map(name=>{const info=markerInfo.get(name),history=cityHistory(info,name,{year:state.year}),st=statusOf(state.places[name]);
+      return {title:name,meta:`${history.category} · ${history.journeys.length} 次旅程`+(st.pending?` · ${st.text}`:''),select:()=>showCity(name,info,anchor,element)};}),
+    primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
 }
 function updateMarkerClasses() {
   if(!footprintOverlay)return;
-  const sel=byId(state.sel),selected=new Set(sel?(sel.kind==='trip'?[...sel.stops.map(s=>s.place),...(sel.origin?[sel.origin.place]:[])]:[sel.place]):[]);
+  const sel=byId(state.sel),selected=new Set(state.city?[state.city]:sel?(sel.kind==='trip'?sel.stops.map(s=>s.place):[sel.place]):[]);
   const data=[];
   for(const [name,info]of markerInfo) {
     const p=state.places[name],position=posOf(name);if(!position)continue;
     const activeTrips=info.trips.filter(inYear),activeHomes=info.homes.filter(inYear);
-    const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name);
+    const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name),observed=info.photos?.some(p=>state.year==null||p.years.includes(state.year));
     data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.anchor?undefined:home?.kind,
-      active:!!(activeTrips.length||home||chosen),selected:chosen,dim:!!sel&&!chosen,
+      active:!!(activeTrips.length||home||chosen||observed),selected:chosen,dim:!!(sel||state.city)&&!chosen,
       color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:home?300:0)+(latest?.date?.start||0)/1e13});
   }
   footprintOverlay.setItems(data);
@@ -1157,7 +1178,7 @@ function renderArcs(){arcSignature=null;updateArcs();}
 function updateArcs() {
   if(!arcSource)return;
   const sel=byId(state.sel),list=visibleTrips();
-  const wanted=sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
+  const wanted=state.city?[]:sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
   const signature=wanted.map(t=>t.id).join('\u0001');
   if(signature!==arcSignature) {
     arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
@@ -1173,7 +1194,7 @@ function updateArcs() {
   }
   // Dashed arc from where the person lived at the time to the selected trip.
   if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
-  if (sel && sel.kind === 'trip' && sel.origin) {
+  if (sel && sel.kind === 'trip' && sel.origin && !sel.inferredConnections) {
     const a = posOf(sel.origin.place), firstStop = sel.stops.find(s => located(s.place));
     const b = firstStop && posOf(firstStop.place);
     if (a && b && Cesium.Cartesian3.distance(a, b) > 30000) {
@@ -1189,6 +1210,7 @@ function updateArcs() {
 
 function refresh() {
   buildModel();
+  if(state.city&&!state.places[state.city]){state.city=null;mapChooser?.close();}
   if(state.sel&&!byId(state.sel))state.sel=null;
   if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
@@ -1207,7 +1229,7 @@ function refresh() {
 
 function renderStats() {
   const list=visibleTrips(),days=list.reduce((n,t)=>n+scopedDays(t,state.year),0);
-  const places=new Set(list.flatMap(t=>t.stops.map(s=>s.place))),years=yearOptions(list),parts=[];
+  const places=new Set([...list.flatMap(t=>t.stops.map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>state.year==null||p.years.includes(state.year)).map(p=>p.place)]),years=yearOptions(list),parts=[];
   if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
   parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
   if(days)parts.push(`<b>${days}</b> 天在路上`);
@@ -1263,6 +1285,7 @@ function renderChips() {
   $('#chips').innerHTML = out.join('');
   $('#tab-badge').textContent = n || '';
   $('#data-dot').hidden = !n;
+  for(const id of ['#more-dot','#menu-data-dot'])if($(id))$(id).hidden=!n;
 }
 
 function itemHTML(x) {
@@ -1384,7 +1407,7 @@ function renderCard() {
       <div class="card-date">${esc(x.date ? x.date.label : '日期未知')}${x.date && x.date.days ? ` <span>· ${x.date.days} 天</span>` : ''}</div>
       ${mobileActions}<div class="card-detail" id="card-detail-body">
       ${x.inferredConnections?`<p class="hint">${x.memoryCount>0?`${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，`:''}记录地点间的虚线为推测连接，交通方式未知。</p>`:''}
-      ${x.origin ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
+      ${x.origin&&!x.inferredConnections ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
       <ol class="stops">${x.stops.map(s => stopHTML(s.place, s.note, color)).join('')}</ol>
       <div class="card-nav"><button data-act="prev"${idx <= 0 ? ' disabled' : ''}>‹ 上一次</button>
       <span>${idx + 1} / ${list.length}</span><button data-act="next"${idx < 0 || idx >= list.length - 1 ? ' disabled' : ''}>下一次 ›</button></div></div>`;
@@ -1420,6 +1443,7 @@ function select(id, { fly = true } = {}) {
   const x = byId(id);
   if (!x) return;
   if(state.sel!==id)expandedCardId=null;
+  state.city=null;mapChooser?.close();
   state.sel = id;
   if(x.kind==='trip')life?.adapter.focusTrip(id);
   renderCard();
@@ -1430,6 +1454,7 @@ function select(id, { fly = true } = {}) {
 
 function deselect({ home = true } = {}) {
   expandedCardId=null;
+  state.city=null;
   state.sel = null;
   renderCard();
   updateSelectionUI();
@@ -1444,9 +1469,9 @@ function step(dir) {
 }
 
 function setYear(y) {
-  const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!flying&&!orbit&&!scenery.name)return;
+  const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!state.city&&!flying&&!orbit&&!scenery.name)return;
   if(next!=null&&!yearOptions(trips).includes(next))return;
-  stopPlay();mapChooser?.close();state.year=next;
+  stopPlay();mapChooser?.close();state.city=null;state.year=next;
   life?.adapter.setScope({type:'all'});lifeUI?.renderStrip();
   state.sel=null;refresh();
   lightsAnimating=true;scene?.requestRender();
@@ -1455,7 +1480,7 @@ function setYear(y) {
 }
 
 function setChapter(id) {
-  stopPlay();mapChooser?.close();state.sel=null;state.year=null;
+  stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;
   life.adapter.setScope(id?{type:'chapter',id}:{type:'all'});refresh();
   if(id)body.classList.add('list-open');
   if(viewer)homeView(1.8);
@@ -1746,6 +1771,15 @@ function bindEvents() {
 
   $('#btn-home').addEventListener('click', () => { storyExperience?.pauseForInteraction();stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
+  $('#btn-share')?.addEventListener('click',()=>{
+    if(life?.repository?.getDataset().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
+    storyExperience?.composer?.open();
+  });
+  // Phones keep the frequent actions in the bar; the rest live under "更多".
+  const menu=$('#toolbar-menu'),more=$('#btn-more'),closeMenu=()=>{if(menu&&!menu.hidden){menu.hidden=true;more.setAttribute('aria-expanded','false');}};
+  more?.addEventListener('click',()=>{const open=menu.hidden;menu.hidden=!open;more.setAttribute('aria-expanded',String(open));});
+  menu?.addEventListener('click',e=>{const b=e.target.closest('[data-proxy]');if(!b)return;closeMenu();$('#'+b.dataset.proxy).click();});
+  document.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target)&&!more.contains(e.target))closeMenu();});
   $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
   $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
   $('#btn-data').addEventListener('click', () => openModal(pendingPlaces().length ? 'places' : 'import'));
@@ -1773,9 +1807,9 @@ async function boot() {
   await initGlobe();
   refresh();
   geocodeMissing();
-  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>state.year?{type:'year',year:state.year}:life.adapter.scope,
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:life.adapter.scope;},
     reducedMotion,cancel:()=>pauseOverviewMotion(),
-    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;state.year=null;state.sel=null;body.classList.add('story-readonly');
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
     restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
@@ -1783,7 +1817,7 @@ async function boot() {
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{
       if(signal.aborted)return;storyScene=item;storyExploreCard=false;$('#toast').classList.remove('show');signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});
-      state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
+      mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
       if(item.tripId)state.sel=item.tripId;refresh();
       const duration=instant?0:Math.min(2.4,1.8/speed);
       const name=item.placeId?Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===item.placeId):null;

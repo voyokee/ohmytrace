@@ -11,10 +11,10 @@ test('antimeridian and exact temporal boundaries use centralized rules',async()=
   assert.equal(reconstructPhotos(a,emptyDataset()).candidates[0].visits.length,1);
   a[1].extractedTime.utcEpochMs+=1;a[1].extractedTime.wallClockOrdinal+=1;
   assert.equal(reconstructPhotos(a,emptyDataset()).candidates[0].visits.length,2);
-  const b=await assets([{time:'2025:01:01 00:00:00'},{time:'2025:01:05 00:00:00',lat:30,lon:120}]);
+  const b=await assets([{time:'2025:01:01 00:00:00'},{time:'2025:01:04 00:00:00',lat:30,lon:120}]);
   assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,1);
   b[1].extractedTime.utcEpochMs+=1;b[1].extractedTime.wallClockOrdinal+=1;
-  assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,2);assert.equal(RECONSTRUCTION_RULES.tripGapHours,96);
+  assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,2);assert.equal(RECONSTRUCTION_RULES.tripGapHours,72);
 });
 test('multi-city, same-day stops and A-B-A returns retain separate visits',async()=>{
   const a=await assets([{time:'2025:05:01 08:00:00'},{time:'2025:05:01 10:00:00',lat:30,lon:120},{time:'2025:05:01 15:00:00'}]);

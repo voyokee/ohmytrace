@@ -18,7 +18,7 @@ await context.addInitScript(()=>{
   // 12,000 album rows: home in Shenzhen, a Bali trip, a Kyoto trip; a third has no GPS.
   const TOTAL=Number(localStorage.getItem('fake-total')||12000),spots=[[22.62,114.06],[-8.65,115.22],[-8.51,115.26],[35.01,135.76]];
   const row=i=>{if(i%3===0)return null;if(i%97===0)return ['external_primary',String(i+1),0,0,'2026-01-01T00:00:00',480,null];
-    const trip=i%10<6?0:i%10<9?(i%2?1:2):3,[lat,lon]=spots[trip],day=trip===0?1+(i%200):trip===3?400+(i%3):300+(i%5),d=new Date(Date.UTC(2025,0,day));
+    const trip=i%10<6?0:i%10<9?(i%2?1:2):3,[lat,lon]=spots[trip],day=trip===0?(i%400<200?1:550)+Math.floor(i%200/10)*6+i%10:trip===3?400+(i%3):300+(i%5),d=new Date(Date.UTC(2025,0,day));
     return ['external_primary',String(i+1),lat+(i%13)*0.002,lon+(i%11)*0.002,d.toISOString().slice(0,10)+'T10:00:00',trip===3?540:trip===0?480:480,null];};
   window.nativeCalls=[];const port={postMessage(text){const request=JSON.parse(text);window.nativeCalls.push(request.method);if(request.method==='cancel')return;
     setTimeout(()=>{let result,error;try{const p=request.params;
@@ -47,14 +47,20 @@ try{
   assert.ok(located>7500&&located<8000,`about two thirds of 12,000 photos are located: ${located}`);
   assert.ok(saved.memories.every(m=>/^android-media:external_primary\/\d+$/.test(m.uri)),'only album pointers are stored');
   assert.ok(saved.places.length<=6,`places are merged per city: ${saved.places.map(p=>p.name)}`);
-  assert.equal(saved.residences.length,1,'the dominant city becomes the inferred home');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'深圳','offline city names are Chinese');
+  assert.equal(saved.residences.filter(r=>r.kind==='home').length,1,'only this year becomes current');assert.equal(saved.residences.filter(r=>r.kind==='past').length,1,'last year has a continuous stay over two months');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'深圳','offline city names are Chinese');
   assert.ok(saved.places.every(p=>!/[A-Za-z]/.test(p.name)),`no English place names: ${saved.places.map(p=>p.name)}`);
-  assert.deepEqual(saved.trips.map(t=>t.title).sort(),['日本之旅','印度尼西亚之旅'].sort());
+  assert.equal(saved.trips.length,2);assert.ok(saved.trips.every(t=>/之旅$/.test(t.title)&&!/[A-Za-z]/.test(t.title)),saved.trips.map(t=>t.title).join());
   assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
   await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
   await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-start]');assert.match(await page.locator('.auto-intro').innerText(),/只会补充新拍的照片/);
   await page.locator('[data-photo-auto-start]').click();await page.waitForSelector('[data-photo-auto-done]');assert.match(await page.locator('.auto-result').innerText(),/没有发现新的足迹/);
   assert.equal((await data()).memories.length,located,'re-importing never duplicates');
+  await page.locator('[data-photo-auto-done]').click();assert.equal(await page.locator('#chips [data-act=regroup]').count(),0,'Regroup belongs inside Photos');
+  await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-regroup]');
+  const calls=await page.evaluate(()=>window.nativeCalls.length),photoIds=(await data()).memories.map(m=>m.id);
+  await page.locator('[data-photo-auto-regroup]').click();await page.waitForSelector('[data-photo-auto-done]',{timeout:120000});
+  assert.match(await page.locator('.auto-result').innerText(),/已重新整理足迹/);assert.equal(await page.evaluate(()=>window.nativeCalls.length),calls,'Regroup must not access the album');
+  assert.deepEqual((await data()).memories.map(m=>m.id),photoIds);await shot('android-5-regroup.png');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}

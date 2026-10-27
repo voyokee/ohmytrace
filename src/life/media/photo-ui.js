@@ -110,10 +110,10 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   // Backup and storage tools live on their own page so the first screen is only about choosing photos.
   const plain=error=>String(error?.message||error).replace(/^[A-Z_]+：/,'');
   function renderAuto(){
-    const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),reading=s?.phase==='reading'||s?.phase==='placing';
+    const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),regroup=autoImporter.outdated(),reading=s?.phase==='reading'||s?.phase==='placing';
     const body=reading?`<div class="auto-progress"><div class="auto-bar"><span data-auto-bar></span></div><p data-auto-status></p></div><button class="auto-link" type="button" data-photo-auto-cancel>取消</button>`
-      :s?.phase==='done'?`<p class="auto-result">${s.summary.newTrips||s.summary.newPlaces?`新增 <b>${s.summary.newTrips}</b> 次旅行 · <b>${s.summary.newPlaces}</b> 个地方`:s.summary.photos?'已补充到原有的旅行里':'没有发现新的足迹'}</p><button class="btn primary auto-main" type="button" data-photo-auto-done>去地球上看看</button>`
-      :`<p class="auto-intro">${legacy?'之前导入的照片足迹会按城市重新整理，你手动添加的记录不受影响。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。照片不会上传，也不会复制到 App 里。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>`;
+      :s?.phase==='done'?`<p class="auto-result">${s.summary.regrouped?'已重新整理足迹，手动修改已保留':s.summary.newTrips||s.summary.newPlaces?`新增 <b>${s.summary.newTrips}</b> 次旅行 · <b>${s.summary.newPlaces}</b> 个地方`:s.summary.photos?'已补充到原有的旅行里':'没有发现新的足迹'}</p><button class="btn primary auto-main" type="button" data-photo-auto-done>去地球上看看</button>`
+      :`<p class="auto-intro">${regroup?'整理规则已更新：按今年识别现住城市、连续居住超过两个月识别曾住城市，照片断档超过 3 天切分旅程。可用已保存的照片记录重新整理，保留手动分类、标题和拆分。':legacy?'之前导入的照片足迹会按城市重新整理，保留手动修改。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。照片不会上传，也不会复制到 App 里。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>${again?'<button class="auto-link" type="button" data-photo-auto-regroup>重新整理足迹</button>':''}`;
     dialog.innerHTML=`<div class="dlg-head"><h3>找回我的足迹</h3><button class="x" type="button" data-photo-close aria-label="关闭">×</button></div><div class="dlg-body photo-auto">${body}</div>`;
     paintAuto();
   }
@@ -122,10 +122,10 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     const pct=s.phase==='placing'?100:s.total?Math.min(99,Math.round(s.scanned/s.total*100)):4;bar.style.width=pct+'%';
     status.textContent=s.phase==='placing'?'正在整理去过的地方…':s.total?`正在读取照片 ${s.scanned.toLocaleString()} / ${s.total.toLocaleString()}`:'正在读取照片…';
   }
-  async function startAuto(){
+  async function startAuto({regroup=false}={}){
     if(autoImporter.running)return;autoState={phase:'reading',scanned:0,total:null};renderAuto();onScanning(true);
-    try{const summary=await autoImporter.run({onProgress:p=>{autoState={...autoState,...p};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
-      autoState={phase:'done',summary};onCommitted({tripId:summary.latestTripId});}
+    try{const summary=await autoImporter[regroup?'regroup':'run']({onProgress:p=>{autoState={...autoState,...p};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
+      autoState={phase:'done',summary};onCommitted({tripId:null});}
     catch(error){autoState=error?.name==='AbortError'?null:{phase:'error',message:plain(error)};}
     finally{onScanning(false);if(dialog.open)renderAuto();}
   }
@@ -166,6 +166,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     const button=event.target.closest('button');if(!button)return;
     if(button.hasAttribute('data-photo-close')){dialog.close();return;}
     if(button.hasAttribute('data-photo-auto-start')){void startAuto();return;}
+    if(button.hasAttribute('data-photo-auto-regroup')){void startAuto({regroup:true});return;}
     if(button.hasAttribute('data-photo-auto-cancel')){autoImporter?.cancel();return;}
     if(button.hasAttribute('data-photo-auto-done')){autoState=null;dialog.close();return;}
     if(button.hasAttribute('data-photo-cancel')){inputController?.abort();nativeImporter?.cancel();service.scanner.cancel();return;}
@@ -200,5 +201,5 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       if(button.dataset.photoResume){dialog.dataset.resumeBatch=button.dataset.photoResume;dialog.querySelector('[data-photo-files]').click();}
     });
   });
-  render();return {open};
+  render();return {open,needsRegroup:()=>!!autoImporter&&!autoImporter.running&&autoImporter.outdated()};
 }

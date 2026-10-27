@@ -1,4 +1,4 @@
-import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData,placeRenames,applyPlaceRenames} from '../life/media/auto-import.js';
+import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData,placeRenames,applyPlaceRenames,autoImportOutdated,savedPhotoObservations} from '../life/media/auto-import.js';
 import {geoNameProvider} from '../life/geocoding/provider.js';
 import {NativeScanStore} from './native-scan-store.js';
 
@@ -11,6 +11,8 @@ export class AndroidAutoImport {
   /** Results of the earlier review-based import are regrouped on the next run. */
   hasLegacy(){return this.repository.getDataset().memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:'));}
   hasImported(){return this.repository.getDataset().memories.some(m=>m.uri?.startsWith('android-media:'));}
+  /** Saved results were grouped by older rules and are rebuilt from a full read on the next run. */
+  outdated(){return autoImportOutdated(this.repository.getDataset());}
   /** Renames imported places after the offline names change (English to Chinese); returns the count. */
   async localize(){
     if(this.running||!this.hasImported())return 0;
@@ -18,13 +20,26 @@ export class AndroidAutoImport {
     if(renames.size&&!this.running)await this.repository.update(d=>{applyPlaceRenames(d,renames);});
     return renames.size;
   }
+  /** Recompute saved automatic results without album access or loss of photo pointers. */
+  async regroup({onProgress=()=>{}}={}){
+    if(this.running)throw new Error('正在导入');
+    this.running=true;this.controller=new AbortController();const {signal}=this.controller;
+    try{
+      const data=this.repository.getDataset(),rows=savedPhotoObservations(data);
+      onProgress({phase:'placing',scanned:rows.length,total:rows.length});
+      const names=await nameCells(rows.map(normalizeObservation).filter(Boolean),this.geonames,{signal});signal.throwIfAborted();
+      let summary;
+      await this.repository.update(d=>{if(d.revision!==data.revision)throw new Error('记录已变化，请重新整理');summary=applyAutoImport(d,rows,names,{force:true});});
+      return {...summary,regrouped:true,scanned:rows.length};
+    }finally{this.running=false;this.controller=null;}
+  }
   async run({onProgress=()=>{}}={}){
     if(this.running)throw new Error('正在导入');
     this.running=true;this.controller=new AbortController();const {signal}=this.controller;
     try{
       await this.capability.ensureLocationAccess();
       // The checkpoint only skips rows already saved; after clearing data everything is read again.
-      const since=this.hasImported()?await this.store.get('auto-checkpoint'):null,rows=[];
+      const outdated=this.outdated(),since=this.hasImported()?await this.store.get('auto-checkpoint'):null,rows=[];
       let cursor=null,total=null,scanned=0,checkpoint=null;
       do{
         const page=await this.capability.locate({cursor,since,pageSize:this.pageSize},{signal});
@@ -34,10 +49,12 @@ export class AndroidAutoImport {
       }while(cursor);
       const known=new Set(this.repository.getDataset().memories.map(m=>m.uri)),fresh=rows.filter(r=>!known.has(r.uri));
       onProgress({phase:'placing',scanned,total});
-      const names=await nameCells(fresh.map(normalizeObservation).filter(Boolean),this.geonames,{signal});
+      const naming=outdated?[...savedPhotoObservations(this.repository.getDataset()),...fresh]:fresh;
+      const names=await nameCells(naming.map(normalizeObservation).filter(Boolean),this.geonames,{signal});
       let summary={photos:0,newTrips:0,newPlaces:0,tripIds:[],latestTripId:null};
-      const legacy=this.hasLegacy(),renames=await placeRenames(this.repository.getDataset(),this.geonames);
-      if(fresh.length||legacy||renames.size)await this.repository.update(d=>{applyPlaceRenames(d,renames);if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names);});
+      const legacy=this.hasLegacy(),renames=outdated?new Map():await placeRenames(this.repository.getDataset(),this.geonames);
+      signal.throwIfAborted();
+      if(fresh.length||legacy||outdated||renames.size)await this.repository.update(d=>{applyPlaceRenames(d,renames);if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names,{force:outdated});});
       if(checkpoint)await this.store.put('auto-checkpoint',checkpoint);
       return {...summary,scanned};
     }finally{this.running=false;this.controller=null;}

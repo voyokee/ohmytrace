@@ -32,3 +32,10 @@ test('a Chapter place anchor is not evidence of residence or travel origin',asyn
   assert.equal(snapshot.trips[0].origin,null,'associating a place with a Chapter must not invent a residence-based departure');
   assert.equal(snapshot.homes[0].anchor,true);assert.equal(repo.getDataset().residences.length,1);adapter.dispose();
 });
+test('city history receives each visit period instead of borrowing the whole journey period',async()=>{
+  const repo=new LifeRepository(new MemoryStore());await repo.initialize({legacyStorage:null});await repo.update(d=>importCSVInto(d,csv));
+  await repo.update(d=>{const trip=d.trips[0];trip.end={precision:'month',value:'2026-01'};d.visits.find(v=>v.id===trip.visitIds[0]).end={precision:'day',value:'2025-05-02'};});
+  const adapter=new RendererAdapter(repo),snapshot=adapter.getRenderSnapshot(),stop=snapshot.trips[0].stops[0];
+  assert.equal(stop.date?.label,'2025-05 – 2025-05-02','City dates describe this stop, not the journey through 2026');
+  assert.equal(snapshot.trips[0].date.label,'2025-05 – 2026-01');adapter.dispose();
+});

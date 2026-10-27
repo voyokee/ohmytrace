@@ -134,14 +134,45 @@ steps above describe the previous release and remain only for Web file import.
    or without any capture time are dropped natively. Only
    `[volume, id, lat, lon, localTime, offset, takenMs]` rows cross the bridge.
 3. JS (`src/life/media/auto-import.js`) names each 0.05° cell offline, drops cells
-   with no name, infers the home city (most photo days, >=5 days and >=30%),
-   merges places per city, splits trips on >72 h gaps or returning home, extends
-   overlapping trips and saves once. There is no review.
-4. Memories store `android-media:<volume>/<id>` pointers only; `preview` reads an
-   album thumbnail on demand. Nothing is copied into app storage.
+   with no name, counts distinct photo days per city and year and chooses that
+   year's maximum as home. Only the current year's home is labelled current.
+   Continuous same-city observations spanning more than two calendar months
+   establish former residence even outside the annual maximum. Observations
+   interrupted by another city or a gap over 72 h do not establish continuous
+   residence; two distant photos alone are insufficient. These are inferences.
+   Places are merged by city; journeys split only on returning home or a gap
+   strictly over 72 h. Changing country alone does not split them, and overlapping
+   dates never rejoin journeys separated by a home observation. There is no review.
+4. Memories store `android-media:<volume>/<id>` pointers and local GPS/time/city
+   metadata; `preview` reads an album thumbnail on demand. No photo pixels are copied.
 5. Later runs use the last generation checkpoint and skip saved pointers. The first
    run after upgrading regroups the previous review-based results (see
    `removeLegacyPhotoData`); CSV records, chapters and residences are kept.
+
+## City browsing and regrouping rules (2026-10-27)
+
+Tapping a map cluster first zooms in. Tapping any city focuses that location and
+opens its residence history and **N distinct journeys**, including zero or one.
+A journey is selected only after tapping its history row; A–B–A counts as one
+journey at A. A former residence may also have later travel visits. A city view
+clears journey routes and does not fabricate a departure from a home city.
+
+For one country and at most two provinces, titles use province names; otherwise
+they use country short names. A cross-border title lists countries in photo order.
+
+**重新整理足迹** lives inside the Photos dialog, alongside **导入新照片**. It
+rebuilds automatic groups from saved observations without album permission or a
+rescan, preserving photo IDs, city IDs and Chapter references. Automatic import
+batches are recomputed together so yearly classification is independent of batch
+boundaries. Explicitly edited city classifications and journeys (including titles
+and splits) retain their user-defined records and photo membership. Rules version
+3 and the classification year are persisted; a new year invalidates the old
+current-home result. Legacy data without exact capture metadata falls back to its
+saved observation date and city centre rather than inventing the original time.
+
+This change does not produce an APK. Automated browser acceptance uses fictional
+records and a simulated native port; phone permissions and EXIF throughput still
+require a physical-device check.
 
 Verified on Windows only: JVM `PhotoLocationTest`, 128 Life tests and a mock-port
 browser flow (12,000 rows, ~2 s of JS time). Phone EXIF throughput, HEIC EXIF on

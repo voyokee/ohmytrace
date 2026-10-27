@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {emptyDataset,validateDataset} from '../../src/life/schema.js';
-import {applyAutoImport,nameCells,cellKey,normalizeObservation,placeRenames,applyPlaceRenames} from '../../src/life/media/auto-import.js';
+import {applyAutoImport,nameCells,cellKey,normalizeObservation,placeRenames,applyPlaceRenames,autoImportOutdated,removeAutoImportData} from '../../src/life/media/auto-import.js';
+import {importCSVInto} from '../../src/life/legacy.js';
 
 // Fictional offline names by rough region; the ocean resolves to nothing.
 const geonames={async reverse({latitude,longitude}){
@@ -9,6 +10,10 @@ const geonames={async reverse({latitude,longitude}){
   if(latitude<-8&&latitude>-9&&longitude>115&&longitude<115.25)return {country:'印度尼西亚',countryCode:'ID',admin1:'巴厘省',city:'Denpasar'};
   if(latitude<-8&&latitude>-9&&longitude>=115.25&&longitude<116)return {country:'印度尼西亚',countryCode:'ID',admin1:'巴厘省',city:'Ubud'};
   if(latitude>34&&latitude<36&&longitude>135&&longitude<136)return {country:'日本',countryCode:'JP',admin1:'京都府',city:'Kyoto'};
+  if(latitude>1&&latitude<1.5&&longitude>103.6&&longitude<104.1)return {country:'新加坡',countryCode:'SG',admin1:null,city:'新加坡'};
+  if(latitude>25.5&&latitude<26&&longitude>100&&longitude<100.4)return {country:'中华人民共和国',countryCode:'CN',admin1:'云南省',city:'大理'};
+  if(latitude>26.7&&latitude<27&&longitude>100.1&&longitude<100.4)return {country:'中华人民共和国',countryCode:'CN',admin1:'云南省',city:'丽江'};
+  if(latitude>31&&latitude<31.4&&longitude>121.3&&longitude<121.6)return {country:'中华人民共和国',countryCode:'CN',admin1:'上海市',city:'上海'};
   return null;
 }};
 let n=0;
@@ -27,7 +32,7 @@ async function run(data,input,names=geonames){return applyAutoImport(data,input,
 test('one-tap import merges places per city, splits trips at home and keeps pointers only',async()=>{
   const data=emptyDataset('new'),summary=await run(data,library());validateDataset(data);
   assert.equal(summary.photos,327,'null island, ocean and timeless photos are dropped silently');
-  assert.deepEqual(data.trips.map(t=>t.title),['印度尼西亚之旅','日本之旅']);
+  assert.deepEqual(data.trips.map(t=>t.title),['巴厘之旅','京都之旅'],'one country, at most two provinces: titled by province');
   assert.deepEqual(data.places.map(p=>p.name).sort(),['Denpasar','Kyoto','Shenzhen','Ubud'],'300 Bali photos collapse to two city places');
   const bali=data.trips[0];assert.equal(bali.visitIds.length,2);assert.deepEqual([bali.start.value,bali.end.value],['2026-04-05','2026-04-07']);
   assert.equal(data.residences.length,1);assert.equal(data.places.find(p=>p.id===data.residences[0].placeId).name,'Shenzhen');
@@ -70,10 +75,10 @@ test('the first one-tap run regroups the old review-based photo import but keeps
   data.chapters.push({id:'chapter_1',title:'旅居',type:'other',start:{precision:'year',value:'2026'},end:{precision:'year',value:'2026'},homeAnchors:[],relatedTripIds:[trip.id,data.trips[0].id],memoryIds:['memory_old'],evidenceIds:[]});
   validateDataset(data);
   assert.deepEqual(removeLegacyPhotoData(data),{memories:1,trips:1});
-  const summary=await run(data,[photo('2026-04-05',10,-8.65,115.22)]);validateDataset(data);
+  const summary=await run(data,[photo('2026-04-01',10,1.3,103.85),photo('2026-04-02',10,1.3,103.85),photo('2026-04-05',10,-8.65,115.22)]);validateDataset(data);
   assert.deepEqual(data.trips.map(t=>t.title).sort(),['巴厘之旅','独库公路'].sort());
   assert.ok(!data.places.some(p=>p.id==='place_old_photo'));assert.deepEqual(data.chapters[0].memoryIds,[]);assert.equal(data.chapters[0].relatedTripIds.length,1);
-  assert.equal(summary.photos,1);assert.equal(removeLegacyPhotoData(data).memories,0,'nothing left to regroup');
+  assert.equal(summary.photos,3);assert.equal(removeLegacyPhotoData(data).memories,0,'nothing left to regroup');
 });
 
 test('places imported with English offline names are renamed to Chinese everywhere they show',async()=>{
@@ -88,4 +93,33 @@ test('places imported with English offline names are renamed to Chinese everywhe
   assert.ok(data.visits.every(v=>/^(深圳|登巴萨|乌布|京都)$/.test(v.legacy.place)));
   assert.equal((await placeRenames(data,chinese)).size,0,'renaming is idempotent');
   const more=await run(data,[photo('2026-04-08',9,-8.66,115.22)],chinese);assert.equal(more.newPlaces,0,'later imports reuse the renamed place');
+});
+
+// Daily life in Singapore, then Dali and Lijiang straight after; an older CSV home in Shanghai.
+function singaporeYear(){
+  const out=[];
+  for(let d=1;d<=65;d++){const day=new Date(Date.UTC(2025,6,d)).toISOString().slice(0,10);out.push(photo(day,12,1.30+(d%5)*0.01,103.85));}
+  out.push(photo('2025-10-12',20,1.29,103.85),photo('2025-10-13',9,25.6,100.2),photo('2025-10-16',9,25.61,100.21),photo('2025-10-19',9,26.85,100.23),photo('2025-10-22',9,26.86,100.22),photo('2025-10-23',20,1.31,103.86));
+  return out;
+}
+test('home is decided per year, so a trip never absorbs the home city even with an older residence on record',async()=>{
+  const data=emptyDataset('new');importCSVInto(data,'日期,行程,地点,类型,备注,坐标\n2019-01~至今,,上海,现居地,,"31.23,121.47"','replace');
+  await run(data,singaporeYear());validateDataset(data);
+  assert.deepEqual(data.trips.map(t=>t.title),['云南之旅'],'Singapore stays home; the trip is only Yunnan');
+  const yunnan=data.trips[0];assert.deepEqual(yunnan.visitIds.map(id=>data.places.find(p=>p.id===data.visits.find(v=>v.id===id).placeId).name),['大理','丽江']);
+  const singapore=data.residences.find(r=>data.places.find(p=>p.id===r.placeId).name==='新加坡');
+  assert.ok(singapore,'the photo home becomes a residence');assert.equal(singapore.kind,'past','last year must not be labelled current');
+  assert.equal(data.residences.length,2);
+});
+
+test('results grouped by older rules are rebuilt without touching CSV records',async()=>{
+  const data=emptyDataset('new');importCSVInto(data,'日期,行程,地点,类型,备注,坐标\n2024-08-10~2024-08-18,独库公路,新疆那拉提,旅行,,"43.229,84.419"','replace');
+  const input=singaporeYear();await run(data,input);
+  for(const e of data.evidence)if(e.source?.kind==='photo-auto-import')e.source.version=1;
+  delete data.meta.photoAutoGrouping; // A real v1 dataset predates this grouping marker.
+  assert.equal(autoImportOutdated(data),true);
+  removeAutoImportData(data);validateDataset(data);
+  assert.deepEqual(data.trips.map(t=>t.title),['独库公路']);assert.equal(data.memories.length,0);assert.equal(data.residences.length,0);
+  await run(data,input);validateDataset(data);
+  assert.equal(autoImportOutdated(data),false);assert.deepEqual(data.trips.map(t=>t.title).sort(),['云南之旅','独库公路'].sort());
 });
