@@ -57,3 +57,21 @@ test('demo data is replaced and existing CSV trips absorb overlapping photos',as
   const demo=emptyDataset('demo');demo.meta.origin='demo';const s=await run(demo,[photo('2026-05-02',10,35.01,135.76)]);
   assert.equal(demo.meta.origin,'user');assert.equal(s.photos,1);
 });
+
+test('the first one-tap run regroups the old review-based photo import but keeps CSV records',async()=>{
+  const {importCSVInto}=await import('../../src/life/legacy.js'),{removeLegacyPhotoData}=await import('../../src/life/media/auto-import.js');
+  const data=emptyDataset('new');importCSVInto(data,'日期,行程,地点,类型,备注,坐标\n2024-08-10~2024-08-18,独库公路,新疆那拉提,旅行,,"43.229,84.419"','replace');
+  const ev=kind=>{const id=`evidence_${kind}`;data.evidence.push({id,state:'inferred',source:{kind},revisions:[]});return id;};
+  const place={id:'place_old_photo',name:'城市未知',coordinates:{latitude:-8.65,longitude:115.22},location:{status:'confirmed'},evidenceIds:[ev('photo-exif')]};
+  const trip={id:'trip_old_photo',title:'照片记录 · 2026-04-05',type:'照片旅行',start:{precision:'unknown',value:null},end:{precision:'unknown',value:null},visitIds:['visit_old_photo'],evidenceIds:[ev('photo-reconstruction')]};
+  const visit={id:'visit_old_photo',placeId:place.id,tripId:trip.id,start:{precision:'day',value:'2026-04-05'},end:{precision:'day',value:'2026-04-05'},legacy:{date:'',trip:'',place:'',type:'',note:''},evidenceIds:[ev('photo-visit')]};
+  data.places.push(place);data.trips.push(trip);data.visits.push(visit);
+  data.memories.push({id:'memory_old',kind:'photo',title:'IMG_1.HEIC',uri:'media:asset_1',start:visit.start,end:visit.end,placeIds:[place.id],tripIds:[trip.id],evidenceIds:['evidence_photo-exif']});
+  data.chapters.push({id:'chapter_1',title:'旅居',type:'other',start:{precision:'year',value:'2026'},end:{precision:'year',value:'2026'},homeAnchors:[],relatedTripIds:[trip.id,data.trips[0].id],memoryIds:['memory_old'],evidenceIds:[]});
+  validateDataset(data);
+  assert.deepEqual(removeLegacyPhotoData(data),{memories:1,trips:1});
+  const summary=await run(data,[photo('2026-04-05',10,-8.65,115.22)]);validateDataset(data);
+  assert.deepEqual(data.trips.map(t=>t.title).sort(),['巴厘之旅','独库公路'].sort());
+  assert.ok(!data.places.some(p=>p.id==='place_old_photo'));assert.deepEqual(data.chapters[0].memoryIds,[]);assert.equal(data.chapters[0].relatedTripIds.length,1);
+  assert.equal(summary.photos,1);assert.equal(removeLegacyPhotoData(data).memories,0,'nothing left to regroup');
+});

@@ -108,10 +108,10 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   // Backup and storage tools live on their own page so the first screen is only about choosing photos.
   const plain=error=>String(error?.message||error).replace(/^[A-Z_]+：/,'');
   function renderAuto(){
-    const s=autoState,again=autoImporter.hasImported(),reading=s?.phase==='reading'||s?.phase==='placing';
+    const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),reading=s?.phase==='reading'||s?.phase==='placing';
     const body=reading?`<div class="auto-progress"><div class="auto-bar"><span data-auto-bar></span></div><p data-auto-status></p></div><button class="auto-link" type="button" data-photo-auto-cancel>取消</button>`
       :s?.phase==='done'?`<p class="auto-result">${s.summary.newTrips||s.summary.newPlaces?`新增 <b>${s.summary.newTrips}</b> 次旅行 · <b>${s.summary.newPlaces}</b> 个地方`:s.summary.photos?'已补充到原有的旅行里':'没有发现新的足迹'}</p><button class="btn primary auto-main" type="button" data-photo-auto-done>去地球上看看</button>`
-      :`<p class="auto-intro">${again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。照片不会上传，也不会复制到 App 里。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}<button class="btn primary auto-main" type="button" data-photo-auto-start>${again?'导入新照片':'开始导入'}</button>`;
+      :`<p class="auto-intro">${legacy?'之前导入的照片足迹会按城市重新整理，你手动添加的记录不受影响。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。照片不会上传，也不会复制到 App 里。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>`;
     dialog.innerHTML=`<div class="dlg-head"><h3>找回我的足迹</h3><button class="x" type="button" data-photo-close aria-label="关闭">×</button></div><div class="dlg-body photo-auto">${body}</div>`;
     paintAuto();
   }

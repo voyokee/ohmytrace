@@ -1,4 +1,4 @@
-import {applyAutoImport,nameCells,normalizeObservation} from '../life/media/auto-import.js';
+import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData} from '../life/media/auto-import.js';
 import {geoNameProvider} from '../life/geocoding/provider.js';
 import {NativeScanStore} from './native-scan-store.js';
 
@@ -8,6 +8,8 @@ export const androidPointer=uri=>{const m=/^android-media:([^/]+)\/([1-9][0-9]{0
 export class AndroidAutoImport {
   constructor(repository,capability,{geonames=geoNameProvider,store=new NativeScanStore(),pageSize=400}={}){this.repository=repository;this.capability=capability;this.geonames=geonames;this.store=store;this.pageSize=pageSize;this.running=false;this.controller=null;}
   cancel(){this.controller?.abort();}
+  /** Results of the earlier review-based import are regrouped on the next run. */
+  hasLegacy(){return this.repository.getDataset().memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:'));}
   hasImported(){return this.repository.getDataset().memories.some(m=>m.uri?.startsWith('android-media:'));}
   async run({onProgress=()=>{}}={}){
     if(this.running)throw new Error('正在导入');
@@ -27,7 +29,8 @@ export class AndroidAutoImport {
       onProgress({phase:'placing',scanned,total});
       const names=await nameCells(fresh.map(normalizeObservation).filter(Boolean),this.geonames,{signal});
       let summary={photos:0,newTrips:0,newPlaces:0,tripIds:[],latestTripId:null};
-      if(fresh.length)await this.repository.update(d=>{summary=applyAutoImport(d,fresh,names);});
+      const legacy=this.hasLegacy();
+      if(fresh.length||legacy)await this.repository.update(d=>{if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names);});
       if(checkpoint)await this.store.put('auto-checkpoint',checkpoint);
       return {...summary,scanned};
     }finally{this.running=false;this.controller=null;}

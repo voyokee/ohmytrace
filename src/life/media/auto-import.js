@@ -127,3 +127,25 @@ export function applyAutoImport(data,input,names,{rules=AUTO_RULES,now=new Date(
   validateDataset(data);return summary;
 }
 
+
+/**
+ * Removes what the earlier review-based photo import produced (media: memories,
+ * 照片旅行 trips, photo visits and places nothing else uses) so the one-tap import
+ * can regroup the same album by city. CSV records, chapters and residences stay.
+ */
+export function removeLegacyPhotoData(data){
+  const kind=new Map(data.evidence.map(e=>[e.id,e.source?.kind])),from=(entity,kinds)=>entity.evidenceIds.some(id=>kinds.includes(kind.get(id)));
+  const memories=new Set(data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('media:')).map(m=>m.id));
+  if(!memories.size)return {memories:0,trips:0};
+  const trips=new Set(data.trips.filter(t=>t.type==='照片旅行'&&from(t,['photo-reconstruction'])).map(t=>t.id));
+  const visits=new Set(data.visits.filter(v=>trips.has(v.tripId)||from(v,['photo-visit'])).map(v=>v.id));
+  data.memories=data.memories.filter(m=>!memories.has(m.id));
+  data.visits=data.visits.filter(v=>!visits.has(v.id));
+  for(const t of data.trips)t.visitIds=t.visitIds.filter(id=>!visits.has(id));
+  for(const t of data.trips)if(!t.visitIds.length)trips.add(t.id);
+  data.trips=data.trips.filter(t=>!trips.has(t.id));
+  for(const c of data.chapters){c.relatedTripIds=c.relatedTripIds.filter(id=>!trips.has(id));c.memoryIds=c.memoryIds.filter(id=>!memories.has(id));}
+  const used=new Set([...data.visits.map(v=>v.placeId),...data.residences.map(r=>r.placeId),...data.chapters.flatMap(c=>c.homeAnchors),...data.memories.flatMap(m=>m.placeIds)]);
+  data.places=data.places.filter(p=>used.has(p.id)||!from(p,['photo-exif']));
+  return {memories:memories.size,trips:trips.size};
+}
