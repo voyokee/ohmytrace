@@ -121,3 +121,30 @@ old redacted batch. Permission scope changes force re-enumeration of the selecte
 range; existing canonical memories are retained and deduplicated. No app-data
 clear or uninstall is necessary. Originals stripped of metadata before reaching
 MediaStore cannot have GPS reconstructed from their pixels.
+
+## One-tap import (0.2.0-one-tap)
+
+The app's photo dialog is now a single **开始导入** button; the review-based
+steps above describe the previous release and remain only for Web file import.
+
+1. The button requests album and photo-GPS access (same consent rules as above).
+2. Native `locate` pages MediaStore 400 rows at a time. A small thread pool reads
+   only GPS and capture time with the platform `ExifInterface` from the original
+   (`setRequireOriginal`). Photos without usable GPS (missing, out of range, 0,0)
+   or without any capture time are dropped natively. Only
+   `[volume, id, lat, lon, localTime, offset, takenMs]` rows cross the bridge.
+3. JS (`src/life/media/auto-import.js`) names each 0.05° cell offline, drops cells
+   with no name, infers the home city (most photo days, >=5 days and >=30%),
+   merges places per city, splits trips on >72 h gaps or returning home, extends
+   overlapping trips and saves once. There is no review.
+4. Memories store `android-media:<volume>/<id>` pointers only; `preview` reads an
+   album thumbnail on demand. Nothing is copied into app storage.
+5. Later runs use the last generation checkpoint and skip saved pointers. The first
+   run after upgrading regroups the previous review-based results (see
+   `removeLegacyPhotoData`); CSV records, chapters and residences are kept.
+
+Verified on Windows only: JVM `PhotoLocationTest`, 128 Life tests and a mock-port
+browser flow (12,000 rows, ~2 s of JS time). Phone EXIF throughput, HEIC EXIF on
+the vivo ROM and the real album size still need on-device measurement.
+Known limit: offline country polygons are generalized, so photos within a few km
+of a border (for example Shenzhen/Hong Kong) can be named after the neighbour.
