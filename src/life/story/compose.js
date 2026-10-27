@@ -1,6 +1,6 @@
 import {validateDataset,newId,clone,dateBound,partialDate} from '../schema.js';
 import {validateStory,unknown} from './schema.js';
-import {tripCountsAsTravel,visiblePlace} from '../travel-policy.js';
+import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
 
 function coverage(entity,data){
   const visits=(entity.visitIds||[]).map(id=>data.visits.find(v=>v.id===id));
@@ -36,7 +36,7 @@ export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回�
   const seen=new Set();
   function tripScenes(t,chapterId=null){
     seen.add(t.id);add('trip',t.title,t,{tripId:t.id,chapterId});
-    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(!v.hidden&&!p.hidden)add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
+    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(visitCountsAsTravel(data,v,t))add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
   }
   for(const c of chapters){
     add('chapter',c.title,c,{chapterId:c.id});

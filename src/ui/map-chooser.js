@@ -4,7 +4,7 @@ export function cityHistory({trips=[],homes=[],photos=[]},place,{year=null,now=D
   const residences=homes.filter(h=>h.place===place&&!h.anchor);
   const current=h=>h.kind==='home'&&(!h.date||h.date.start<=now&&(h.date.ongoing||h.date.end+86400000>now));
   const active=residences.filter(current),past=residences.filter(h=>!current(h));
-  const journeys=trips.filter(t=>t.stops.some(s=>s.place===place&&overlaps(s.date))).map(t=>{
+  const journeys=trips.filter(t=>t.countsAsTravel!==false&&t.stops.some(s=>s.place===place&&s.countsAsTravel!==false&&overlaps(s.date))).map(t=>{
     const dates=t.stops.filter(s=>s.place===place&&overlaps(s.date)).map(s=>s.date).filter(Boolean).sort((a,b)=>b.start-a.start);
     return {trip:t,date:dates[0]||null};
   }).sort((a,b)=>(b.date?.start??-Infinity)-(a.date?.start??-Infinity));

@@ -27,6 +27,7 @@
   "src/life/story/viewer-config.js",
   "src/life/story/viewer.js",
   "src/life/timeline-layout.js",
+  "src/life/travel-policy.js",
   "src/performance/camera-motion.js",
   "src/performance/draw-statistics.js",
   "src/performance/gpu-metrics.js",

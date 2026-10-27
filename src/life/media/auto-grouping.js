@@ -1,5 +1,6 @@
 import {newId,partialDate,ongoingDate,dateBound,addEvidence,validateDataset} from '../schema.js';
 import {distanceKm} from './reconstruction.js';
+import {classifyStops} from './transit.js';
 
 const dayMs=s=>Date.parse(s+'T00:00:00Z');
 const sameDate=(a,b)=>a?.precision===b?.precision&&a?.value===b?.value;
@@ -71,13 +72,16 @@ export function applyPhotoGrouping(data,input,names,{rules,now,version,force=fal
   for(const group of byCity.values()){
     const city=group[0].city,c={latitude:group.reduce((s,o)=>s+o.latitude,0)/group.length,longitude:group.reduce((s,o)=>s+o.longitude,0)/group.length};
     let p=data.places.find(p=>p.mergedCityKeys?.includes(city.key));
-    p||=group.map(o=>o.memory?.placeIds[0]).map(id=>data.places.find(p=>p.id===id)).find(p=>p?.coordinates&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
+    p||=group.map(o=>o.memory?.placeIds[0]).map(id=>data.places.find(p=>p.id===id)).find(p=>p?.coordinates&&(own.manual(p)||p.location?.photoCity?.key===city.key||p.name===city.label)&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
     p||=data.places.find(p=>p.name===city.label&&p.coordinates&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
     if(!p){p={id:newId('place'),name:city.label,coordinates:c,location:{status:'confirmed',label:'照片 GPS'},evidenceIds:[evidence]};data.places.push(p);summary.newPlaces++;}
     // A merged city's chosen identity is a user decision; don't silently swap
     // its administrative anchor every time another constituent city is scanned.
+    if(!own.manual(p)&&!p.mergedCityKeys?.length)p.coordinates=c;
     p.location={...p.location,photoCity:p.mergedCityKeys?.length&&p.location?.photoCity?p.location.photoCity:city};placeFor.set(city.key,p);
     for(const o of group){o.place=p;if(!o.memory){o.memory={id:newId('memory_photo'),kind:'photo',title:o.title||`${p.name} · ${o.day}`,uri:o.uri,start:partialDate(o.day),end:partialDate(o.day),placeIds:[p.id],tripIds:[],evidenceIds:[evidence]};data.memories.push(o.memory);}
+      if(!own.manual(o.memory)&&!own.manual(p))o.memory.placeIds=[p.id];
+      const previousLabel=o.memory.photoObservation?.city?.label;if(!own.manual(o.memory)&&previousLabel&&o.memory.title?.startsWith(previousLabel+' · '))o.memory.title=p.name+o.memory.title.slice(previousLabel.length);
       o.memory.photoObservation={latitude:o.latitude,longitude:o.longitude,takenMs:o.instant,day:o.day,city};
     }
   }
@@ -114,14 +118,18 @@ export function applyPhotoGrouping(data,input,names,{rules,now,version,force=fal
   for(const group of segments){
     const scores=new Map();for(const o of group)for(const id of oldTripByURI.get(o.uri)||[])if(!own.protectedTrips.has(id)&&!reused.has(id))scores.set(id,(scores.get(id)||0)+1);
     const prior=[...scores].sort((a,b)=>b[1]-a[1])[0]?.[0],old=oldTrips.find(t=>t.id===prior),id=old?.id||newId('trip');reused.add(id);
-    const title=tripTitle(group),trip={id,title,autoTitle:title,type:'旅行',start:partialDate(group[0].day),end:partialDate(group.at(-1).day),visitIds:[],evidenceIds:[evidence]};data.trips.push(trip);if(!old)summary.newTrips++;
-    // One city summary per journey. Alternating nearby photo locations must not
-    // produce thousands of stops or inflate a city's journey count.
+    const homeCity=homeByYear.get(group[0].day.slice(0,4))?.city,home=homeCity&&placeFor.get(homeCity.key)?.coordinates;
+    const classifications=classifyStops(group,{home}),travel=group.filter(o=>classifications.get(o.place.id).type==='travel');
+    const title=tripTitle(travel.map(o=>({...o,city:{...o.city,key:o.place.id,label:o.place.name}})),{homeCountry:homeCity?.country});
+    const short=travel.length&&group.every(o=>o.day===group[0].day)&&new Set(travel.map(o=>o.place.id)).size===1;
+    const trip={id,title,autoTitle:title,type:travel.length?(short?'短途':'旅行'):'转机',start:partialDate(group[0].day),end:partialDate(group.at(-1).day),visitIds:[],evidenceIds:[evidence]};data.trips.push(trip);if(!old&&travel.length)summary.newTrips++;
     const stops=new Map();
-    for(const o of group){let stop=stops.get(o.place.id);if(!stop){stop={id:newId('visit'),placeId:o.place.id,tripId:id,start:partialDate(o.day),end:partialDate(o.day),legacy:{date:o.day,trip:title,place:o.place.name,type:'旅行',note:''},evidenceIds:[evidence]};stops.set(o.place.id,stop);data.visits.push(stop);trip.visitIds.push(stop.id);}stop.end=partialDate(o.day);stop.legacy.date=stop.start.value===o.day?o.day:`${stop.start.value}~${o.day}`;o.memory.tripIds=[id];}
+    for(const o of group){let stop=stops.get(o.place.id);if(!stop){const classification=classifications.get(o.place.id);stop={id:newId('visit'),placeId:o.place.id,tripId:id,start:partialDate(o.day),end:partialDate(o.day),legacy:{date:o.day,trip:title,place:o.place.name,type:classification.type==='transit'?'转机':classification.type==='pass-through'?'路过':'旅行',note:classification.reason||''},evidenceIds:[evidence]};stops.set(o.place.id,stop);data.visits.push(stop);trip.visitIds.push(stop.id);}stop.end=partialDate(o.day);stop.legacy.date=stop.start.value===o.day?o.day:`${stop.start.value}~${o.day}`;o.memory.tripIds=[id];}
     for(const c of data.chapters)if(group.some(o=>(oldTripByURI.get(o.uri)||[]).some(id=>chapterTrips.get(c.id).has(id)))&&!c.relatedTripIds.includes(id))c.relatedTripIds.push(id);
-    summary.tripIds.push(id);
+    if(travel.length)summary.tripIds.push(id);
   }
+  const usedPlaces=new Set([...data.visits.map(v=>v.placeId),...data.residences.map(r=>r.placeId),...data.chapters.flatMap(c=>c.homeAnchors),...data.memories.flatMap(m=>m.placeIds)]);
+  data.places=data.places.filter(p=>usedPlaces.has(p.id)||!own.automatic(p)||own.manual(p));
   // No generated evidence may grow without bound on repeated incremental imports.
   const usedEvidence=new Set(['places','visits','trips','residences','chapters','memories'].flatMap(k=>data[k].flatMap(e=>e.evidenceIds)));
   data.evidence=data.evidence.filter(e=>e.source?.kind!=='photo-auto-import'||usedEvidence.has(e.id));

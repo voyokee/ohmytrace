@@ -70,13 +70,13 @@ test('Photos regroup uses saved observations without album access, survives relo
   await repository.restore(JSON.stringify(after));await importer.regroup();assert.deepEqual(repository.getDataset().memories.map(m=>m.id),photos);
   assert.equal(autoImportOutdated(after,new Date('2027-01-01')),true,'New year must invalidate the current-home classification');
 });
-test('titles use up to two provinces within one country, otherwise short country names',async()=>{
+test('titles use cities ranked by observed days and photos',async()=>{
   const points=[{latitude:25.6,longitude:100.2,country:'中华人民共和国',countryCode:'CN',admin1:'云南省',city:'大理'},
     {latitude:30.6,longitude:104,country:'中华人民共和国',countryCode:'CN',admin1:'四川省',city:'成都'},
     {latitude:22.5,longitude:114,country:'中华人民共和国',countryCode:'CN',admin1:'广东省',city:'深圳'}];
   const g={async reverse(p){return points.find(c=>c.latitude===p.latitude)||geonames.reverse(p);}};
   const make=i=>({...photo(`2026-02-0${i+1}`),...points[i]});
   const d=emptyDataset(),input=[...span('2026-01-01',10),make(0),make(1),make(2)];
-  applyAutoImport(d,input.slice(0,-1),await nameCells(input.slice(0,-1).map(normalizeObservation),g));assert.equal(d.trips[0].title,'云南 · 四川之旅');
-  applyAutoImport(d,[input.at(-1)],await nameCells([normalizeObservation(input.at(-1))],g));assert.equal(d.trips[0].title,'中国之旅');
+  applyAutoImport(d,input.slice(0,-1),await nameCells(input.slice(0,-1).map(normalizeObservation),g));assert.equal(d.trips[0].title,'大理 · 成都');
+  applyAutoImport(d,[input.at(-1)],await nameCells([normalizeObservation(input.at(-1))],g));assert.equal(d.trips[0].title,'中国 · 大理等 3 城');
 });

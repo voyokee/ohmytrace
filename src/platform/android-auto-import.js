@@ -1,4 +1,4 @@
-import {applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData,placeRenames,applyPlaceRenames,autoImportOutdated,savedPhotoObservations} from '../life/media/auto-import.js';
+import {AUTO_VERSION,applyAutoImport,nameCells,normalizeObservation,removeLegacyPhotoData,placeRenames,applyPlaceRenames,autoImportOutdated,savedPhotoObservations} from '../life/media/auto-import.js';
 import {geoNameProvider} from '../life/geocoding/provider.js';
 import {NativeScanStore} from './native-scan-store.js';
 
@@ -39,7 +39,10 @@ export class AndroidAutoImport {
     try{
       await this.capability.ensureLocationAccess();
       // The checkpoint only skips rows already saved; after clearing data everything is read again.
-      const outdated=this.outdated(),since=this.hasImported()?await this.store.get('auto-checkpoint'):null,rows=[];
+      const outdated=this.outdated(),savedCheckpoint=this.hasImported()?await this.store.get('auto-checkpoint'):null;
+      // Old versions discarded unnamed coastal photos. Re-read their pointers on
+      // the first scan after an upgrade, even if saved observations were regrouped.
+      const since=savedCheckpoint?.version===AUTO_VERSION?savedCheckpoint.checkpoint:null,rows=[];
       let cursor=null,total=null,scanned=0,checkpoint=null;
       do{
         const page=await this.capability.locate({cursor,since,pageSize:this.pageSize},{signal});
@@ -55,7 +58,7 @@ export class AndroidAutoImport {
       const legacy=this.hasLegacy(),renames=outdated?new Map():await placeRenames(this.repository.getDataset(),this.geonames);
       signal.throwIfAborted();
       if(fresh.length||legacy||outdated||renames.size)await this.repository.update(d=>{applyPlaceRenames(d,renames);if(legacy)removeLegacyPhotoData(d);summary=applyAutoImport(d,fresh,names,{force:outdated});});
-      if(checkpoint)await this.store.put('auto-checkpoint',checkpoint);
+      if(checkpoint)await this.store.put('auto-checkpoint',{version:AUTO_VERSION,checkpoint});
       return {...summary,scanned};
     }finally{this.running=false;this.controller=null;}
   }
