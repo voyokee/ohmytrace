@@ -1,3 +1,5 @@
+import {tripTitle} from './journey-title.js';
+export {tripTitle} from './journey-title.js';
 import {COLLECTIONS} from '../schema.js';
 import {applyPhotoGrouping,clearAutomaticPhotoGroups,photoOwnership} from './auto-grouping.js';
 export {savedPhotoObservations} from './auto-grouping.js';
@@ -7,9 +9,9 @@ export {savedPhotoObservations} from './auto-grouping.js';
 // locations are dropped silently, places are merged per city, trips split on
 // time gaps and on returning home.
 // Bump when grouping rules change. Regroup from saved observations in Photos.
-// v3: three-day gaps, current year home, two-month stays, protected manual edits.
-export const AUTO_VERSION=3;
-export const AUTO_RULES=Object.freeze({nameCellDegrees:0.05,tripGapHours:72,placeReuseKm:100});
+// v4: city-first naming, fine name cells, airport/endpoint transit and city titles.
+export const AUTO_VERSION=4;
+export const AUTO_RULES=Object.freeze({nameCellDegrees:0.00001,tripGapHours:72,placeReuseKm:100});
 
 /**
  * Finds places this import created whose offline name has since changed (the city
@@ -29,6 +31,9 @@ export async function placeRenames(data,geonames){
 export function applyPlaceRenames(data,renames){
   const manual=new Set(data.evidence.filter(e=>e.state==='manual').map(e=>e.id));
   for(const p of data.places){const r=renames.get(p.id);if(!r||p.name!==r.from||p.evidenceIds.some(id=>manual.has(id)))continue;p.name=r.to;
+    const renamed=city=>city?{...city,label:r.to,key:`${city.countryCode||city.key.split('|')[0]}|${r.to}`} :city;
+    if(p.location?.photoCity)p.location.photoCity=renamed(p.location.photoCity);
+    for(const m of data.memories)if(m.placeIds.includes(p.id)&&m.photoObservation?.city)m.photoObservation.city=renamed(m.photoObservation.city);
     for(const v of data.visits)if(v.placeId===p.id&&v.legacy.place===r.from)v.legacy.place=r.to;
     for(const h of data.residences)if(h.placeId===p.id&&h.title===r.from)h.title=r.to;
     for(const m of data.memories)if(m.placeIds.includes(p.id)&&m.title?.startsWith(r.from+' · '))m.title=r.to+m.title.slice(r.from.length);}
@@ -61,21 +66,11 @@ export async function nameCells(observations,geonames,{rules=AUTO_RULES,concurre
   await Promise.all(Array.from({length:Math.min(concurrency,queue.length)},worker));return names;
 }
 
-const shortRegion=name=>{const s=String(name||'');return s.length>2?s.replace(/(维吾尔自治区|壮族自治区|回族自治区|自治区|特别行政区|省|市|府|县|都)$/,''):s;};
-const SHORT_COUNTRY={'中华人民共和国':'中国','大韩民国':'韩国','朝鲜民主主义人民共和国':'朝鲜','美利坚合众国':'美国','大不列颠及北爱尔兰联合王国':'英国','俄罗斯联邦':'俄罗斯'};
-const shortCountry=name=>SHORT_COUNTRY[name]||name;
-// One country and at most two provinces: name the provinces (云南之旅, 东京 · 京都之旅);
-// otherwise the country (日本之旅), or the first two countries for a cross-border trip.
-function tripTitle(segment){
-  const countries=[...new Set(segment.map(o=>o.city.country))];
-  if(countries.length>1)return `${countries.slice(0,2).map(shortCountry).join(' · ')}${countries.length>2?' 等':''}之旅`;
-  const regions=[...new Set(segment.filter(o=>o.city.region!==o.city.country).map(o=>shortRegion(o.city.region)))];
-  return `${regions.length&&regions.length<=2?regions.join(' · '):shortCountry(countries[0])}之旅`;
-}
+
 function cityOf(o,names,rules){
   const g=names.get(cellKey(o,rules));if(!g||!g.country)return null;
   const label=g.city||g.admin1||g.country;
-  return {key:`${g.countryCode||g.country}|${label}`,label,country:g.country,region:g.admin1||g.country};
+  return {key:`${g.countryCode||g.country}|${label}`,label,hasCity:!!g.city,country:g.country,countryCode:g.countryCode,region:g.admin1||g.country};
 }
 /** Mutates `data` (a working copy) with the photos; returns a summary. Pure apart from IDs. */
 export function applyAutoImport(data,input,names,{rules=AUTO_RULES,now=new Date(),force=false}={}){

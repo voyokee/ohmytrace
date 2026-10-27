@@ -19,21 +19,35 @@ export function containsPoint(geometry,point){
 /** Generalized admin polygons are suggestions. Cities have no boundary dataset. */
 export class OfflineAdminResolver {
  // "-zh": city packs carry NAME_ZH; the new id/cache name retires English labels cached on devices.
- id='natural-earth-v5.1.2-zh';
- constructor({load=async path=>{const url=new URL('./data/'+path,import.meta.url);let cache=null;try{cache=await globalThis.caches?.open('ohmytrace.geonames-v5.1.2-zh');const saved=await cache?.match(url);if(saved)return saved.json();}catch{/* Cache Storage may be unavailable in private browsing. */}const r=await fetch(url);if(!r.ok)throw new Error('离线地名包读取失败');try{await cache?.put(url,r.clone());}catch{/* Naming remains usable without a cache write. */}return r.json();},maxPacks=8,maxCityKm=80}={}){this.load=load;this.maxPacks=maxPacks;this.maxCityKm=maxCityKm;this.packs=new Map();}
+ id='natural-earth-v5.1.2-zh-city-v2';
+ constructor({load=async path=>{const url=new URL('./data/'+path,import.meta.url);let cache=null;try{cache=await globalThis.caches?.open('ohmytrace.geonames-v5.1.2-zh-city-v2');const saved=await cache?.match(url);if(saved)return saved.json();}catch{/* Cache Storage may be unavailable in private browsing. */}const r=await fetch(url);if(!r.ok)throw new Error('离线地名包读取失败');try{await cache?.put(url,r.clone());}catch{/* Naming remains usable without a cache write. */}return r.json();},maxPacks=8,maxCityKm=80}={}){this.load=load;this.maxPacks=maxPacks;this.maxCityKm=maxCityKm;this.packs=new Map();}
  async pack(code){if(!this.packs.has(code)){if(this.packs.size>=this.maxPacks)this.packs.delete(this.packs.keys().next().value);this.packs.set(code,this.load(code+'.json').catch(e=>{this.packs.delete(code);throw e;}));}return this.packs.get(code);}
  async reverse(point){
   if(!valid(point)||point.crs&&point.crs!=='WGS84')throw new Error('只接受有效 WGS84 坐标');
-  this.index??=await this.load('index.json');
-  const candidates=this.index.countries.filter(c=>(Array.isArray(c.bounds[0])?c.bounds.some(b=>inBounds(point,b)):inBounds(point,c.bounds))),hits=[];
-  for(const c of candidates){const pack=await this.pack(c.code);if(containsPoint(pack.country.geometry,point))hits.push(pack);}
-  if(hits.length!==1)return null;
-  const pack=hits[0],admins=pack.admins.filter(a=>(!a.bounds||inBounds(point,a.bounds))&&containsPoint(a.geometry,point));
-  const nearest=pack.cities.map(c=>({...c,distanceKm:distanceKm(point,c.coordinates)})).sort((a,b)=>a.distanceKm-b.distanceKm)[0];
-  const city=nearest&&nearest.distanceKm<=this.maxCityKm?nearest:null;
+  // A global city point index avoids loading every neighbouring country's large
+  // polygons. Share initialization across concurrent photo-name workers.
+  this.ready??=Promise.all(['index.json','city-index.json','city-regions.json'].map(p=>this.load(p))).catch(e=>{this.ready=null;throw e;});
+  const [index,cities,regions]=await this.ready;this.index=index;
+  const detailed=Object.entries(regions).find(([,g])=>containsPoint(g,point))?.[0];
+  const candidates=index.countries.filter(c=>inBounds(point,c.bounds)),hits=[];
+  for(const c of candidates){const p=await this.pack(c.code);if(containsPoint(regions[c.code]||p.country.geometry,point))hits.push(p);}
+  let pack=detailed?await this.pack(detailed):hits.length===1?hits[0]:null;
+  const nearby=cities.map(([code,name,latitude,longitude,admin])=>({code,name,admin,distanceKm:distanceKm(point,{latitude,longitude})})).filter(c=>c.distanceKm<=this.maxCityKm).sort((a,b)=>a.distanceKm-b.distanceKm||a.code.localeCompare(b.code)||a.name.localeCompare(b.name));
+  const local=pack?nearby.find(c=>c.code===pack.country.code):null,nearest=nearby[0];
+  let city=local,match=detailed?'detailed-city-region':'generalized-polygon';
+  if(!pack){
+   if(!nearest||nearest.distanceKm>30)return null;
+   city=nearest;pack=await this.pack(city.code);match='coastal-nearby-city';
+  }else if(!detailed&&nearest&&nearest.code!==pack.country.code&&nearest.distanceKm<=30&&(!local||nearest.distanceKm+5<local.distanceKm&&nearest.distanceKm<local.distanceKm*0.65)){
+   city=nearest;pack=await this.pack(city.code);match='closer-cross-border-city';
+  }
+  // Hong Kong, Macau and Singapore are each one city, including districts.
+  const cityRegion=regions[pack.country.code];
+  if(cityRegion)city={name:pack.country.name,distanceKm:local?.distanceKm??city?.distanceKm??null};
+  const admins=cityRegion?[]:pack.admins.filter(a=>(!a.bounds||inBounds(point,a.bounds))&&containsPoint(a.geometry,point));
   return {country:pack.country.name,countryCode:pack.country.code,admin1:admins.length===1?admins[0].name:null,
    city:city?.name||null,displayName:[pack.country.name,admins.length===1?admins[0].name:null,city?`附近城市：${city.name}`:null].filter(Boolean).join(' / '),
-   precision:city?'nearby-city':'admin-area',countryMatch:'generalized-polygon',admin1Match:admins.length===1?'generalized-polygon':null,
+   precision:city?'nearby-city':'admin-area',countryMatch:match,admin1Match:admins.length===1?'generalized-polygon':null,
    cityMatch:city?'nearest-centre-not-boundary':null,distanceKm:city?.distanceKm??null,source:this.id,license:'Public Domain',crs:'WGS84',state:'inferred'};
  }
  async search(query,{limit=6}={}){this.index??=await this.load('index.json');return this.index.countries.filter(c=>c.name.includes(query)||c.code.toLowerCase()===query.toLowerCase()).slice(0,limit);}

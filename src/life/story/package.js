@@ -17,7 +17,7 @@ export function staticZip(entries){
   const size=directory.reduce((n,b)=>n+b.length,0),end=header(22),v=end.view;v.setUint32(0,0x06054b50,true);v.setUint16(8,entries.length,true);v.setUint16(10,entries.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);
   return new Blob([...parts,...directory,end.bytes],{type:'application/zip'});
 }
-const allowed=path=>/^(assets\/|vendor\/cesium\/|src\/(rendering|scenery|performance|ui|geocoding)\/)/.test(path)||['app.js','styles.css','story-viewer.html','src/life/schema.js','src/life/timeline-layout.js','src/life/story/publishing/publisher.js'].includes(path)||/^src\/life\/story\/(schema|share|viewer|viewer-config|viewer-bridge|app-integration|player-ui|playback|story)\.(js|css)$/.test(path);
+const allowed=path=>/^(assets\/|vendor\/cesium\/|src\/(rendering|scenery|performance|ui|geocoding)\/)/.test(path)||['app.js','styles.css','story-viewer.html','src/life/schema.js','src/life/travel-policy.js','src/life/timeline-layout.js','src/life/story/publishing/publisher.js'].includes(path)||/^src\/life\/story\/(schema|share|viewer|viewer-config|viewer-bridge|app-integration|player-ui|playback|story)\.(js|css)$/.test(path);
 export async function createSharePackage(input,{fetchFile=async path=>{const r=await fetch(new URL('../../../'+path,import.meta.url));if(!r.ok)throw new Error(`分享包资源缺失：${path}`);return new Uint8Array(await r.arrayBuffer());},onProgress=()=>{}}={}){
   const artifact=parseArtifact(input),manifest=JSON.parse(new TextDecoder().decode(await fetchFile('src/life/story/runtime-files.json'))),entries=[];
   if(!Array.isArray(manifest)||manifest.some(path=>typeof path!=='string'||!allowed(path)||path.includes('..'))||new Set(manifest).size!==manifest.length)throw new Error('分享运行时清单无效');

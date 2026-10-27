@@ -49,7 +49,7 @@ try{
   assert.ok(saved.places.length<=6,`places are merged per city: ${saved.places.map(p=>p.name)}`);
   assert.equal(saved.residences.filter(r=>r.kind==='home').length,1,'only this year becomes current');assert.equal(saved.residences.filter(r=>r.kind==='past').length,1,'last year has a continuous stay over two months');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'深圳','offline city names are Chinese');
   assert.ok(saved.places.every(p=>!/[A-Za-z]/.test(p.name)),`no English place names: ${saved.places.map(p=>p.name)}`);
-  assert.equal(saved.trips.length,2);assert.ok(saved.trips.every(t=>/之旅$/.test(t.title)&&!/[A-Za-z]/.test(t.title)),saved.trips.map(t=>t.title).join());
+  assert.equal(saved.trips.length,2);assert.deepEqual(saved.trips.map(t=>t.title),['登巴萨','京都'],'Chinese city titles replace province/country journeys');
   assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
   await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
   await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-start]');assert.match(await page.locator('.auto-intro').innerText(),/只会补充新拍的照片/);
@@ -61,6 +61,18 @@ try{
   await page.locator('[data-photo-auto-regroup]').click();await page.waitForSelector('[data-photo-auto-done]',{timeout:120000});
   assert.match(await page.locator('.auto-result').innerText(),/已重新整理足迹/);assert.equal(await page.evaluate(()=>window.nativeCalls.length),calls,'Regroup must not access the album');
   assert.deepEqual((await data()).memories.map(m=>m.id),photoIds);await shot('android-5-regroup.png');
+  // Replace only this disposable browser profile with a border/airport fixture.
+  await page.evaluate(async()=>{
+    const {emptyDataset}=await import('/src/life/schema.js'),{applyAutoImport,nameCells,normalizeObservation}=await import('/src/life/media/auto-import.js'),{GeoNameProvider}=await import('/src/life/geocoding/provider.js'),{LifeRepository,IndexedDBStore}=await import('/src/life/repository.js');
+    let n=50000;const p=(day,hour,latitude,longitude)=>({uri:`android-media:external_primary/${++n}`,latitude,longitude,local:`${day}T${String(hour).padStart(2,'0')}:00:00`,offsetMinutes:480});
+    const rows=Array.from({length:12},(_,i)=>p(`2026-01-${String(i+1).padStart(2,'0')}`,12,22.541,114.0596));
+    rows.push(p('2026-03-01',8,22.308,113.918),p('2026-03-02',12,35.01,135.76),p('2026-03-03',12,35.01,135.76),p('2026-03-04',8,22.308,113.918),p('2026-03-04',12,22.541,114.0596));
+    const d=emptyDataset();applyAutoImport(d,rows,await nameCells(rows.map(normalizeObservation),new GeoNameProvider()),{now:new Date('2026-10-28')});
+    const store=new IndexedDBStore(),repo=new LifeRepository(store);await repo.initialize({legacyStorage:null});await repo.restore(JSON.stringify(d));store.db.close();
+  });
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#stats')?.textContent.includes('1 次旅行'));
+  const borderStats=await page.locator('#stats').innerText();assert.match(borderStats,/2 个地点/);assert.match(borderStats,/2 天在路上/);
+  const borderData=await data();assert.ok(borderData.places.some(p=>p.name==='香港'));assert.equal(borderData.memories.length,17,'airport photos remain stored');await shot('android-6-border-transit.png');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
+  console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,borderStats,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
