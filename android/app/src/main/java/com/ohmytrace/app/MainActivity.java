@@ -90,6 +90,8 @@ public final class MainActivity extends Activity {
                         switch (method) {
                             case "permissionStatus": result = library.permissions(); break;
                             case "enumerate": result = library.enumerate(options, signal); break;
+                            case "locate": result = library.locate(options, signal); break;
+                            case "preview": result = library.preview(options, signal); break;
                             case "readRange": result = library.read(options, signal); break;
                             case "readSamples": result = library.samples(options, signal); break;
                             case "stat": result = library.stat(options.getJSONObject("handle"), signal); break;

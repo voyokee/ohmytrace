@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.ImageDecoder;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,11 +26,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 final class MediaLibrary {
     private final Context context;
     private final ContentResolver resolver;
     private final android.content.SharedPreferences preferences;
+    // EXIF reads are I/O bound: a small pool keeps several originals in flight per page.
+    private final ExecutorService exifPool = Executors.newFixedThreadPool(Math.max(2, Math.min(6, Runtime.getRuntime().availableProcessors())));
     MediaLibrary(Context context) {
         this.context = context; resolver = context.getContentResolver();
         preferences = context.getSharedPreferences("media-library", Context.MODE_PRIVATE);
@@ -104,6 +110,93 @@ final class MediaLibrary {
         }
         Object next = volumeIndex < volumes.size() ? new JSONObject().put("snapshot", snapshot).put("volumeIndex", volumeIndex).put("afterId", after) : JSONObject.NULL;
         return new JSONObject().put("entries", entries).put("cursor", next).put("scopeId", scope()).put("checkpoint", snapshot);
+    }
+    /**
+     * One-tap import: pages the album and returns only photos whose original EXIF
+     * holds usable GPS, as compact rows. No pixels or file bytes cross the bridge.
+     */
+    JSONObject locate(JSONObject options, CancellationSignal signal) throws Exception {
+        if (photos().equals("denied")) throw new SecurityException("PHOTO_PERMISSION_REQUIRED：请先允许访问照片");
+        ScanWindow.requireLocation(granted(Manifest.permission.ACCESS_MEDIA_LOCATION));
+        int count = Math.max(1, Math.min(1000, options.optInt("pageSize", 400)));
+        JSONObject cursor = options.optJSONObject("cursor"), since = options.optJSONObject("since");
+        List<String> volumes = volumes(); JSONObject snapshot; int total = -1;
+        if (cursor == null) {
+            JSONObject versions = new JSONObject(), upper = new JSONObject();
+            for (String volume : volumes) { versions.put(volume, version(volume)); upper.put(volume, generation(volume)); }
+            snapshot = new JSONObject().put("scopeId", scope()).put("versions", versions).put("upper", upper).put("volumes", new JSONArray(volumes));
+            cursor = new JSONObject().put("snapshot", snapshot).put("volumeIndex", 0).put("afterId", 0);
+            total = 0;
+            for (String volume : volumes) {
+                Bundle q = locateQuery(volume, snapshot, since, 0, 0);
+                try (Cursor c = resolver.query(MediaStore.Images.Media.getContentUri(volume), new String[]{"_id"}, q, signal)) { if (c != null) total += c.getCount(); }
+            }
+        } else {
+            snapshot = cursor.getJSONObject("snapshot");
+            if (!snapshot.getString("scopeId").equals(scope()) || !snapshot.getJSONArray("volumes").toString().equals(new JSONArray(volumes).toString()))
+                throw new SecurityException("相册授权范围已变化，请重新导入");
+        }
+        int volumeIndex = cursor.getInt("volumeIndex"); long after = cursor.getLong("afterId"); int scanned = 0;
+        if (volumeIndex < 0 || volumeIndex > volumes.size() || after < 0) throw new IllegalArgumentException("扫描游标无效");
+        List<String> rowVolumes = new ArrayList<>(); List<Long> ids = new ArrayList<>(); List<Long> taken = new ArrayList<>();
+        while (volumeIndex < volumes.size() && ids.size() < count) {
+            signal.throwIfCanceled(); String volume = volumes.get(volumeIndex);
+            Bundle q = locateQuery(volume, snapshot, since, after, count - ids.size());
+            try (Cursor c = resolver.query(MediaStore.Images.Media.getContentUri(volume), new String[]{"_id", "datetaken"}, q, signal)) {
+                if (c == null) throw new IllegalStateException("系统相册暂不可用，请重试");
+                while (ids.size() < count && c.moveToNext()) { rowVolumes.add(volume); ids.add(c.getLong(0)); taken.add(c.isNull(1) ? 0L : c.getLong(1)); after = c.getLong(0); }
+            }
+            if (ids.size() == count) break;
+            volumeIndex++; after = 0;
+        }
+        List<Future<JSONArray>> reads = new ArrayList<>();
+        for (int i = 0; i < ids.size(); i++) { final String volume = rowVolumes.get(i); final long id = ids.get(i), takenMs = taken.get(i); reads.add(exifPool.submit(() -> locateOne(volume, id, takenMs, signal))); }
+        JSONArray located = new JSONArray();
+        try {
+            for (Future<JSONArray> read : reads) { signal.throwIfCanceled(); JSONArray row = read.get(); scanned++; if (row != null) located.put(row); }
+        } finally { for (Future<JSONArray> read : reads) read.cancel(true); }
+        Object next = volumeIndex < volumes.size() ? new JSONObject().put("snapshot", snapshot).put("volumeIndex", volumeIndex).put("afterId", after) : JSONObject.NULL;
+        JSONObject result = new JSONObject().put("located", located).put("scanned", scanned).put("cursor", next).put("checkpoint", snapshot);
+        if (total >= 0) result.put("total", total);
+        return result;
+    }
+    private Bundle locateQuery(String volume, JSONObject snapshot, JSONObject since, long after, int limit) throws Exception {
+        String selection = "_id > ?"; ArrayList<String> args = new ArrayList<>(); args.add(String.valueOf(after));
+        if (Build.VERSION.SDK_INT >= 30) {
+            long upper = snapshot.getJSONObject("upper").getLong(volume), lower = -1;
+            // Only an unchanged scope and index can skip already-seen rows; anything else rescans and JS deduplicates.
+            if (since != null && since.optJSONObject("versions") != null && since.optJSONObject("upper") != null
+                    && ScanWindow.incremental(since.optString("scopeId"), scope(), since.getJSONObject("versions").optString(volume), snapshot.getJSONObject("versions").getString(volume), photos().equals("limited")))
+                lower = since.getJSONObject("upper").optLong(volume, -1);
+            selection += " AND generation_modified > ? AND generation_modified <= ?"; args.add(String.valueOf(lower)); args.add(String.valueOf(upper));
+        }
+        Bundle query = new Bundle(); query.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection); query.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args.toArray(new String[0]));
+        query.putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "_id ASC"); if (limit > 0) query.putInt(ContentResolver.QUERY_ARG_LIMIT, limit);
+        return query;
+    }
+    /** [volume, id, latitude, longitude, localTime|null, offsetMinutes|null, takenMs|null], or null when unlocated/unreadable. */
+    private JSONArray locateOne(String volume, long id, long takenMs, CancellationSignal signal) {
+        if (signal.isCanceled()) return null;
+        Uri uri = MediaStore.setRequireOriginal(ContentUris.withAppendedId(MediaStore.Images.Media.getContentUri(volume), id));
+        try (ParcelFileDescriptor fd = resolver.openFileDescriptor(uri, "r", signal)) {
+            if (fd == null) return null;
+            ExifInterface exif = new ExifInterface(fd.getFileDescriptor()); float[] ll = new float[2];
+            if (!exif.getLatLong(ll) || !PhotoLocation.usable(ll[0], ll[1])) return null;
+            String local = PhotoLocation.localTime(exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL));
+            Integer offset = PhotoLocation.offsetMinutes(exif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL));
+            if (local == null && takenMs <= 0) return null;
+            return new JSONArray().put(volume).put(String.valueOf(id)).put(ll[0]).put(ll[1]).put(local == null ? JSONObject.NULL : local).put(offset == null ? JSONObject.NULL : offset).put(takenMs > 0 ? takenMs : JSONObject.NULL);
+        } catch (Exception unreadable) { return null; }
+    }
+    /** Small preview for a saved photo pointer, read from the album each time it is shown. */
+    JSONObject preview(JSONObject options, CancellationSignal signal) throws Exception {
+        if (photos().equals("denied")) throw new SecurityException("PHOTO_PERMISSION_REQUIRED：请先允许访问照片");
+        String volume = options.getString("volume"), id = options.getString("id"); int edge = Math.max(64, Math.min(512, options.optInt("maxEdge", 320)));
+        if (!volumes().contains(volume) || !id.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("照片标识无效");
+        Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.getContentUri(volume), Long.parseLong(id));
+        Bitmap bitmap = resolver.loadThumbnail(uri, new android.util.Size(edge, edge), signal);
+        try { ByteArrayOutputStream out = new ByteArrayOutputStream(); bitmap.compress(Bitmap.CompressFormat.JPEG, 72, out); return new JSONObject().put("base64", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)); }
+        finally { bitmap.recycle(); }
     }
     private Uri checkedUri(JSONObject handle, CancellationSignal signal) throws Exception {
         return checkedUri(handle, signal, null);

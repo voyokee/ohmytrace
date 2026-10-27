@@ -58,6 +58,9 @@ export class AndroidPhotoCapability {
     return permission;
   }
   async page(options){return this.bridge.call('enumerate',options,{signal:options.signal});}
+  /** One-tap import page: only located photos come back, as [volume,id,lat,lon,local,offset,takenMs] rows. */
+  locate(options,{signal}={}){return this.bridge.call('locate',options,{signal,timeoutMs:180000});}
+  async preview(pointer,{maxEdge=320,signal}={}){const result=await this.bridge.call('preview',{...pointer,maxEdge},{signal});return new Blob([bytesFrom64(result.base64)],{type:'image/jpeg'});}
   file(entry,signal){return new AndroidPhotoFile(this,entry.handle,entry,signal);}
   async analyzeFile(file,options={}){
     const limits=options.limits||MEDIA_LIMITS;

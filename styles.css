@@ -560,3 +560,15 @@ body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { 
 [data-photo-progress]:empty { display:none; }
 #photo-dialog .dlg-head h3 { margin-right:auto; }
 #photo-dialog label:has(> [data-photo-retain]) { display:block; margin-top:14px; color:var(--muted); font-size:13px; }
+/* One-tap album import (Android app). */
+#photo-dialog .photo-auto { display:flex; flex-direction:column; align-items:stretch; gap:16px; padding:22px 20px 26px; }
+.auto-intro { margin:0; color:var(--muted); font-size:15px; line-height:1.7; }
+.photo-auto .auto-main { height:52px; font-size:17px; border-radius:14px; }
+.auto-progress p { margin:10px 0 0; font-size:15px; text-align:center; }
+.auto-bar { height:8px; border-radius:4px; background:var(--line-2); overflow:hidden; }
+.auto-bar span { display:block; height:100%; width:4%; background:var(--accent); border-radius:4px; transition:width .3s; }
+.auto-link { align-self:center; border:0; background:none; color:var(--faint); font-size:14px; padding:8px 16px; text-decoration:underline; cursor:pointer; }
+.auto-result { margin:4px 0 0; font-size:17px; text-align:center; }
+.auto-result b { font-size:24px; color:var(--accent); margin:0 2px; }
+.auto-error { margin:0; color:var(--bad); font-size:14px; }
+#photo-dialog .photo-auto .auto-main { justify-content:center; text-align:center; }

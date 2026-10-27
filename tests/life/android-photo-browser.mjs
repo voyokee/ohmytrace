@@ -1,55 +1,59 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
-import {photoJPEG} from './photo-fixtures.mjs';
-import {cleanJPEG} from '../../src/life/story/share.js';
+import {tmpdir} from 'node:os';
+// One-tap Android import against a mock WebMessage port: real UI, offline names,
+// IndexedDB and reconstruction; not Android device certification.
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
-const root=resolve(fileURLToPath(new URL('../../',import.meta.url))),mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml'};
+const root=resolve(fileURLToPath(new URL('../../',import.meta.url))),mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.glb':'model/gltf-binary'};
+const output=process.env.LIFE_BROWSER_OUTPUT||resolve(tmpdir(),'ohmytrace-android-auto');await mkdir(output,{recursive:true});
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname.replace(/\/$/,'/index.html'));if(!path.startsWith(root+sep)&&path!==resolve(root,'index.html'))throw new Error();const bytes=await readFile(path);res.writeHead(200,{'Content-Type':mime[extname(path)]||'application/octet-stream'}).end(bytes);}catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const browser=await chromium.launch({headless:true,executablePath:process.env.LIFE_BROWSER_EXECUTABLE,args:['--enable-unsafe-swiftshader']}),context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'}),page=await context.newPage(),errors=[],network=[];
-page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('nominatim'))network.push(r.url());});
-const base64=bytes=>Buffer.from(bytes).toString('base64'),photos=[base64(photoJPEG({lat:30.2741,lon:120.1551,nonce:123})),base64(await readFile(new URL('./fixtures/photo-gps.heic',import.meta.url))),base64(await readFile(new URL('./fixtures/photo-gps.png',import.meta.url))),base64(photoJPEG({lat:35.68,lon:139.76,nonce:124}))],thumbnail=base64(cleanJPEG(photoJPEG()));
-await context.addInitScript(({photos,thumbnail})=>{
-  window.nativeCalls=[];const port={postMessage(text){const request=JSON.parse(text);window.nativeCalls.push(request);if(request.method==='cancel')return;
-    setTimeout(()=>{let result,error;try{const p=request.params,done=localStorage.getItem('native-first-done')==='yes',all=done?photos:photos.slice(0,3);
-      if(request.method==='permissionStatus')result={photos:'authorized',location:localStorage.getItem('fake-gps')||'permission-required'};
-      else if(request.method==='requestPermission'){if(p.location&&localStorage.getItem('fake-gps-deny')!=='yes')localStorage.setItem('fake-gps','authorized');result={photos:'authorized',location:localStorage.getItem('fake-gps')||'permission-required'};}
-      else if(request.method==='enumerate'){const offset=p.cursor??(p.since?3:0),limit=offset+2,entries=all.slice(offset,limit).map((bytes,i)=>({handle:{source:'android',scopeId:'test:full:gps',localId:String(offset+i)},name:`phone-${offset+i}.${offset+i===1?'heic':offset+i===2?'png':'jpg'}`,mimeType:'image/jpeg',size:atob(bytes).length,lastModified:1000}));result={entries,cursor:limit<all.length?limit:null,checkpoint:{scopeId:'test:full:gps',versions:{primary:'v1'},upper:{primary:all.length}},scopeId:'test:full:gps'};}
-      else if(request.method==='readRange')result={base64:btoa(atob(photos[+p.handle.localId]).slice(p.offset,p.offset+p.length))};
-      else if(request.method==='readSamples'){const bytes=atob(photos[+p.handle.localId]);result={headBase64:btoa(bytes.slice(0,p.headLength)),tailBase64:btoa(bytes.slice(bytes.length-p.tailLength)),tailOffset:bytes.length-p.tailLength};}
-      else if(request.method==='thumbnail')result={base64:thumbnail};else throw new Error(request.method);
-    }catch(e){error=e.message;}port.onmessage?.({data:JSON.stringify({id:request.id,result,error})});},5);
+const browser=await chromium.launch({headless:true,executablePath:process.env.LIFE_BROWSER_EXECUTABLE,args:['--enable-unsafe-swiftshader']}),context=await browser.newContext({viewport:{width:412,height:915},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion:'reduce'}),page=await context.newPage(),errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+await context.addInitScript(()=>{
+  // 12,000 album rows: home in Shenzhen, a Bali trip, a Kyoto trip; a third has no GPS.
+  const TOTAL=Number(localStorage.getItem('fake-total')||12000),spots=[[22.62,114.06],[-8.65,115.22],[-8.51,115.26],[35.01,135.76]];
+  const row=i=>{if(i%3===0)return null;if(i%97===0)return ['external_primary',String(i+1),0,0,'2026-01-01T00:00:00',480,null];
+    const trip=i%10<6?0:i%10<9?(i%2?1:2):3,[lat,lon]=spots[trip],day=trip===0?1+(i%200):trip===3?400+(i%3):300+(i%5),d=new Date(Date.UTC(2025,0,day));
+    return ['external_primary',String(i+1),lat+(i%13)*0.002,lon+(i%11)*0.002,d.toISOString().slice(0,10)+'T10:00:00',trip===3?540:trip===0?480:480,null];};
+  window.nativeCalls=[];const port={postMessage(text){const request=JSON.parse(text);window.nativeCalls.push(request.method);if(request.method==='cancel')return;
+    setTimeout(()=>{let result,error;try{const p=request.params;
+      if(request.method==='permissionStatus')result={photos:'authorized',location:localStorage.getItem('fake-gps')||'permission-required',scopeId:'test'};
+      else if(request.method==='requestPermission'){if(p.location&&localStorage.getItem('fake-gps-deny')!=='yes')localStorage.setItem('fake-gps','authorized');result={photos:'authorized',location:localStorage.getItem('fake-gps')||'permission-required',scopeId:'test'};}
+      else if(request.method==='locate'){const start=p.cursor?.afterId??(p.since?TOTAL:0),end=Math.min(TOTAL,start+p.pageSize),located=[];for(let i=start;i<end;i++){const r=row(i);if(r)located.push(r);}
+        result={located,scanned:end-start,cursor:end<TOTAL?{afterId:end}:null,checkpoint:{upper:TOTAL},...(p.cursor?{}:{total:TOTAL-start})};}
+      else if(request.method==='preview')result={base64:''};else throw new Error(request.method);
+    }catch(e){error=e.message;}port.onmessage?.({data:JSON.stringify({id:request.id,result,error})});},15);
   }};window.OhMyTraceMedia=port;
-},{photos,thumbnail});
-const data=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('ohmytrace.life');r.onsuccess=()=>{const db=r.result,q=db.transaction('datasets').objectStore('datasets').get('canonical');q.onsuccess=()=>{resolve(q.result);db.close();};q.onerror=()=>reject(q.error);};}));
+});
+const data=()=>page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('ohmytrace.life');r.onsuccess=()=>{const db=r.result,q=db.transaction('datasets').objectStore('datasets').get('canonical');q.onsuccess=()=>{resolve(q.result);db.close();};};}));
+const shot=name=>page.screenshot({path:resolve(output,name)});
 try{
-  await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));await page.waitForSelector('body.is-empty #empty-photos');assert.equal(await page.locator('#btn-data').isVisible(),false);await page.locator('#empty-photos').click();await page.waitForSelector('[data-photo-native]');
-  assert.equal(await page.locator('[data-photo-library-backup]').count(),0,'onboarding keeps backup controls on their own page');await page.locator('[data-photo-manage]').click();await page.waitForSelector('[data-photo-library-backup]');assert.equal(await page.locator('[data-photo-native]').count(),0);await page.locator('[data-photo-manage]').click();await page.waitForSelector('[data-photo-native]');
-  await page.evaluate(()=>localStorage.setItem('fake-gps-deny','yes'));await page.locator('[data-photo-native-scan]').click();await page.waitForFunction(()=>document.querySelector('[data-photo-error]').textContent.includes('GPS_PERMISSION_REQUIRED'));assert.equal(await page.evaluate(()=>window.nativeCalls.filter(c=>c.method==='enumerate'||c.method==='readRange').length),0,'denied GPS never becomes a full-library no-GPS scan');assert.equal(await page.locator('[data-photo-preview]').count(),0);
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));
+  await page.locator('#empty-photos').click();await page.waitForSelector('[data-photo-auto-start]');
+  assert.equal(await page.locator('#photo-dialog input, #photo-dialog [data-photo-zip], #photo-dialog [data-photo-manage]').count(),0,'the app import is a single button: no inputs, ZIP or backup tools');
+  await shot('android-1-start.png');
+  await page.evaluate(()=>localStorage.setItem('fake-gps-deny','yes'));await page.locator('[data-photo-auto-start]').click();
+  await page.waitForSelector('.auto-error');assert.match(await page.locator('.auto-error').innerText(),/照片位置/);assert.ok(!(await page.evaluate(()=>window.nativeCalls)).includes('locate'),'nothing is read without photo GPS consent');
   await page.evaluate(()=>localStorage.removeItem('fake-gps-deny'));
-  await page.locator('[data-photo-native-start]').fill('2025-01-01T00:00');await page.locator('[data-photo-native-end]').fill('2026-01-01T00:00');await page.locator('[data-photo-retain]').check();
-  await page.locator('[data-photo-native-scan]').click();await page.waitForSelector('[data-photo-preview]');assert.match(await page.locator('[data-photo-summary]').innerText(),/有 GPS\s*3/);assert.ok((await page.evaluate(()=>window.nativeCalls)).find(c=>c.method==='enumerate'&&c.params.startMs&&c.params.endMs));await page.waitForFunction(()=>document.querySelector('[data-photo-native]').textContent.includes('可读取原始照片 GPS'));
-  await page.locator('[data-photo-preview]').click();await page.waitForSelector('[data-photo-commit]');await page.locator('[data-photo-commit]').click();await page.waitForFunction(()=>document.querySelector('[data-photo-progress]').textContent.includes('已保存'));
-  assert.equal((await data()).memories.length,3);assert.equal(errors.length,0);assert.equal(network.length,0);
-  await page.evaluate(()=>localStorage.setItem('native-first-done','yes'));await page.reload();await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));await page.locator('#btn-photos').click();await page.locator('[data-photo-gallery]').click();await page.waitForFunction(()=>document.querySelectorAll('[data-photo-gallery-list] img').length===3&&[...document.querySelectorAll('[data-photo-gallery-list] img')].every(i=>i.complete&&i.naturalWidth));
-  await page.locator('[data-photo-native-start]').fill('2025-01-01T00:00');await page.locator('[data-photo-native-end]').fill('2026-01-01T00:00');await page.locator('[data-photo-native-scan]').click();await page.waitForSelector('[data-photo-preview]');assert.ok((await page.evaluate(()=>window.nativeCalls)).find(c=>c.method==='enumerate'&&c.params.since));
-  await page.locator('[data-photo-preview]').click();await page.waitForSelector('[data-photo-commit]');await page.locator('[data-photo-commit]').click();await page.waitForFunction(()=>document.querySelector('[data-photo-progress]').textContent.includes('已保存'));assert.equal((await data()).memories.length,4);assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
-  const journalMetrics=await page.evaluate(async()=>{const {NativeScanStore}=await import('./src/platform/native-scan-store.js'),store=new NativeScanStore(indexedDB,'test.native-scan-growth'),original=await store.get('active'),put=IDBObjectStore.prototype.put;let maxActiveBytes=0;
-    IDBObjectStore.prototype.put=function(value,key){if(this.name==='records'&&key==='active')maxActiveBytes=Math.max(maxActiveBytes,JSON.stringify(value).length);return put.apply(this,arguments);};
-    try{const session={version:1,batchId:'test-growth',status:'scanning',pending:null,files:[]};for(let i=0;i<1000;i+=100){session.files.push(...Array.from({length:100},(_,n)=>({assetId:`asset_${i+n}`,name:`phone-${i+n}.jpg`,handle:{source:'android',localId:String(i+n),scopeId:'test',stamp:'x'.repeat(100)}})));await store.put('active',session);}const saved=await store.get('active');if(saved.files.length!==1000)throw new Error('journal handle recovery failed');
-      IDBObjectStore.prototype.put=function(value,key){if(Array.isArray(key)&&key[0]==='files'&&key[2]===1050)throw new DOMException('Injected quota failure','QuotaExceededError');return put.apply(this,arguments);};
-      let failed=false;try{await store.put('active',{...session,files:[...session.files,...session.files.slice(0,100)]});}catch{failed=true;}IDBObjectStore.prototype.put=put;if(!failed||(await store.get('active')).files.length!==1000)throw new Error('partial file append advanced journal');
-      store.db.close();store.db=null;const reopened=new NativeScanStore(indexedDB,'test.native-scan-growth');if((await reopened.get('active')).files.length!==1000)throw new Error('reopened journal incomplete');reopened.db.close();
-      const legacy=new NativeScanStore(indexedDB,'test.native-scan-legacy'),db=await legacy.open(),old={...session,batchId:'old-inline',files:session.files.slice(0,10)};
-      await new Promise((resolve,reject)=>{const tx=db.transaction('records','readwrite');tx.objectStore('records').put(old,'active');tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});
-      if((await legacy.get('active')).files.length!==10)throw new Error('old inline journal unreadable');await legacy.put('active',{...old,files:session.files.slice(0,20)});if((await legacy.get('active')).files.length!==20)throw new Error('old inline journal migration failed');
-      await legacy.put('active',{...old,batchId:'replacement',files:session.files.slice(0,1)});const keys=await new Promise((resolve,reject)=>{const tx=db.transaction('records'),r=tx.objectStore('records').getAllKeys();tx.oncomplete=()=>resolve(r.result);tx.onabort=()=>reject(tx.error);});if(keys.filter(k=>Array.isArray(k)&&k[0]==='files').length!==1)throw new Error('old device handles leaked after replacement');db.close();
-      return {maxActiveBytes,files:saved.files.length,atomicAbort:true,reopen:true,legacyMigration:true};}
-    finally{IDBObjectStore.prototype.put=put;if(original)await store.put('active',original);}});
-  assert.ok(journalMetrics.maxActiveBytes<4096,`active cursor rewrites the entire growing handle journal: ${journalMetrics.maxActiveBytes} bytes`);
-  console.log(JSON.stringify({passed:true,browser:await browser.version(),memories:4,retainedAfterReload:3,journalMetrics,nativeBoundary:'mock WebMessage port; real browser UI, Worker, IndexedDB and thumbnails; not Android device certification'},null,2));
+  const started=Date.now();await page.locator('[data-photo-auto-start]').click();
+  await page.waitForFunction(()=>/正在读取照片 [\d,]+ \/ 12,000/.test(document.querySelector('[data-auto-status]')?.textContent||''));await shot('android-2-progress.png');
+  await page.waitForSelector('[data-photo-auto-done]',{timeout:120000});const elapsed=Date.now()-started;await shot('android-3-done.png');
+  const saved=await data(),located=saved.memories.length;
+  assert.ok(located>7500&&located<8000,`about two thirds of 12,000 photos are located: ${located}`);
+  assert.ok(saved.memories.every(m=>/^android-media:external_primary\/\d+$/.test(m.uri)),'only album pointers are stored');
+  assert.ok(saved.places.length<=6,`places are merged per city: ${saved.places.map(p=>p.name)}`);
+  assert.equal(saved.residences.length,1,'the dominant city becomes the inferred home');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'Shenzhen');
+  assert.deepEqual(saved.trips.map(t=>t.title).sort(),['日本之旅','印度尼西亚之旅'].sort());
+  assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
+  await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
+  await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-start]');assert.match(await page.locator('.auto-intro').innerText(),/只会补充新拍的照片/);
+  await page.locator('[data-photo-auto-start]').click();await page.waitForSelector('[data-photo-auto-done]');assert.match(await page.locator('.auto-result').innerText(),/没有发现新的足迹/);
+  assert.equal((await data()).memories.length,located,'re-importing never duplicates');
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
