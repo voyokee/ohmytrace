@@ -1230,7 +1230,7 @@ function refresh() {
 
 function renderStats() {
   const list=visibleTrips(),days=list.reduce((n,t)=>n+scopedDays(t,state.year),0);
-  const places=new Set([...list.flatMap(t=>t.stops.filter(s=>s.countsAsTravel!==false).map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>p.countsAsVisited!==false&&(state.year==null||p.years.includes(state.year))).map(p=>p.place)]),years=yearOptions(list),parts=[];
+  const places=new Set([...list.flatMap(t=>t.stops.filter(s=>s.countsAsTravel!==false).map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>p.countsAsVisited!==false&&(state.year==null||(p.visitedYears||p.years).includes(state.year))).map(p=>p.place)]),years=yearOptions(list),parts=[];
   if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
   parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
   if(days)parts.push(`<b>${days}</b> 天在路上`);

@@ -61,6 +61,18 @@ try{
   await page.locator('[data-photo-auto-regroup]').click();await page.waitForSelector('[data-photo-auto-done]',{timeout:120000});
   assert.match(await page.locator('.auto-result').innerText(),/已重新整理足迹/);assert.equal(await page.evaluate(()=>window.nativeCalls.length),calls,'Regroup must not access the album');
   assert.deepEqual((await data()).memories.map(m=>m.id),photoIds);await shot('android-5-regroup.png');
+  // Replace only this disposable browser profile with a border/airport fixture.
+  await page.evaluate(async()=>{
+    const {emptyDataset}=await import('/src/life/schema.js'),{applyAutoImport,nameCells,normalizeObservation}=await import('/src/life/media/auto-import.js'),{GeoNameProvider}=await import('/src/life/geocoding/provider.js'),{LifeRepository,IndexedDBStore}=await import('/src/life/repository.js');
+    let n=50000;const p=(day,hour,latitude,longitude)=>({uri:`android-media:external_primary/${++n}`,latitude,longitude,local:`${day}T${String(hour).padStart(2,'0')}:00:00`,offsetMinutes:480});
+    const rows=Array.from({length:12},(_,i)=>p(`2026-01-${String(i+1).padStart(2,'0')}`,12,22.541,114.0596));
+    rows.push(p('2026-03-01',8,22.308,113.918),p('2026-03-02',12,35.01,135.76),p('2026-03-03',12,35.01,135.76),p('2026-03-04',8,22.308,113.918),p('2026-03-04',12,22.541,114.0596));
+    const d=emptyDataset();applyAutoImport(d,rows,await nameCells(rows.map(normalizeObservation),new GeoNameProvider()),{now:new Date('2026-10-28')});
+    const store=new IndexedDBStore(),repo=new LifeRepository(store);await repo.initialize({legacyStorage:null});await repo.restore(JSON.stringify(d));store.db.close();
+  });
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#stats')?.textContent.includes('1 次旅行'));
+  const borderStats=await page.locator('#stats').innerText();assert.match(borderStats,/2 个地点/);assert.match(borderStats,/2 天在路上/);
+  const borderData=await data();assert.ok(borderData.places.some(p=>p.name==='香港'));assert.equal(borderData.memories.length,17,'airport photos remain stored');await shot('android-6-border-transit.png');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
+  console.log(JSON.stringify({passed:true,browser:await browser.version(),albumRows:12000,located,places:saved.places.length,trips:saved.trips.length,jsElapsedMs:elapsed,borderStats,nativeBoundary:'mock port with 15 ms latency per page; device EXIF time not included'},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}

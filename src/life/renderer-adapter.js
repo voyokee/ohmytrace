@@ -68,7 +68,7 @@ export function projectDataset(data,scope={type:'all'}) {
     if(!photoMap.has(id))photoMap.set(id,{place:keys.get(id),placeId:id,countsAsVisited:placeCountsAsVisited(data,id),years:new Set(),count:0});
     const p=photoMap.get(id),year=m.start.value?Number(m.start.value.slice(0,4)):null;p.count++;if(year)p.years.add(year);
   }
-  const photoPlaces=[...photoMap.values()].map(p=>({...p,years:[...p.years]}));
+  const photoPlaces=[...photoMap.values()].map(p=>({...p,years:[...p.years],visitedYears:[...p.years].filter(year=>placeCountsAsVisited(data,p.placeId,{year}))}));
   const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)})),represented=new Set(rows.map(r=>r.place));
   for(const p of photoPlaces)if(!represented.has(p.place))rows.push({place:p.place});
   return {rows,places,placeIds,trips,homes,photoPlaces,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter.start,chapter.end):null,scope:clone(scope)};

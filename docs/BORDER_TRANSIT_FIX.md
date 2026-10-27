@@ -32,7 +32,15 @@ representative WGS84 coordinates (not a user's private album):
 
 The regression also starts from a false mixed “香港” identity, then verifies
 regrouping separates cities and rewires photo references without dropping photos
-or duplicating identities on the next regroup.
+or duplicating identities on the next regroup. It also verifies that a substantive
+visit in another year cannot inflate an airport-only year's visited-city count.
+
+Chrome browser acceptance with a simulated native port imported 12,000 album
+rows (7,918 located observations / 3 cities / 2 journeys), then loaded a
+Shenzhen–Hong Kong airport–Kyoto return fixture. The actual page displayed
+“1 次旅行 / 2 个地点 / 2 天在路上 / 现居 深圳”; all 17 photo pointers,
+including both airport photos, remained stored. This is desktop automation,
+not real-album or Android performance evidence.
 
 ## Inference and counting
 

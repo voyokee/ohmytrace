@@ -65,3 +65,7 @@ test('upgrade rescans old discarded coastal photos once, even after saved-only r
  const record=new Map([['auto-checkpoint',{upper:999}]]),sinceCalls=[],coastal=photo('2026-03-01',12,'蛇口');const capability={async ensureLocationAccess(){},async locate({since}){sinceCalls.push(since);return {located:since?[]:[['external_primary',coastal.uri.split('/').at(-1),coastal.latitude,coastal.longitude,coastal.local,480,null]],scanned:1,cursor:null,checkpoint:{upper:1000}};}};
  const importer=new AndroidAutoImport(repo,capability,{geonames:resolver(),store:{async get(k){return record.get(k);},async put(k,v){record.set(k,v);}}});await importer.regroup();await importer.run();assert.equal(sinceCalls[0],null);assert.ok(repo.getDataset().memories.some(m=>m.uri===coastal.uri));await importer.run();assert.deepEqual(sinceCalls[1],{upper:1000});
 });
+test('a substantive visit in another year cannot make an airport-only year count as a city visit',async()=>{
+ const d=emptyDataset(),older=home().map(o=>({...o,local:o.local.replace('2026','2025')}));await run(d,[...older,...home(),photo('2025-03-01',8,'香港机场'),photo('2026-03-01',10,'香港'),photo('2026-03-01',20,'深圳')]);const hk=d.places.find(p=>p.name==='香港');
+ assert.equal(placeCountsAsVisited(d,hk.id),true);assert.equal(placeCountsAsVisited(d,hk.id,{year:2025}),false);assert.equal(placeCountsAsVisited(d,hk.id,{year:2026}),true);const projected=projectDataset(d).photoPlaces.find(p=>p.placeId===hk.id);assert.deepEqual(projected.visitedYears,[2026]);assert.deepEqual(projected.years,[2025,2026]);
+});
