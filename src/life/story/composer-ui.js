@@ -61,6 +61,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
     const d=data(),years=new Set(storyYears(d)),now=new Date().getFullYear(),out=[];
     if(origin?.startsWith('trip:')){const t=d.trips.find(t=>'trip:'+t.id===origin);if(t)out.push([origin,'这次旅行']);}
     if(years.has(now))out.push([`year:${now}`,'今年']);if(years.has(now-1))out.push([`year:${now-1}`,'去年']);
+    if(origin?.startsWith('year:')&&!out.some(([value])=>value===origin))out.push([origin,`${origin.slice(5)} 年`]);
     out.push(['all','全部'],['custom','自定义']);return out;
   }
   function renderSimple(){

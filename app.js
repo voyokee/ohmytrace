@@ -1286,6 +1286,8 @@ function renderChips() {
   $('#tab-badge').textContent = n || '';
   $('#data-dot').hidden = !n;
   for(const id of ['#more-dot','#menu-data-dot'])if($(id))$(id).hidden=!n;
+  const share=$('#btn-share');
+  if(share){const data=(storyBaseLife||life)?.repository?.getDataset();share.disabled=!storyExperience?.composer||!data||data.meta.origin==='demo'||!['places','visits','memories','chapters'].some(key=>data[key].length);}
 }
 
 function itemHTML(x) {
@@ -1759,6 +1761,7 @@ function bindEvents() {
       e.preventDefault();return;
     }
     if (e.key === 'Escape') {
+      if(menu&&!menu.hidden){closeMenu(true);e.preventDefault();return;}
       if (mapChooser?.close(true)) return;
       if (pickName) endPick();
       else if (body.classList.contains('modal-open')) closeModal();
@@ -1772,14 +1775,21 @@ function bindEvents() {
   $('#btn-home').addEventListener('click', () => { storyExperience?.pauseForInteraction();stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
   $('#btn-share')?.addEventListener('click',()=>{
-    if(life?.repository?.getDataset().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
-    storyExperience?.composer?.open();
+    if((storyBaseLife||life)?.repository?.getDataset().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
+    storyExperience?.pauseForInteraction();
+    storyExperience?.composer?.open({resume:!!storyBaseLife});
   });
   // Phones keep the frequent actions in the bar; the rest live under "更多".
-  const menu=$('#toolbar-menu'),more=$('#btn-more'),closeMenu=()=>{if(menu&&!menu.hidden){menu.hidden=true;more.setAttribute('aria-expanded','false');}};
-  more?.addEventListener('click',()=>{const open=menu.hidden;menu.hidden=!open;more.setAttribute('aria-expanded',String(open));});
-  menu?.addEventListener('click',e=>{const b=e.target.closest('[data-proxy]');if(!b)return;closeMenu();$('#'+b.dataset.proxy).click();});
+  const menu=$('#toolbar-menu'),more=$('#btn-more'),closeMenu=(restore=false)=>{if(menu&&!menu.hidden){menu.hidden=true;more.setAttribute('aria-expanded','false');if(restore)more.focus({preventScroll:true});}};
+  const openMenu=()=>{menu.hidden=false;more.setAttribute('aria-expanded','true');menu.querySelector('[role=menuitem]')?.focus({preventScroll:true});};
+  more?.addEventListener('click',()=>{if(menu.hidden)openMenu();else closeMenu();});
+  more?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();e.stopPropagation();openMenu();}});
+  menu?.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;e.preventDefault();e.stopPropagation();
+    const items=[...menu.querySelectorAll('[role=menuitem]')],i=items.indexOf(document.activeElement),next=e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus();});
+  menu?.addEventListener('click',e=>{const b=e.target.closest('[data-proxy]');if(!b)return;closeMenu(true);$('#'+b.dataset.proxy).click();});
+  menu?.addEventListener('focusout',e=>{if(!menu.contains(e.relatedTarget)&&e.relatedTarget!==more)closeMenu();});
   document.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target)&&!more.contains(e.target))closeMenu();});
+  window.addEventListener('resize',()=>{if(innerWidth>720)closeMenu();});
   $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
   $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
   $('#btn-data').addEventListener('click', () => openModal(pendingPlaces().length ? 'places' : 'import'));
@@ -1807,7 +1817,7 @@ async function boot() {
   await initGlobe();
   refresh();
   geocodeMissing();
-  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:life.adapter.scope;},
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:{type:'all'};},
     reducedMotion,cancel:()=>pauseOverviewMotion(),
     applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
