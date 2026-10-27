@@ -1,4 +1,5 @@
 import {clone,dateBound,validateDataset} from './schema.js';
+import {tripCountsAsTravel,visitCountsAsTravel,placeCountsAsVisited} from './travel-policy.js';
 import {datasetRows} from './legacy.js';
 
 const format=d=>d.precision==='unknown'?'未知':d.precision==='ongoing'?'至今':d.value;
@@ -28,12 +29,14 @@ export function projectDataset(data,scope={type:'all'}) {
   const photoTrips=new Set(data.memories.filter(m=>m.kind==='photo').flatMap(m=>m.tripIds));
   let trips=data.trips.map(t=>{
     const inferredConnections=photoTrips.has(t.id);let date=renderDate(t.start,t.end);
+    const eligible=t.visitIds.map(id=>visits.get(id)).filter(v=>visitCountsAsTravel(data,v,t));
+    if(inferredConnections&&eligible.length&&eligible.length!==t.visitIds.length){const first=[...eligible].sort((a,b)=>(dateBound(a.start)??Infinity)-(dateBound(b.start)??Infinity))[0],last=[...eligible].sort((a,b)=>(dateBound(b.end,true)??-Infinity)-(dateBound(a.end,true)??-Infinity))[0];date=renderDate(first.start,last.end);}
     if(inferredConnections&&(t.start.precision==='unknown'||t.end.precision==='unknown')){
       const stops=t.visitIds.map(id=>visits.get(id)),starts=stops.filter(v=>dateBound(v.start)!==null).sort((a,b)=>dateBound(a.start)-dateBound(b.start)),ends=stops.filter(v=>dateBound(v.end,true)!==null).sort((a,b)=>dateBound(a.end,true)-dateBound(b.end,true));
       if(starts.length&&ends.length){date=renderDate(t.start.precision==='unknown'?starts[0].start:t.start,t.end.precision==='unknown'?ends.at(-1).end:t.end);date={...date,days:null,label:`照片观测 ${date.label} · 旅行起止未完全确认`,short:`照片观测 ${date.short}`};}
     }
-    return {id:t.id,kind:'trip',title:t.title,type:t.type,date,inferredConnections,originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
-      stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note,date:renderDate(v.start,v.end)};})};
+    return {id:t.id,kind:'trip',countsAsTravel:tripCountsAsTravel(data,t),title:t.title,type:t.type,date,inferredConnections,originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
+      stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,countsAsTravel:visitCountsAsTravel(data,v,t),note:v.legacy.note,date:renderDate(v.start,v.end)};})};
   });
   const evidence=new Map(data.evidence.map(e=>[e.id,e])),grouping=data.meta.photoAutoGrouping,currentYear=String(new Date().getFullYear());
   let homes=data.residences.map(r=>{
@@ -62,7 +65,7 @@ export function projectDataset(data,scope={type:'all'}) {
   });
   const photoMap=new Map(),tripIds=new Set(trips.map(t=>t.id));
   for(const m of data.memories)if(m.kind==='photo'&&(!chapter||chapter.memoryIds.includes(m.id)||m.tripIds.some(id=>tripIds.has(id))))for(const id of m.placeIds){
-    if(!photoMap.has(id))photoMap.set(id,{place:keys.get(id),placeId:id,years:new Set(),count:0});
+    if(!photoMap.has(id))photoMap.set(id,{place:keys.get(id),placeId:id,countsAsVisited:placeCountsAsVisited(data,id),years:new Set(),count:0});
     const p=photoMap.get(id),year=m.start.value?Number(m.start.value.slice(0,4)):null;p.count++;if(year)p.years.add(year);
   }
   const photoPlaces=[...photoMap.values()].map(p=>({...p,years:[...p.years]}));

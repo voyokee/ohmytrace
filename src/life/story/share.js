@@ -1,4 +1,5 @@
 import {clone,validateDataset,validatePeriod} from '../schema.js';
+import {tripCountsAsTravel,visitCountsAsTravel} from '../travel-policy.js';
 import {validateStory,validateScene,keys,list,ids,text} from './schema.js';
 
 const date=d=>({precision:d.precision,value:d.value});
@@ -9,8 +10,8 @@ export function projectShare(data,story,{images={}}={}){
   validateDataset(data);validateStory(story);
   const policy=story.privacySettings;
   const chapters=data.chapters.filter(c=>story.selectedChapterIds.includes(c.id));
-  const trips=data.trips.filter(t=>story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id));
-  if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id)))throw new Error('原始人生记录已改变，请重新生成故事');
+  const trips=data.trips.filter(t=>story.selectedTripIds.includes(t.id)&&tripCountsAsTravel(data,t)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>visitCountsAsTravel(data,data.visits.find(v=>v.id===id),t))}));
+  if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id&&tripCountsAsTravel(data,t))))throw new Error('原始人生记录已改变，请重新生成故事');
   const selectedMemories=data.memories.filter(m=>story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&
     (m.tripIds.some(id=>trips.some(t=>t.id===id))||chapters.some(c=>c.memoryIds.includes(m.id)))&&
     (m.kind==='photo'?policy.includePhotos:policy.includeNotes));

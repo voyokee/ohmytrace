@@ -1,3 +1,5 @@
+import {tripTitle} from './media/journey-title.js';
+import {visitCountsAsTravel} from './travel-policy.js';
 import {COLLECTIONS,clone,newId,dateBound,unknownDate,validateDataset} from './schema.js';
 
 const collections={place:'places',trip:'trips',residence:'residences',chapter:'chapters'};
@@ -116,6 +118,18 @@ function split(data,{kind,id,visitIds,title}){
   for(const c of data.chapters)if(c.relatedTripIds.includes(id))c.relatedTripIds.push(newTrip.id);
   return {id:newTrip.id};
 }
+// Keep generated city titles consistent with a corrected stop, in the same undo patch.
+function refreshAutomaticTitles(data,changed){
+ const touched=new Set(changed.flatMap(c=>c.collection==='trips'?[c.id]:c.collection==='visits'?[c.before?.value.tripId,c.after?.value.tripId]:c.collection==='places'?data.visits.filter(v=>v.placeId===c.id).map(v=>v.tripId):[]));
+ for(const t of data.trips){
+  if(!touched.has(t.id)||!t.autoTitle||t.title!==t.autoTitle)continue;
+  if(!t.visitType&&t.type==='转机'&&t.visitIds.some(id=>data.visits.find(v=>v.id===id)?.legacy.type==='旅行'))t.type='旅行';
+  const ids=new Set(t.visitIds.map(id=>data.visits.find(v=>v.id===id)).filter(v=>visitCountsAsTravel(data,v,t)).map(v=>v.placeId));
+  const photos=data.memories.filter(m=>m.tripIds.includes(t.id)&&m.photoObservation&&m.placeIds.some(id=>ids.has(id))).sort((a,b)=>a.photoObservation.takenMs-b.photoObservation.takenMs||a.uri.localeCompare(b.uri)).map(m=>{const p=data.places.find(p=>p.id===m.placeIds[0]);return {day:m.photoObservation.day,city:{...m.photoObservation.city,key:p.id,label:p.name}};});
+  const home=data.places.find(p=>p.id===data.meta.photoAutoGrouping?.currentHomePlaceId)?.location?.photoCity?.country;
+  t.title=t.autoTitle=tripTitle(photos,{homeCountry:home});for(const v of data.visits)if(v.tripId===t.id)v.legacy.trip=t.title;
+ }
+}
 const operations={rename,classify,merge,split};
 function changesBetween(before,after){
   return entityCollections.flatMap(collection=>{
@@ -154,7 +168,7 @@ export class EditHistory {
     let record,result;
     await this.repository.update(data=>{
       if(data.meta.origin==='demo')throw new Error('示例数据不能保存修改');
-      const before=clone(data);result=operations[command.type](data,clone(command));validateDataset(data);
+      const before=clone(data);result=operations[command.type](data,clone(command));refreshAutomaticTitles(data,changesBetween(before,data));validateDataset(data);
       const changed=changesBetween(before,data);if(!changed.length)return;
       record={id:newId('edit'),type:command.type,datasetId:data.id};
       const evidenceId=evidence(data,record,'apply',changed);

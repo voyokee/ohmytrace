@@ -49,7 +49,7 @@ try{
   assert.ok(saved.places.length<=6,`places are merged per city: ${saved.places.map(p=>p.name)}`);
   assert.equal(saved.residences.filter(r=>r.kind==='home').length,1,'only this year becomes current');assert.equal(saved.residences.filter(r=>r.kind==='past').length,1,'last year has a continuous stay over two months');assert.equal(saved.places.find(p=>p.id===saved.residences[0].placeId).name,'深圳','offline city names are Chinese');
   assert.ok(saved.places.every(p=>!/[A-Za-z]/.test(p.name)),`no English place names: ${saved.places.map(p=>p.name)}`);
-  assert.equal(saved.trips.length,2);assert.ok(saved.trips.every(t=>/之旅$/.test(t.title)&&!/[A-Za-z]/.test(t.title)),saved.trips.map(t=>t.title).join());
+  assert.equal(saved.trips.length,2);assert.deepEqual(saved.trips.map(t=>t.title),['登巴萨','京都'],'Chinese city titles replace province/country journeys');
   assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
   await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
   await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-start]');assert.match(await page.locator('.auto-intro').innerText(),/只会补充新拍的照片/);

@@ -343,7 +343,8 @@ function buildModel() {
 const byId = id => trips.find(t => t.id === id) || homes.find(h => h.id === id) || null;
 const inYear = t => matchesYear(t,state.year);
 const visibleHomes = () => homes.filter(inYear);
-const visibleTrips = () => trips.filter(inYear);
+const travelTrips = () => trips.filter(t=>t.countsAsTravel!==false);
+const visibleTrips = () => travelTrips().filter(inYear);
 const located = name => { const p = state.places[name]; return p && p.lat != null; };
 
 /* ================= geocoding ================= */
@@ -764,7 +765,7 @@ function lightTarget(name) {
   if (!lightsOn) return 0;
   if (replayLit) return replayLit.has(name) ? 1 : 0;
   if (state.year || life?.adapter.scope.type==='chapter') {
-    const lit = visibleHomes().some(h => h.place === name) || visibleTrips().some(t => t.stops.some(s => s.place === name));
+    const lit = visibleHomes().some(h => h.place === name) || trips.filter(inYear).some(t => t.stops.some(s => s.place === name)) || lifeSnapshot?.photoPlaces?.some(p=>p.place===name&&(state.year==null||p.years.includes(state.year)));
     return lit ? 1 : 0;
   }
   return 1;
@@ -1229,7 +1230,7 @@ function refresh() {
 
 function renderStats() {
   const list=visibleTrips(),days=list.reduce((n,t)=>n+scopedDays(t,state.year),0);
-  const places=new Set([...list.flatMap(t=>t.stops.map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>state.year==null||p.years.includes(state.year)).map(p=>p.place)]),years=yearOptions(list),parts=[];
+  const places=new Set([...list.flatMap(t=>t.stops.filter(s=>s.countsAsTravel!==false).map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>p.countsAsVisited!==false&&(state.year==null||p.years.includes(state.year))).map(p=>p.place)]),years=yearOptions(list),parts=[];
   if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
   parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
   if(days)parts.push(`<b>${days}</b> 天在路上`);
@@ -1240,12 +1241,12 @@ function renderStats() {
 }
 let yearSignature='';
 function renderYears() {
-  const options=yearOptions(trips),signature=trips.length+'|'+options.map(y=>`${y}:${trips.filter(t=>matchesYear(t,y)).length}`).join('|');
+  const counted=travelTrips(),options=yearOptions(counted),signature=counted.length+'|'+options.map(y=>`${y}:${counted.filter(t=>matchesYear(t,y)).length}`).join('|');
   const el=$('#year-filter');
   if(signature!==yearSignature||!el.children.length) {
     const scroll=el.scrollLeft;yearSignature=signature;
-    el.innerHTML=`<button class="year-option" data-act="all-years" aria-label="全部年份，${trips.length} 次旅行" aria-pressed="false">全部<span>${trips.length}</span></button>`+
-      options.map(y=>{const count=trips.filter(t=>matchesYear(t,y)).length;return `<button class="year-option" data-year="${y}" aria-label="按 ${y} 年显示，${count} 次旅行" aria-pressed="false">${y}<span>${count}</span></button>`;}).join('');
+    el.innerHTML=`<button class="year-option" data-act="all-years" aria-label="全部年份，${counted.length} 次旅行" aria-pressed="false">全部<span>${counted.length}</span></button>`+
+      options.map(y=>{const count=counted.filter(t=>matchesYear(t,y)).length;return `<button class="year-option" data-year="${y}" aria-label="按 ${y} 年显示，${count} 次旅行" aria-pressed="false">${y}<span>${count}</span></button>`;}).join('');
     el.scrollLeft=scroll;
   }
   for(const button of el.children){const on=button.dataset.year?+button.dataset.year===state.year:state.year==null;button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));}
@@ -1265,8 +1266,8 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 
 // One tap replays what the visitor is looking at: the chosen year, else the latest trip.
 function replayTarget() {
-  if(state.year!=null&&trips.some(t=>matchesYear(t,state.year)))return {source:`year:${state.year}`,label:` ${state.year} 年`};
-  const latest=[...trips].sort((a,b)=>(b.date?.end??-Infinity)-(a.date?.end??-Infinity))[0];
+  if(state.year!=null&&travelTrips().some(t=>matchesYear(t,state.year)))return {source:`year:${state.year}`,label:` ${state.year} 年`};
+  const latest=travelTrips().sort((a,b)=>(b.date?.end??-Infinity)-(a.date?.end??-Infinity))[0];
   return latest?{source:`trip:${latest.id}`,label:`「${latest.title.length>8?latest.title.slice(0,8)+'…':latest.title}」`}:null;
 }
 function renderChips() {

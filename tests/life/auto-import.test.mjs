@@ -32,7 +32,7 @@ async function run(data,input,names=geonames){return applyAutoImport(data,input,
 test('one-tap import merges places per city, splits trips at home and keeps pointers only',async()=>{
   const data=emptyDataset('new'),summary=await run(data,library());validateDataset(data);
   assert.equal(summary.photos,327,'null island, ocean and timeless photos are dropped silently');
-  assert.deepEqual(data.trips.map(t=>t.title),['巴厘之旅','京都之旅'],'one country, at most two provinces: titled by province');
+  assert.deepEqual(data.trips.map(t=>t.title),['Ubud · Denpasar','Kyoto'],'titles use cities, never provinces');
   assert.deepEqual(data.places.map(p=>p.name).sort(),['Denpasar','Kyoto','Shenzhen','Ubud'],'300 Bali photos collapse to two city places');
   const bali=data.trips[0];assert.equal(bali.visitIds.length,2);assert.deepEqual([bali.start.value,bali.end.value],['2026-04-05','2026-04-07']);
   assert.equal(data.residences.length,1);assert.equal(data.places.find(p=>p.id===data.residences[0].placeId).name,'Shenzhen');
@@ -55,7 +55,7 @@ test('observations without usable time or position are rejected before naming',(
   assert.equal(normalizeObservation({uri:'a',latitude:91,longitude:0,local:'2026-01-01T00:00:00'}),null);
   assert.equal(normalizeObservation({uri:'a',latitude:1,longitude:1}),null);
   assert.equal(normalizeObservation({uri:'a',latitude:1,longitude:1,local:'2026-01-01T08:00:00',offsetMinutes:480}).instant,Date.parse('2026-01-01T00:00:00Z'));
-  assert.equal(cellKey({latitude:-8.651,longitude:115.221}),cellKey({latitude:-8.66,longitude:115.215}));
+  assert.notEqual(cellKey({latitude:-8.651,longitude:115.221}),cellKey({latitude:-8.66,longitude:115.215}));
 });
 
 test('demo data is replaced and existing CSV trips absorb overlapping photos',async()=>{
@@ -76,7 +76,7 @@ test('the first one-tap run regroups the old review-based photo import but keeps
   validateDataset(data);
   assert.deepEqual(removeLegacyPhotoData(data),{memories:1,trips:1});
   const summary=await run(data,[photo('2026-04-01',10,1.3,103.85),photo('2026-04-02',10,1.3,103.85),photo('2026-04-05',10,-8.65,115.22)]);validateDataset(data);
-  assert.deepEqual(data.trips.map(t=>t.title).sort(),['巴厘之旅','独库公路'].sort());
+  assert.deepEqual(data.trips.map(t=>t.title).sort(),['Denpasar','独库公路'].sort());
   assert.ok(!data.places.some(p=>p.id==='place_old_photo'));assert.deepEqual(data.chapters[0].memoryIds,[]);assert.equal(data.chapters[0].relatedTripIds.length,1);
   assert.equal(summary.photos,3);assert.equal(removeLegacyPhotoData(data).memories,0,'nothing left to regroup');
 });
@@ -105,7 +105,7 @@ function singaporeYear(){
 test('home is decided per year, so a trip never absorbs the home city even with an older residence on record',async()=>{
   const data=emptyDataset('new');importCSVInto(data,'日期,行程,地点,类型,备注,坐标\n2019-01~至今,,上海,现居地,,"31.23,121.47"','replace');
   await run(data,singaporeYear());validateDataset(data);
-  assert.deepEqual(data.trips.map(t=>t.title),['云南之旅'],'Singapore stays home; the trip is only Yunnan');
+  assert.deepEqual(data.trips.map(t=>t.title),['大理 · 丽江'],'Singapore stays home; the trip is only Yunnan');
   const yunnan=data.trips[0];assert.deepEqual(yunnan.visitIds.map(id=>data.places.find(p=>p.id===data.visits.find(v=>v.id===id).placeId).name),['大理','丽江']);
   const singapore=data.residences.find(r=>data.places.find(p=>p.id===r.placeId).name==='新加坡');
   assert.ok(singapore,'the photo home becomes a residence');assert.equal(singapore.kind,'past','last year must not be labelled current');
@@ -121,5 +121,5 @@ test('results grouped by older rules are rebuilt without touching CSV records',a
   removeAutoImportData(data);validateDataset(data);
   assert.deepEqual(data.trips.map(t=>t.title),['独库公路']);assert.equal(data.memories.length,0);assert.equal(data.residences.length,0);
   await run(data,input);validateDataset(data);
-  assert.equal(autoImportOutdated(data),false);assert.deepEqual(data.trips.map(t=>t.title).sort(),['云南之旅','独库公路'].sort());
+  assert.equal(autoImportOutdated(data),false);assert.deepEqual(data.trips.map(t=>t.title).sort(),['大理 · 丽江','独库公路'].sort());
 });

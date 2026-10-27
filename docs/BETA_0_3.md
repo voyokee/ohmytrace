@@ -1,6 +1,6 @@
 # OnceHere Beta 0.3 验收台账
 
-2026-10-27。用户体验以 [PRODUCT.md](PRODUCT.md) 为准，迭代范围见 [ROADMAP.md](ROADMAP.md)。本台账区分自动化验证、桌面浏览器验证、真实 Android 和真实用户验证；后一类不能由前一类替代。
+2026-10-28。用户体验以 [PRODUCT.md](PRODUCT.md) 为准，迭代范围见 [ROADMAP.md](ROADMAP.md)。本台账区分自动化验证、桌面浏览器验证、真实 Android 和真实用户验证；后一类不能由前一类替代。
 
 ## 代码基线与交付
 
@@ -8,7 +8,8 @@
 - `beta/0.3-foundation` 已通过 [PR #3](https://github.com/voyokee/ohmytrace/pull/3) 合入主干 `afc902d`；Web / Android / 分享入口统一为 OnceHere，保留旧安装包、数据库和备份格式标识以兼容数据。
 - PR 三项检查和主干 CI 均通过：[主干 Web](https://github.com/voyokee/ohmytrace/actions/runs/40508957693)、[主干 Android 与 APK](https://github.com/voyokee/ohmytrace/actions/runs/40508957619)。已建立 `v0.2.0` 基线标签，指向 `afc902d`。
 - Web CI 覆盖 Node 20 / 24；Android CI 使用 JDK 17、SDK / Build Tools 35、校验 SHA-256 的 Gradle 8.11.1，运行 JVM 单测、Lint，构建 Debug、测试与未签名 Release APK，再禁用缓存重跑全部 Release 任务、逐字节比较 APK。
-- 当前开发：`beta/0.3-trust-cards` 从 `afc902d` 创建；可撤销编辑命令的领域基础见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。统一卡片尚待接入。
+- 可撤销编辑领域基础已通过 [PR #4](https://github.com/voyokee/ohmytrace/pull/4) 合入 `5521cfd`，见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。统一卡片在 `beta/0.3-record-cards` 保存开发进度，尚待接入。
+- 当前优先修复：`beta/0.3-border-geocoding`，深港沿海归属、机场 / 路过推断、城市标题及升级重扫见 [BORDER_TRANSIT_FIX.md](BORDER_TRANSIT_FIX.md)。
 - `v0.3.0` 尚未发布，完整退出标准继续逐项验证。
 
 ## 退出标准追踪
