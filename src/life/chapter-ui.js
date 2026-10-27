@@ -34,7 +34,7 @@ export function mountChapterUI({repository,adapter,onScope,onError,onBackup,onRe
       <details ${chapter?.homeAnchors.length?'open':''}><summary>关联常驻 / 阶段地点（${d.places.length}）</summary><div class="life-options">${d.places.map(p=>`<label><input type="checkbox" name="homeAnchors" value="${esc(p.id)}" ${chapter?.homeAnchors.includes(p.id)?'checked':''}>${esc(p.name)}${p.coordinates?` <small>${p.coordinates.latitude}, ${p.coordinates.longitude}</small>`:' · 坐标未知'}</label>`).join('')}</div></details>
       <details open><summary>关联旅行（${d.trips.length}）</summary><div class="life-options">${d.trips.map(t=>`<label><input type="checkbox" name="relatedTripIds" value="${esc(t.id)}" ${chapter?.relatedTripIds.includes(t.id)?'checked':''}>${esc(t.title)} <small>${esc(period(t))}</small></label>`).join('')||'<p class="hint">没有旅行也可以建立居住或学习阶段。</p>'}</div></details>
       <div class="row-actions"><button class="btn primary" type="submit">保存阶段</button><button class="btn" type="button" data-life-new>新建阶段</button></div>
-      </fieldset>${demo?'<p class="hint">当前为虚构演示。导入你的 CSV 或在数据管理中清空示例后，即可保存人生阶段。</p>':''}
+      </fieldset>${demo?'<p class="hint">当前为示例数据。退出示例并导入你自己的照片或 CSV 后，即可保存人生阶段。</p>':''}
       <p id="chapter-error" role="alert"></p></form></div>`;
   }
   function open(){editing=null;render();dialog.showModal();}
@@ -60,7 +60,7 @@ export function mountChapterUI({repository,adapter,onScope,onError,onBackup,onRe
   dialog.addEventListener('submit',e=>{
     e.preventDefault();const form=e.target,values=new FormData(form);
     run(async()=>{
-      if(data().meta.origin==='demo')throw new Error('请先导入真实 CSV');
+      if(data().meta.origin==='demo')throw new Error('示例数据不能保存，请先导入你自己的足迹');
       const input={...(editing?{id:editing}:{}),title:values.get('title'),type:values.get('type'),start:partialDate(values.get('start')),end:partialDate(values.get('end'),{end:true}),homeAnchors:values.getAll('homeAnchors'),relatedTripIds:values.getAll('relatedTripIds')};
       await repository.update(d=>upsertChapter(d,input));editing=null;render();
     });

@@ -246,6 +246,7 @@ function download(name,text,type='text/csv;charset=utf-8') {
   a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
 function exportCsv() { if(life)download('我的足迹.csv',life.exportCSV()); }
+function exitDemo() { if(!life?.exitDemo())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
 
 async function readFileText(file) {
   const buf = await file.arrayBuffer();
@@ -1191,6 +1192,7 @@ function refresh() {
   if(state.sel&&!byId(state.sel))state.sel=null;
   if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
+  if(!publicViewer)$('#empty-demo').hidden=!life?.canPreviewDemo();
   renderStats();
   renderChips();
   renderList();
@@ -1241,9 +1243,11 @@ const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.pl
 
 function renderChips() {
   const out = [];
-  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读人生故事 · 不连接个人数据库':'只读故事预览 · 未改动人生数据'}</span>`;return;}
-  if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例<span class="chip-extra"> · 导入 CSV 开始记录人生</span></span>');
-  if(life&&!sceneDemo)out.push(`<button class="chip" data-story-compose ${storyExperience?'':'disabled'}>${storyExperience?'生成人生故事 →':'故事准备中…'}</button>`);
+  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读分享 · 不会读取你的数据':'只读故事预览 · 未改动人生数据'}</span>`;return;}
+  const demo=life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo;
+  if(demo)out.push('<button class="chip" data-act="exit-demo" aria-label="退出示例，回到开始">示例 · 退出</button><button class="chip" data-act="demo-photos">用我的照片开始 →</button>');
+  // Stories are made from the visitor's own footprints, so the entry waits for real trips.
+  if(life&&!sceneDemo&&!demo&&trips.length)out.push(`<button class="chip" data-story-compose ${storyExperience?'':'disabled'}>${storyExperience?'生成人生故事 →':'故事准备中…'}</button>`);
   if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
@@ -1672,6 +1676,8 @@ function bindEvents() {
       case 'close': deselect(); return;
       case 'prev': step(-1); return;
       case 'next': step(1); return;
+      case 'exit-demo': exitDemo(); return;
+      case 'demo-photos': exitDemo(); $('#btn-photos').click(); return;
       case 'fix': openModal('places'); return;
       case 'retry': geo.failed = false; geocodeMissing(); return;
       case 'clear-year': case 'all-years': setYear(null); return;
@@ -1736,6 +1742,8 @@ function bindEvents() {
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
   $('#empty-import').addEventListener('click', () => openModal('import'));
+  $('#empty-photos')?.addEventListener('click', () => $('#btn-photos').click());
+  $('#empty-demo')?.addEventListener('click', () => { if(life?.previewDemo()){ stopPlay(); state.sel=null; state.year=null; refresh(); sampleHeights(); homeView(); } });
   $('#btn-play').addEventListener('click', play);
   $('.tl-main').addEventListener('scroll',()=>{const e=$('.tl-main');if(Math.abs(e.clientWidth-timelineViewportWidth)<=1)timelineAtLatest=e.scrollWidth-e.clientWidth-e.scrollLeft<2;},{passive:true});
   new ResizeObserver(()=>{if(Math.abs($('.tl-main').clientWidth-timelineViewportWidth)>1)renderTimeline();}).observe($('.tl-main'));

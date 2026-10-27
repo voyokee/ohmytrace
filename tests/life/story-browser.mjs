@@ -19,7 +19,7 @@ async function review(){await page.locator('[data-story-review]').click();await 
 function unpack(bytes){const entries=new Map();let offset=0;while(bytes.readUInt32LE(offset)===0x04034b50){const method=bytes.readUInt16LE(offset+8),crc=bytes.readUInt32LE(offset+14),size=bytes.readUInt32LE(offset+18),length=bytes.readUInt16LE(offset+26),extra=bytes.readUInt16LE(offset+28);assert.equal(method,0);const name=bytes.subarray(offset+30,offset+30+length).toString(),start=offset+30+length+extra,data=bytes.subarray(start,start+size);assert.equal(crc32(data),crc,name);entries.set(name,data);offset=start+size;}assert.equal(bytes.readUInt32LE(offset),0x02014b50);return entries;}
 try{
   await page.goto(url);await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'));
-  await page.locator('#btn-data').click();await page.locator('[data-tab=import]').click();await page.locator('#file').setInputFiles({name:'life.csv',mimeType:'text/csv',buffer:Buffer.from(exportLegacyCSV(f.data))});
+  await page.locator('#empty-import').click();await page.locator('[data-tab=import]').click();await page.locator('#file').setInputFiles({name:'life.csv',mimeType:'text/csv',buffer:Buffer.from(exportLegacyCSV(f.data))});
   await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));await page.locator('#btn-life').click();
   for(const [title,start,end,indices]of [['新加坡硕士','2024','2026',[0,1]],['北京实习阶段','2025','2025',[0]]]){
     await page.locator('#chapter-form [name=title]').fill(title);await page.locator('#chapter-form [name=start]').fill(start);await page.locator('#chapter-form [name=end]').fill(end);

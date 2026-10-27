@@ -247,7 +247,13 @@ body.picking #pickbar { opacity: 1; transform: translate(-50%, 0); pointer-event
 #empty { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; width: min(380px, calc(100vw - 32px)); padding: 28px; text-align: center; display: none; }
 body.is-empty #empty { display: block; }
 .empty-title { font: 600 22px var(--serif); letter-spacing: .08em; }
-#empty p { color: var(--muted); margin: 8px 0 18px; }
+#empty p { color: var(--muted); margin: 8px 0 18px; line-height: 1.6; }
+#empty .btn { display: block; width: 100%; height: 42px; margin-top: 10px; font-size: 15px; }
+#empty .btn[hidden] { display: none; }
+#empty .empty-link { margin-top: 14px; padding: 6px; border: 0; background: none; color: var(--faint); font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* Before the first footprint the list, data tools and zero counts add nothing; Chapters
+   stay available because they can be planned before photos are attached to them. */
+body.is-empty #stats, body.is-empty #btn-list, body.is-empty #btn-data { display: none; }
 #toast { position: fixed; left: 50%; bottom: 112px; transform: translate(-50%, 10px); z-index: 20; padding: 9px 16px; border-radius: 12px; font-size: 13.5px;
   background: rgba(13,17,27,.92); border: 1px solid var(--line-2); box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; max-width: calc(100vw - 32px); }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -502,6 +508,7 @@ body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { 
   #brand .chips::-webkit-scrollbar { display:none; }
   #brand .chip { flex:none; white-space:nowrap; font-size:10px; line-height:1.5; padding:3px 8px; }
   #brand .chip-extra,body.card-open #brand .chips { display:none; }
+  #empty { top:auto; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); padding:22px 20px 14px; }
   #toolbar { top:calc(10px + env(safe-area-inset-top)); right:12px; gap:4px; }
   #toolbar .tb { width:32px; height:32px; }
   #toolbar .tb svg { width:17px; height:17px; }

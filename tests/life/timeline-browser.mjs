@@ -25,7 +25,7 @@ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(
 try {
   await page.goto(url);await page.waitForSelector('#globe canvas');
   await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'),null,{timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#tl-track .tl-dot').length===4);
+  await page.locator('#empty-demo').click();await page.waitForFunction(()=>document.querySelectorAll('#tl-track .tl-dot').length===4);
   const first=await page.locator('#tl-track .tl-dot').first().evaluate(e=>parseFloat(e.style.left));
   assert.ok(first<25,`First recorded year must occupy the first timeline slot, not leave an empty residence-only span (${first}%)`);
   assert.equal(await page.locator('#btn-life svg').count(),1);
