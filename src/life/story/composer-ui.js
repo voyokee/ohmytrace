@@ -7,7 +7,7 @@ import {createPublishingPanel} from './publishing/panel.js';
 const sceneNames={globe:'开场',chapter:'人生阶段',trip:'旅行概览',place:'地点飞入',memory:'记忆时刻',closing:'结束'};
 export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPreview,onExportPackage,saveBlob,publisher=null}){
   const dialog=document.createElement('dialog');dialog.id='story-composer';dialog.className='dialog glass';dialog.setAttribute('aria-label','编辑与分享回放');document.body.append(dialog);
-  let story=null,images={},review=null,approved=false,source='all',busy=false;
+  let story=null,images={},review=null,approved=false,source='all',busy=false,simple=true,origin=null,shared=null,custom=null;
   const publishing=createPublishingPanel({publisher,getArtifact:()=>review,isApproved:()=>approved&&!!review});
   const data=()=>getDataset();
   const availableMemories=()=>{const d=data();return d.memories.filter(m=>m.tripIds.some(id=>story.selectedTripIds.includes(id))||d.chapters.some(c=>story.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(m.id)));};
@@ -23,6 +23,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   }
   function error(e){const el=dialog.querySelector('[data-story-error]');if(el)el.textContent=e.message;}
   function render(){
+    if(simple&&story){renderSimple();return;}
     const d=data(),years=storyYears(d);
     const placeIds=new Set(story?[...d.chapters.filter(c=>story.selectedChapterIds.includes(c.id)).flatMap(c=>c.homeAnchors),...d.visits.filter(v=>story.selectedTripIds.includes(v.tripId)).map(v=>v.placeId),...d.memories.filter(m=>story.includedMemories.includes(m.id)).flatMap(m=>m.placeIds)]:[]);
     // Re-rendering replaces the markup; keep the optional scene list as the visitor left it.
@@ -54,9 +55,45 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
     dialog.querySelector('[data-story-source]').value=source;
     if(story){dialog.querySelector('.dlg-body').append(publishing.element);publishing.refresh();}
   }
-  function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='all'?{type}:{type,id:rest.join(':')};}
-  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:'我的足迹'});images={};dirty();render();}
+  // Default share sheet: pick a period, then one button. Privacy uses the safe
+  // defaults (blurred places, no notes or photos); everything else is under 更多设置.
+  function ranges(){
+    const d=data(),years=new Set(storyYears(d)),now=new Date().getFullYear(),out=[];
+    if(origin?.startsWith('trip:')){const t=d.trips.find(t=>'trip:'+t.id===origin);if(t)out.push([origin,'这次旅行']);}
+    if(years.has(now))out.push([`year:${now}`,'今年']);if(years.has(now-1))out.push([`year:${now-1}`,'去年']);
+    out.push(['all','全部'],['custom','自定义']);return out;
+  }
+  function renderSimple(){
+    const places=new Set(story.orderedScenes.filter(sc=>sc.placeId).map(sc=>sc.placeId)).size,trips=story.selectedTripIds.length,empty=!trips&&!places;
+    const month=new Date().toISOString().slice(0,7);
+    dialog.innerHTML=`<div class="dlg-head"><h3>分享</h3><button class="x" data-story-composer-close aria-label="关闭分享">×</button></div><div class="dlg-body share-simple">
+      <p class="share-label">分享哪段时间</p>
+      <div class="share-ranges" role="group" aria-label="分享时间">${ranges().map(([value,label])=>`<button class="share-range${(value==='custom'?custom:source===value&&!custom)?' on':''}" data-share-range="${esc(value)}" aria-pressed="${(value==='custom'?!!custom:source===value&&!custom)}">${label}</button>`).join('')}</div>
+      ${custom?`<div class="share-custom"><input type="month" data-share-from value="${esc(custom.from)}" max="${month}" aria-label="开始月份"><span>到</span><input type="month" data-share-to value="${esc(custom.to)}" max="${month}" aria-label="结束月份"></div>`:''}
+      <p class="share-summary">${empty?'这段时间没有足迹':`${trips} 次旅行 · ${places} 个地方`}</p>
+      ${shared?.url?`<div class="share-link"><a href="${esc(shared.url)}" target="_blank" rel="noopener noreferrer" data-share-url>${esc(shared.url)}</a><button class="btn" data-share-copy>复制链接</button></div>`:''}
+      <button class="btn primary share-main" data-share-go ${empty||busy?'disabled':''}>${busy?'正在生成…':shared?'重新分享':'分享'}</button>
+      <button class="btn share-secondary" data-story-preview ${empty?'disabled':''}>先预览</button>
+      <p class="share-note">地点只精确到约 10 公里，不含照片和备注。</p>
+      <button class="share-more" data-share-more>更多设置</button>
+      <p data-story-progress role="status"></p><p data-story-error role="alert"></p></div>`;
+  }
+  async function shareNow(){
+    review=projectShare(data(),story,{images});approved=true;if(!review.orderedScenes.length)throw new Error('这段时间没有可分享的足迹');
+    busy=true;render();
+    try{
+      if(publisher){shared=await publisher.publish(review,{visibility:'unlisted',idempotencyKey:crypto.randomUUID()});return;}
+      const file=new File([JSON.stringify(review)],`${story.title||'足迹'}.story.json`,{type:'application/json'});
+      if(navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:story.title});shared={file:true};return;}
+      saveBlob(file.name,file);shared={file:true};
+    }finally{busy=false;render();if(shared?.file){const el=dialog.querySelector('[data-story-progress]');if(el)el.textContent='分享文件已生成，可以发给朋友用足迹分享页打开。';}}
+  }
+  function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='range'?{type,start:rest[0],end:rest[1]}:type==='all'?{type}:{type,id:rest.join(':')};}
+  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:s.type==='range'?`${s.start} 至 ${s.end}`:'我的足迹'});images={};dirty();render();}
   dialog.addEventListener('input',e=>editText(e.target));
+  dialog.addEventListener('change',e=>{const el=e.target;if(!el.matches('[data-share-from],[data-share-to]'))return;
+    custom[el.hasAttribute('data-share-from')?'from':'to']=el.value;
+    try{if(custom.from&&custom.to){source=`range:${custom.from}:${custom.to}`;shared=null;generate();}}catch(err){error(err);}},true);
   dialog.addEventListener('change',async e=>{
     const el=e.target;if(publishing.element.contains(el))return;try{
       if(el.hasAttribute('data-story-source')){source=el.value;return;}
@@ -73,6 +110,12 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   dialog.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b)return;try{
       if(b.hasAttribute('data-story-composer-close')){dialog.close();return;}
+      if(b.hasAttribute('data-share-range')){const value=b.dataset.shareRange;shared=null;
+        if(value==='custom'){const month=new Date().toISOString().slice(0,7);custom=custom||{from:`${new Date().getFullYear()}-01`,to:month};source=`range:${custom.from}:${custom.to}`;}else{custom=null;source=value;}
+        generate();return;}
+      if(b.hasAttribute('data-share-go')){await shareNow();return;}
+      if(b.hasAttribute('data-share-copy')){try{await navigator.clipboard.writeText(shared.url);b.textContent='已复制';}catch{b.textContent='请长按链接复制';}return;}
+      if(b.hasAttribute('data-share-more')){simple=false;render();return;}
       if(b.hasAttribute('data-story-generate')){generate();return;}
       const index=Number(b.closest('[data-story-scene]')?.dataset.storyScene);
       if(b.hasAttribute('data-story-move')){const target=index+Number(b.dataset.storyMove);[story.orderedScenes[index],story.orderedScenes[target]]=[story.orderedScenes[target],story.orderedScenes[index]];dirty();render();return;}
@@ -85,6 +128,6 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   });
   return {
     // Quick replay composes with the same defaults so "编辑与分享" resumes exactly what was played.
-    prepare(value){source=value;generate();return structuredClone(story);},
-    open({resume=false}={}){document.querySelector('#life-dialog')?.close();if(!resume){const s=getScope();source=s.type==='chapter'?`chapter:${s.id}`:s.type==='year'?`year:${s.year}`:s.type==='trip'?`trip:${s.id}`:'all';generate();}else render();dialog.showModal();}};
+    prepare(value){source=value;origin=value;custom=null;generate();return structuredClone(story);},
+    open({resume=false}={}){document.querySelector('#life-dialog')?.close();simple=true;shared=null;custom=null;if(!resume){const s=getScope();source=s.type==='chapter'?`chapter:${s.id}`:s.type==='year'?`year:${s.year}`:s.type==='trip'?`trip:${s.id}`:'all';origin=source;generate();}else render();dialog.showModal();}};
 }

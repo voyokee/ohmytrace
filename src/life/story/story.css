@@ -83,3 +83,18 @@ body[data-story-viewer] #brand h1 { font-size:28px; }
   .card-mobile-actions > :not(.card-replay) { display:none; }
   .card-replay { height:32px; padding:0 14px; border-radius:9px; font-size:13px; cursor:pointer; }
 }
+/* Simple share sheet: one decision (the period) and one button. */
+.share-simple { display:flex; flex-direction:column; gap:12px; padding:18px 20px 22px; }
+.share-label { margin:0; font-size:15px; color:var(--muted); }
+.share-ranges { display:flex; flex-wrap:wrap; gap:10px; }
+.share-range { min-width:84px; height:46px; padding:0 18px; border-radius:23px; border:1px solid var(--line-2); background:rgba(255,255,255,.04); color:var(--text); font-size:16px; cursor:pointer; }
+.share-range.on { background:var(--accent); color:#1c1306; border-color:transparent; font-weight:600; }
+.share-custom { display:flex; align-items:center; gap:10px; }
+.share-custom input { flex:1; min-width:0; height:44px; font-size:16px; color:inherit; background:#0a1320; border:1px solid var(--line-2); border-radius:10px; padding:0 10px; color-scheme:dark; }
+.share-summary { margin:6px 0 0; font-size:20px; font-weight:600; }
+.share-simple .share-main,.share-simple .share-secondary { height:52px; font-size:17px; border-radius:14px; justify-content:center; text-align:center; }
+.share-note { margin:0; color:var(--faint); font-size:13px; text-align:center; }
+.share-more { align-self:center; border:0; background:none; color:var(--faint); font-size:13px; text-decoration:underline; text-underline-offset:3px; padding:6px; cursor:pointer; }
+.share-link { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line-2); border-radius:12px; }
+.share-link a { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--accent); font-size:13px; }
+.share-simple [data-story-progress]:empty,.share-simple [data-story-error]:empty { display:none; }

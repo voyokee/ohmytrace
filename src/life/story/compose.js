@@ -1,4 +1,4 @@
-import {validateDataset,newId,clone,dateBound} from '../schema.js';
+import {validateDataset,newId,clone,dateBound,partialDate} from '../schema.js';
 import {validateStory,unknown} from './schema.js';
 
 function coverage(entity,data){
@@ -13,11 +13,15 @@ export function storyYears(data){const years=new Set();for(const t of data.trips
 export function composeStory(data,{scope={type:'all'},title='我的足迹',chapterIds,tripIds}={}){
   validateDataset(data);
   const byYear=e=>{const d=coverage(e,data),year={precision:'year',value:String(scope.year).padStart(4,'0')};return d!==null&&d.start<=dateBound(year,true)&&d.end>=dateBound(year);};
-  if(!['all','chapter','trip','year'].includes(scope.type))throw new Error('未知故事范围');
+  if(!['all','chapter','trip','year','range'].includes(scope.type))throw new Error('未知故事范围');
+  // A range is inclusive at month or day precision, e.g. {start:'2025-03',end:'2025-09'}.
+  const from=scope.type==='range'?dateBound(partialDate(scope.start)):null,to=scope.type==='range'?dateBound(partialDate(scope.end),true):null;
+  if(scope.type==='range'&&(from===null||to===null||from>to))throw new Error('请选择有效的开始和结束时间');
+  const byRange=e=>{const d=coverage(e,data);return d!==null&&d.start<=to&&d.end>=from;},inScope=e=>scope.type==='year'?byYear(e):scope.type==='range'&&byRange(e);
   if(scope.type==='chapter'&&!data.chapters.some(c=>c.id===scope.id)||scope.type==='trip'&&!data.trips.some(t=>t.id===scope.id))throw new Error('故事范围不存在');
   if(scope.type==='year'&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效故事年份');
-  const chapters=data.chapters.filter(c=>chapterIds?chapterIds.includes(c.id):scope.type==='chapter'?c.id===scope.id:scope.type==='all'||scope.type==='year'&&byYear(c));
-  const trips=data.trips.filter(t=>tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:scope.type==='year'?byYear(t):true)
+  const chapters=data.chapters.filter(c=>chapterIds?chapterIds.includes(c.id):scope.type==='chapter'?c.id===scope.id:scope.type==='all'||inScope(c));
+  const trips=data.trips.filter(t=>tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:['year','range'].includes(scope.type)?inScope(t):true)
     .sort((a,b)=>(dateBound(a.start)??Infinity)-(dateBound(b.start)??Infinity));
   if(chapterIds?.some(id=>!chapters.some(c=>c.id===id))||tripIds?.some(id=>!trips.some(t=>t.id===id)))throw new Error('故事选择包含不存在的记录');
   const scenes=[];

@@ -27,7 +27,7 @@ try{
     await page.locator('#chapter-form button[type=submit]').click();await page.waitForFunction(title=>[...document.querySelectorAll('.life-chapter strong')].some(e=>e.textContent===title),title);
   }
   await page.locator('[data-life-close]').click();const before=await dataset();assert.equal(before.memories.length,0);
-  await page.locator('[data-story-quick]').click();await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-edit]').click();await page.waitForSelector('#story-composer[open]');
+  await page.locator('[data-story-quick]').click();await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-edit]').click();await page.waitForSelector('#story-composer[open] [data-share-go]');assert.ok(await page.locator('[data-share-range]').count()>=3,'sharing starts with a few period choices');assert.equal(await page.locator('#story-composer input, #story-composer textarea').count(),0,'the default share sheet has no form fields');await page.locator('[data-share-more]').click();
   await page.locator('[data-story-source]').selectOption(`chapter:${before.chapters[0].id}`);await page.locator('[data-story-generate]').click();
   await page.locator('[data-story-field=title]').fill('我的求学故事');await page.locator('[data-story-field=description]').fill('仅由已有足迹构成的虚构演示');
   await openScenes(page);const attack='<img src=x onerror="window.STORY_XSS=true">';await page.locator('[data-story-scene="0"] [data-story-scene-field=title]').fill(attack);
@@ -46,7 +46,7 @@ try{
   await page.evaluate(()=>{window.storyTitles=[];new MutationObserver(()=>{const title=document.querySelector('[data-story-scene-title]')?.textContent;if(title&&!window.storyTitles.includes(title))window.storyTitles.push(title);}).observe(document.querySelector('#story-player'),{childList:true,subtree:true});});
   await page.locator('[data-story-play]').click();await page.waitForFunction(()=>document.querySelector('#story-player').dataset.status==='ended',null,{timeout:45000});
   const played=await page.evaluate(()=>window.storyTitles);assert.ok(played.includes('新加坡硕士'));assert.ok(played.includes('北京实习'));assert.ok(played.includes('回放结束'));
-  await page.locator('[data-story-edit]').click();assert.deepEqual(await dataset(),before,'Composing and playback cannot modify canonical data');
+  await page.locator('[data-story-edit]').click();await page.locator('[data-share-more]').click();assert.deepEqual(await dataset(),before,'Composing and playback cannot modify canonical data');
   // Replay the whole selected life, including both overlapping Chapters and a
   // shared Trip, while explicitly excluding the private/unshared Trip.
   await page.locator('[data-story-source]').selectOption('all');await page.locator('[data-story-generate]').click();
@@ -55,7 +55,7 @@ try{
   await page.evaluate(()=>{window.fullLifeTitles=[];new MutationObserver(()=>{const title=document.querySelector('[data-story-scene-title]')?.textContent;if(title&&!window.fullLifeTitles.includes(title))window.fullLifeTitles.push(title);}).observe(document.querySelector('#story-player'),{childList:true,subtree:true});});
   await page.waitForFunction(()=>document.querySelector('#story-player').dataset.status==='ended',null,{timeout:45000});
   const fullLifeTitles=await page.evaluate(()=>window.fullLifeTitles);assert.ok(fullLifeTitles.includes('新加坡硕士'));assert.ok(fullLifeTitles.includes('北京实习阶段'));assert.ok(!fullLifeTitles.includes('私人旅行'));
-  await page.locator('[data-story-edit]').click();await page.locator('[data-story-source]').selectOption(`chapter:${before.chapters[0].id}`);await page.locator('[data-story-generate]').click();
+  await page.locator('[data-story-edit]').click();await page.locator('[data-share-more]').click();await page.locator('[data-story-source]').selectOption(`chapter:${before.chapters[0].id}`);await page.locator('[data-story-generate]').click();
   await openScenes(page);await page.locator('[data-story-scene="0"] [data-story-scene-field=title]').fill(attack);
   await page.locator('#story-composer summary').filter({hasText:'逐项审查旅行'}).click();await page.locator(`[data-story-trip="${before.trips[1].id}"]`).uncheck();
   await review();assert.equal(JSON.parse(await page.locator('[data-story-review-panel] pre').textContent()).trips.length,1);
@@ -101,7 +101,7 @@ try{
   // Restore fictional photo/Memory data through the normal JSON Restore UI.
   await page.locator('[data-story-composer-close]').click();await page.locator('#btn-life').click();page.once('dialog',d=>d.accept());await page.locator('[data-life-restore]').setInputFiles({name:'fictional-life.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(f.data))});
   await page.waitForSelector(`[data-life-edit="${f.chapter}"]`);await page.locator('[data-life-close]').click();
-  await page.locator('[data-story-quick]').click();await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-edit]').click();await page.waitForSelector('#story-composer[open]');await page.locator('[data-story-source]').selectOption(`chapter:${f.chapter}`);await page.locator('[data-story-generate]').click();
+  await page.locator('[data-story-quick]').click();await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-edit]').click();await page.locator('[data-share-more]').click();await page.waitForSelector('#story-composer[open]');await page.locator('[data-story-source]').selectOption(`chapter:${f.chapter}`);await page.locator('[data-story-generate]').click();
   await page.locator('[data-story-policy=includePhotos]').check();await page.locator('summary').filter({hasText:'逐张选择记忆'}).click();await page.locator(`[data-story-memory="${f.photo}"]`).check();
   await page.locator(`[data-story-image="${f.photo}"]`).setInputFiles({name:'approved-photo.jpg',mimeType:'image/jpeg',buffer:Buffer.from(photoJPEG({lat:39.912345,lon:116.412345,time:'2025:05:01 10:00:00',offset:'+08:00',nonce:99}))});
   await page.waitForFunction(()=>document.querySelector('#story-composer').textContent.includes('已生成去除 EXIF 的缩略图'));
@@ -116,7 +116,7 @@ try{
   assert.equal(await page.locator('#story-composer').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Mobile composer must not overflow horizontally');
   await page.screenshot({path:resolve(output,'05-mobile-composer.png')});
   await page.locator('[data-story-preview]').click();await page.locator('[data-story-play]').click();
-  await page.locator('[data-story-edit]').click();assert.equal(await page.locator('[data-story-field=title]').inputValue(),'移动端 · 求学足迹');
+  await page.locator('[data-story-edit]').click();await page.locator('[data-share-more]').click();assert.equal(await page.locator('[data-story-field=title]').inputValue(),'移动端 · 求学足迹');
   assert.equal(await page.locator('[data-story-field=visualTheme]').inputValue(),'paper');
   await review();const mobileArtifact=parseArtifact((await download('[data-story-json]','mobile-edited.story.json')).toString());
   assert.equal(mobileArtifact.title,'移动端 · 求学足迹');assert.equal(mobileArtifact.orderedScenes[0].description,'在窄屏编辑的故事说明');

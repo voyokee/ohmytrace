@@ -17,7 +17,7 @@ export function mountStoryPlayer({enter,cancel,onClose,onEdit,reducedMotion=fals
     const description=scene?.description||(scene?.kind==='globe'?artifact.description:'');
     const more=panel.querySelector('.story-more')?.open?' open':'';
     panel.innerHTML=`<div class="story-head"><p class="story-kicker">${esc(levels[scene?.kind]||'回放')} · ${state.index+1} / ${state.count}</p>
-      ${onEdit?'<button class="story-link" data-story-edit>编辑与分享</button>':''}<button class="x" data-story-close aria-label="关闭回放">×</button></div>
+      ${onEdit?'<button class="story-link" data-story-edit>分享</button>':''}<button class="x" data-story-close aria-label="关闭回放">×</button></div>
       <div class="story-caption"><div class="story-text"><h2 data-story-scene-title>${esc(scene?.title||artifact.title)}</h2>
       ${time?`<p class="story-time" data-story-time>${esc(time)}</p>`:''}
       ${description?`<p class="story-description" data-story-scene-description>${esc(description)}</p>`:''}
