@@ -29,10 +29,15 @@ function rename(data,{target,name}){
   return {id:e.id};
 }
 function classifyVisits(data,visits,value){
+  const targets=[];
   for(const v of visits){
     v.legacy.type=visitTypes[value];
     const p=data.places.find(p=>p.id===v.placeId),residence=data.residences.find(r=>r.visitId===v.id);
     if(value==='home'||value==='past'){
+      if(value==='home')v.end={precision:'ongoing',value:null};
+      else if(v.end.precision==='ongoing')v.end=unknownDate();
+      const dateText=d=>d.precision==='unknown'?'未知':d.precision==='ongoing'?'至今':d.value;
+      v.legacy.date=dateText(v.start)+'~'+dateText(v.end);
       const previousTrip=v.tripId;
       if(previousTrip){data.trips.find(t=>t.id===previousTrip).visitIds=data.trips.find(t=>t.id===previousTrip).visitIds.filter(id=>id!==v.id);
         for(const m of data.memories)if(m.placeIds.includes(p.id))m.tripIds=m.tripIds.filter(id=>id!==previousTrip);}
@@ -40,14 +45,17 @@ function classifyVisits(data,visits,value){
       const r=residence||{id:newId('residence'),visitId:v.id,placeId:p.id,title:p.name,note:v.legacy.note,evidenceIds:[]};
       Object.assign(r,{kind:value,type:visitTypes[value],start:clone(v.start),end:clone(v.end)});
       if(!residence)data.residences.push(r);
+      targets.push({kind:'residence',id:r.id});
     }else if(residence){
       data.residences=data.residences.filter(r=>r.id!==residence.id);
       const trip={id:newId('trip'),title:residence.title||p.name,type:visitTypes[value],visitType:value,start:clone(v.start),end:clone(v.end),visitIds:[v.id],evidenceIds:[]};
       data.trips.push(trip);v.tripId=trip.id;v.legacy.trip=trip.title;
+      targets.push({kind:'trip',id:trip.id});
       for(const m of data.memories)if(m.placeIds.includes(p.id)&&(dateBound(m.start)??-Infinity)>=(dateBound(v.start)??-Infinity)&&(dateBound(m.end,true)??Infinity)<=(dateBound(v.end,true)??Infinity))m.tripIds=unique([...m.tripIds,trip.id]);
     }
   }
   removeEmptyTrips(data);
+  return targets;
 }
 function classify(data,{target,value}){
   const e=entity(data,target?.kind,target?.id);
@@ -57,13 +65,14 @@ function classify(data,{target,value}){
   }
   if(!Object.hasOwn(visitTypes,value))throw new Error('请选择旅行、路过、转机或居住类型');
   if(target.kind==='place'){e.visitType=value;classifyVisits(data,data.visits.filter(v=>v.placeId===e.id),value);}
-  else if(target.kind==='residence')classifyVisits(data,[data.visits.find(v=>v.id===e.visitId)],value);
+  else if(target.kind==='residence')return classifyVisits(data,[data.visits.find(v=>v.id===e.visitId)],value)[0]||{kind:'residence',id:e.id};
   else {
     if(['home','past'].includes(value)&&new Set(e.visitIds.map(id=>data.visits.find(v=>v.id===id).placeId)).size>1)throw new Error('请在具体城市卡片中确认居住，不能把多个城市改为一处居住');
     e.type=visitTypes[value];e.visitType=value;
-    classifyVisits(data,e.visitIds.map(id=>data.visits.find(v=>v.id===id)),value);
+    const converted=classifyVisits(data,e.visitIds.map(id=>data.visits.find(v=>v.id===id)),value);
+    if(converted.length)return converted[0];
   }
-  return {id:e.id};
+  return {kind:target.kind,id:e.id};
 }
 function merge(data,{kind,ids,name}){
   if(!Array.isArray(ids)||ids.length<2||new Set(ids).size!==ids.length)throw new Error('请选择至少两条不同记录');

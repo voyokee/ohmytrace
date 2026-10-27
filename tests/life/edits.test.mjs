@@ -148,6 +148,11 @@ test('residence/travel conversion rewires photos, keeps visits and is fully undo
   await history.execute({type:'classify',target:{kind:'place',id:city.id},value:'past'});d=repository.getDataset();
   assert.ok(d.residences.some(r=>r.placeId===city.id&&r.kind==='past'));validateDataset(d);
   await history.undo();assert.deepEqual(entities(repository.getDataset()),entities(before));
+  await history.execute({type:'classify',target:{kind:'place',id:city.id},value:'home'});
+  d=repository.getDataset();const confirmed=d.residences.find(r=>r.placeId===city.id);
+  assert.equal(confirmed.end.precision,'ongoing','Choosing current residence explicitly confirms that it continues today');
+  assert.equal(d.visits.find(v=>v.id===confirmed.visitId).end.precision,'ongoing');
+  await history.undo();assert.deepEqual(entities(repository.getDataset()),entities(before));
 });
 
 test('split and rename decisions survive regrouping without inventing home classification',async()=>{
