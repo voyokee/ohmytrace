@@ -2,6 +2,7 @@ import {COLLECTIONS,emptyDataset} from './schema.js';
 import {LifeRepository,MemoryStore} from './repository.js';
 import {migrateLegacy,importCSVInto,reconcileRows,updatePlace,datasetRows,exportLegacyCSV} from './legacy.js';
 import {RendererAdapter} from './renderer-adapter.js';
+import {EditHistory} from './edits.js';
 
 export async function createLifeBridge({defaultCSV,sceneCSV,store}={}) {
   const repository=new LifeRepository(store||(sceneCSV?new MemoryStore():undefined));
@@ -13,8 +14,9 @@ export async function createLifeBridge({defaultCSV,sceneCSV,store}={}) {
   let beforeDemo=null;
   if(sceneCSV)repository.data=fictional(sceneCSV);
   const adapter=new RendererAdapter(repository);
+  const edits=new EditHistory(repository);
   const requireWritable=()=>{if(sceneCSV)throw new Error('景观演示为临时预览，请返回首页保存个人数据');};
-  return {repository,adapter,
+  return {repository,adapter,edits,
     canPreviewDemo(){return !sceneCSV&&!!defaultCSV&&ephemeral();},
     previewDemo(){if(!this.canPreviewDemo())return false;beforeDemo=repository.data;repository.data=fictional(defaultCSV);repository.notify();return true;},
     exitDemo(){if(sceneCSV||repository.data.meta.origin!=='demo')return false;repository.data=beforeDemo||emptyDataset();beforeDemo=null;repository.notify();return true;},

@@ -70,10 +70,13 @@ export function applyPhotoGrouping(data,input,names,{rules,now,version,force=fal
   const currentYear=String(now.getFullYear()),placeFor=new Map();
   for(const group of byCity.values()){
     const city=group[0].city,c={latitude:group.reduce((s,o)=>s+o.latitude,0)/group.length,longitude:group.reduce((s,o)=>s+o.longitude,0)/group.length};
-    let p=group.map(o=>o.memory?.placeIds[0]).map(id=>data.places.find(p=>p.id===id)).find(p=>p?.coordinates&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
+    let p=data.places.find(p=>p.mergedCityKeys?.includes(city.key));
+    p||=group.map(o=>o.memory?.placeIds[0]).map(id=>data.places.find(p=>p.id===id)).find(p=>p?.coordinates&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
     p||=data.places.find(p=>p.name===city.label&&p.coordinates&&distanceKm(p.coordinates,c)<=rules.placeReuseKm);
     if(!p){p={id:newId('place'),name:city.label,coordinates:c,location:{status:'confirmed',label:'照片 GPS'},evidenceIds:[evidence]};data.places.push(p);summary.newPlaces++;}
-    p.location={...p.location,photoCity:city};placeFor.set(city.key,p);
+    // A merged city's chosen identity is a user decision; don't silently swap
+    // its administrative anchor every time another constituent city is scanned.
+    p.location={...p.location,photoCity:p.mergedCityKeys?.length&&p.location?.photoCity?p.location.photoCity:city};placeFor.set(city.key,p);
     for(const o of group){o.place=p;if(!o.memory){o.memory={id:newId('memory_photo'),kind:'photo',title:o.title||`${p.name} · ${o.day}`,uri:o.uri,start:partialDate(o.day),end:partialDate(o.day),placeIds:[p.id],tripIds:[],evidenceIds:[evidence]};data.memories.push(o.memory);}
       o.memory.photoObservation={latitude:o.latitude,longitude:o.longitude,takenMs:o.instant,day:o.day,city};
     }
@@ -85,7 +88,8 @@ export function applyPhotoGrouping(data,input,names,{rules,now,version,force=fal
   const longStays=stays.filter(beyondTwoMonths),longPhotos=new Set(longStays.flatMap(s=>s.photos));
   const manualHome=data.residences.filter(r=>own.manual(r)||own.manual(oldVisits.get(r.visitId)));
   const covers=(r,o)=>r.placeId===o.place.id&&(dateBound(r.start)??-Infinity)<=dayMs(o.day)&&(dateBound(r.end,true,now.getTime())??Infinity)>=dayMs(o.day);
-  const manualTravel=new Set(data.visits.filter(v=>own.manual(v)&&v.tripId&&v.evidenceIds.some(id=>data.evidence.find(e=>e.id===id)?.revisions.some(r=>r.before?.type!==r.after?.type))).map(v=>v.placeId));
+  const manualTravel=new Set([...data.places.filter(p=>['travel','pass-through','transit'].includes(p.visitType)).map(p=>p.id),
+    ...data.visits.filter(v=>own.manual(v)&&v.tripId&&v.evidenceIds.some(id=>data.evidence.find(e=>e.id===id)?.revisions.some(r=>(!r.entityId||r.entityId===v.id)&&r.before?.type!==r.after?.type))).map(v=>v.placeId)]);
   const isHome=o=>!manualTravel.has(o.place.id)&&(manualHome.some(r=>covers(r,o))||homeByYear.get(o.day.slice(0,4))?.city.key===o.city.key||longPhotos.has(o));
   const residenceRuns=longStays.map(s=>({city:s.city,photos:s.photos,current:false}));
   const thisYear=homeByYear.get(currentYear);

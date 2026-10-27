@@ -17,8 +17,9 @@ export const AUTO_RULES=Object.freeze({nameCellDegrees:0.05,tripGapHours:72,plac
  */
 export async function placeRenames(data,geonames){
   const own=new Set(data.evidence.filter(e=>e.source?.kind==='photo-auto-import').map(e=>e.id)),renames=new Map();
+  const manual=new Set(data.evidence.filter(e=>e.state==='manual').map(e=>e.id));
   for(const p of data.places){
-    if(!p.coordinates||!p.evidenceIds.some(id=>own.has(id)))continue;
+    if(!p.coordinates||!p.evidenceIds.some(id=>own.has(id))||p.evidenceIds.some(id=>manual.has(id)))continue;
     let g=null;try{g=await geonames.reverse({latitude:p.coordinates.latitude,longitude:p.coordinates.longitude});}catch{continue;}
     const label=g&&(g.city||g.admin1||g.country);if(label&&label!==p.name)renames.set(p.id,{from:p.name,to:label});
   }
@@ -26,7 +27,8 @@ export async function placeRenames(data,geonames){
 }
 /** Applies placeRenames inside a repository update, including labels derived from the name. */
 export function applyPlaceRenames(data,renames){
-  for(const p of data.places){const r=renames.get(p.id);if(!r||p.name!==r.from)continue;p.name=r.to;
+  const manual=new Set(data.evidence.filter(e=>e.state==='manual').map(e=>e.id));
+  for(const p of data.places){const r=renames.get(p.id);if(!r||p.name!==r.from||p.evidenceIds.some(id=>manual.has(id)))continue;p.name=r.to;
     for(const v of data.visits)if(v.placeId===p.id&&v.legacy.place===r.from)v.legacy.place=r.to;
     for(const h of data.residences)if(h.placeId===p.id&&h.title===r.from)h.title=r.to;
     for(const m of data.memories)if(m.placeIds.includes(p.id)&&m.title?.startsWith(r.from+' · '))m.title=r.to+m.title.slice(r.from.length);}
