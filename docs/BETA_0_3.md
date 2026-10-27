@@ -9,7 +9,7 @@
 - 新开发分支：`beta/0.3-foundation`，从 `cac3e97` 创建。
 - 本轮准备：Web / Android / 分享入口统一为 OnceHere；保留 Android applicationId、IndexedDB 库名、原有备份与分享格式标识，以兼容既有数据。
 - Web CI 覆盖 Node 20 / 24；Android CI 使用 JDK 17、SDK 35、锁定且校验 SHA-256 的 Gradle 8.11.1，运行 JVM 单测、Lint，构建 Debug、测试 APK 和未签名 Release APK。
-- PR、主干 CI、基线标签与最终 `v0.3.0`：待完成；未达到退出标准前不打最终发布标签。
+- 基线 PR：[PR #3](https://github.com/voyokee/ohmytrace/pull/3)。主干 CI、基线标签与最终 `v0.3.0` 仍需分别验收；未达到退出标准前不打最终发布标签。
 
 ## 退出标准追踪
 
@@ -47,7 +47,9 @@
 - `npm run test:publishing`：6 个发布协议测试通过。
 - `npm run test:production`：3 个生产构建 / 边界 / Android 名称测试通过。名称回归先在旧实现失败，再在修改后通过。
 - `npm run build`：Editor、Viewer、Android Web 资源均构建成功；生产测试验证两次构建清单与内容哈希一致。
-- Android JVM / Lint / APK：本轮正在运行，完成后补录。
+- Android 云端验证：[运行记录](https://github.com/voyokee/ohmytrace/actions/runs/40507798375)。7 个 JVM 单测、Lint、Debug / 测试 / 未签名 Release APK 构建通过；随后重复构建步骤暴露了仓库中 `gradlew` 缺少 Unix 执行权限，本轮已修正为可执行，完整 CI 重新验证。
+- Android CI 增加禁用构建缓存、重跑所有 Release 任务并逐字节比较 APK 的检查；当前结果以 [PR #3 的 Checks](https://github.com/voyokee/ohmytrace/pull/3/checks) 为准。
+- Android SDK 安装显式指定 `platform-tools`，避免旧安装器默认请求已下线的 `tools` 包。
 - `node tests/life/toolbar-browser.mjs`：Chrome 156 下 320–430px 与桌面布局、触控安全区、全部 / 年份 / 旅程 / 阶段 / 预览分享通过。
 - `node tests/life/android-photo-browser.mjs`：模拟原生端口 12,000 行（7,918 个有效照片观测）、权限拒绝、重复导入、重新整理与照片 ID 保留通过。JS 流程 1,608 ms，明确不含真机 EXIF 时间。
 - 真机性能、原生权限、两设备恢复、真实用户试用：未测。
@@ -63,7 +65,7 @@ npm run build
 npm run build:android -- lintDebug assembleDebugAndroidTest assembleRelease
 ```
 
-Debug APK 用于试装，未签名 Release APK 供后续签名与发布验证。Debug 签名取决于本机密钥，不能用两台构建机的 Debug APK 哈希相等来宣称可复现。发布前还需验证干净环境下的未签名 Release 构建及签名流程。
+Debug APK 用于试装，未签名 Release APK 供后续签名与发布验证。Debug 签名取决于本机密钥，不能用两台构建机的 Debug APK 哈希相等来宣称可复现。CI 从干净检出构建未签名 Release，并在同一锁定工具环境重跑全部任务、比较产物；跨操作系统、不同 JDK 补丁版本和正式签名流程仍需另验。
 
 ## Beta 试用记录
 
