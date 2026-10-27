@@ -49,6 +49,9 @@ export function emptyDataset(origin = 'new') {
     meta: { origin, migration: null }, ...Object.fromEntries(COLLECTIONS.map(k => [k, []])) };
 }
 const requireText = (s, label) => { if (typeof s !== 'string' || !s.trim()) throw new Error(`缺少${label}`); };
+function validateVisitType(entity) {
+  if(entity.visitType!==undefined&&!['travel','pass-through','transit','home','past'].includes(entity.visitType))throw new Error('无效的到访类型');
+}
 export function validateDataset(data) {
   if (!data || data.schemaVersion !== SCHEMA_VERSION) throw new Error(`不支持的 Life schema 版本：${data?.schemaVersion}`);
   requireText(data.id, 'dataset ID');
@@ -77,6 +80,8 @@ export function validateDataset(data) {
   }
   for (const key of COLLECTIONS.filter(k => k !== 'evidence')) for (const e of data[key]) refs(e.evidenceIds, 'evidence');
   for (const p of data.places) {
+    validateVisitType(p);
+    if(p.mergedCityKeys!==undefined&&(!Array.isArray(p.mergedCityKeys)||new Set(p.mergedCityKeys).size!==p.mergedCityKeys.length||p.mergedCityKeys.some(key=>typeof key!=='string'||!key.trim()||key.length>512)))throw new Error('无效的城市合并记录');
     requireText(p.name, '地点名称');
     if (p.coordinates !== null && (!p.coordinates || !Number.isFinite(p.coordinates.latitude) || !Number.isFinite(p.coordinates.longitude) || Math.abs(p.coordinates.latitude)>90 || Math.abs(p.coordinates.longitude)>180)) throw new Error('无效经纬度');
   }
@@ -86,6 +91,7 @@ export function validateDataset(data) {
     if (!v.legacy || ['date','trip','place','type','note'].some(k => typeof v.legacy[k] !== 'string')) throw new Error('缺少 CSV 原始行');
   }
   for (const t of data.trips) {
+    validateVisitType(t);
     requireText(t.title,'旅行标题'); validatePeriod(t.start,t.end); refs(t.visitIds,'visits');
     if (!t.visitIds.length) throw new Error('旅行缺少 Stops');
     for (const id of t.visitIds) if (data.visits.find(v=>v.id===id).tripId!==t.id) throw new Error('Trip/Visit 关系不一致');

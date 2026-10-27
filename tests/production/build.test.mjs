@@ -12,6 +12,7 @@ test('production build is reproducible, complete, isolated and free of private/d
     const manifests=await Promise.all(first.targets.map(target=>verifyDistribution(resolve(outDir,target))));
     for(const manifest of manifests){
       const files=manifest.files.map(f=>f.path);
+      assert.equal(files.includes('src/life/edits.js'),manifest.target!=='viewer','Private edit history ships to Editor/Android, never Viewer');
       assert.ok(files.some(p=>p.endsWith('.wasm')));assert.ok(files.some(p=>p.startsWith('vendor/cesium/Workers/')));
       assert.ok(files.some(p=>p.endsWith('.glb')));assert.ok(files.includes('LICENSE'));assert.ok(files.includes('vendor/cesium/LICENSE.md'));assert.ok(files.includes('assets/SOURCES.md'));
       assert.ok(!files.some(p=>p.startsWith('tests/')||p.startsWith('docs/')||p.includes('.DS_Store')||p.endsWith('.csv')||p.startsWith('.git/')||p.startsWith('server/')));

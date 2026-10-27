@@ -21,6 +21,7 @@
     "src/geocoding/region-scope.js",
     "src/life/app-bridge.js",
     "src/life/chapter-ui.js",
+    "src/life/edits.js",
     "src/life/geocoding/data/ABW.json",
     "src/life/geocoding/data/AFG.json",
     "src/life/geocoding/data/AGO.json",

@@ -42,3 +42,13 @@ test('importing while the sample is shown replaces it with personal data',async(
   assert.equal(saved.meta.origin,'user');
   assert.deepEqual(saved.trips.map(t=>t.title),['真实旅行']);
 });
+test('the private app bridge exposes durable corrections with session undo, including demo guards',async()=>{
+  const bridge=await createLifeBridge({defaultCSV:sampleCSV,store:new MemoryStore()});
+  bridge.previewDemo();const demoId=bridge.repository.getDataset().trips[0].id;
+  await assert.rejects(bridge.edits.execute({type:'rename',target:{kind:'trip',id:demoId},name:'不能保存'}),/示例/);
+  bridge.exitDemo();await bridge.importCSV(sampleCSV,'replace');
+  const before=bridge.repository.getDataset(),id=before.trips[0].id;
+  await bridge.edits.execute({type:'rename',target:{kind:'trip',id},name:'我修改的旅程'});
+  assert.equal((await bridge.repository.store.read()).trips[0].title,'我修改的旅程');
+  await bridge.edits.undo();assert.deepEqual(bridge.repository.getDataset().trips,before.trips);
+});

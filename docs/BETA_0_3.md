@@ -4,12 +4,12 @@
 
 ## 代码基线与交付
 
-- 已获取远端：`origin/main` 为 `f7f1330`，已通过 PR #2 合入 Life Atlas 基线。
-- 最新照片导入分支：`feat/photo-first-onboarding` 为 `cac3e97`，比主干多 18 个提交。
-- 新开发分支：`beta/0.3-foundation`，从 `cac3e97` 创建。
-- 本轮准备：Web / Android / 分享入口统一为 OnceHere；保留 Android applicationId、IndexedDB 库名、原有备份与分享格式标识，以兼容既有数据。
-- Web CI 覆盖 Node 20 / 24；Android CI 使用 JDK 17、SDK 35、锁定且校验 SHA-256 的 Gradle 8.11.1，运行 JVM 单测、Lint，构建 Debug、测试 APK 和未签名 Release APK。
-- 基线 PR：[PR #3](https://github.com/voyokee/ohmytrace/pull/3)。主干 CI、基线标签与最终 `v0.3.0` 仍需分别验收；未达到退出标准前不打最终发布标签。
+- 起点：最新照片导入分支 `feat/photo-first-onboarding` @ `cac3e97`，当时比远端主干多 18 个提交。
+- `beta/0.3-foundation` 已通过 [PR #3](https://github.com/voyokee/ohmytrace/pull/3) 合入主干 `afc902d`；Web / Android / 分享入口统一为 OnceHere，保留旧安装包、数据库和备份格式标识以兼容数据。
+- PR 三项检查和主干 CI 均通过：[主干 Web](https://github.com/voyokee/ohmytrace/actions/runs/40508957693)、[主干 Android 与 APK](https://github.com/voyokee/ohmytrace/actions/runs/40508957619)。已建立 `v0.2.0` 基线标签，指向 `afc902d`。
+- Web CI 覆盖 Node 20 / 24；Android CI 使用 JDK 17、SDK / Build Tools 35、校验 SHA-256 的 Gradle 8.11.1，运行 JVM 单测、Lint，构建 Debug、测试与未签名 Release APK，再禁用缓存重跑全部 Release 任务、逐字节比较 APK。
+- 当前开发：`beta/0.3-trust-cards` 从 `afc902d` 创建；可撤销编辑命令的领域基础见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。统一卡片尚待接入。
+- `v0.3.0` 尚未发布，完整退出标准继续逐项验证。
 
 ## 退出标准追踪
 
@@ -22,7 +22,7 @@
 | 切后台 / 恢复、杀进程后续扫 | 未测 | 中断前后计数与稳定 ID、检查点和权限状态 |
 | 用户可见名称统一，无系统词进入主流程 | 进行中 | 已有入口名称检查；后续统一卡片与首次使用验收 |
 | 最多三问、生成阶段草稿、无需输入日期格式 | 待实现 | 领域与浏览器用例，首次使用计时 |
-| 城市 / 常驻 / 旅程来源、统一卡片纠错、撤销与重新整理保留修改 | 待完成 | 各实体编辑命令、撤销、重新整理回归 |
+| 城市 / 常驻 / 旅程来源、统一卡片纠错、撤销与重新整理保留修改 | 领域基础完成，卡片待接入 | 各实体编辑命令、撤销、重新整理回归 |
 | 完整备份跨设备恢复实体和 ID 零差异 | 未测 | 两台设备恢复前后的规范数据与 ID 对比 |
 | GPX / GeoJSON 开放导出、持久存储与备份提醒 | 待实现 | 标准解析验证与浏览器用例 |
 | 人生 / 年份时间轴双向联动，阶段 / 年份 / 旅程回放分享 | 待完成 | 领域、浏览器和真机用例 |
@@ -43,11 +43,11 @@
 
 ## 本轮验证记录
 
-- `npm test`：渲染与性能逻辑检查通过，145 个 Life 领域测试通过。
+- I0：渲染与性能逻辑检查通过，145 个 Life 领域测试通过。I1 新增 16 个编辑命令测试和 1 个桥接测试，Life 用例合计 162 个。5k 合成照片改名与撤销验证 ID 和关系保留，不是真机或真实相册证据。
 - `npm run test:publishing`：6 个发布协议测试通过。
 - `npm run test:production`：3 个生产构建 / 边界 / Android 名称测试通过。名称回归先在旧实现失败，再在修改后通过。
 - `npm run build`：Editor、Viewer、Android Web 资源均构建成功；生产测试验证两次构建清单与内容哈希一致。
-- Android 云端验证：[运行记录](https://github.com/voyokee/ohmytrace/actions/runs/40507798375)。7 个 JVM 单测、Lint、Debug / 测试 / 未签名 Release APK 构建通过；随后重复构建步骤暴露了仓库中 `gradlew` 缺少 Unix 执行权限，本轮已修正为可执行，完整 CI 重新验证。
+- Android 云端验证：[主干运行记录](https://github.com/voyokee/ohmytrace/actions/runs/40508957619)。7 个 JVM 单测、Lint、Debug / 测试 / 未签名 Release APK 构建、Release 重跑逐字节一致性检查全部通过。`gradlew` 已设置 Unix 执行权限。
 - Android CI 增加禁用构建缓存、重跑所有 Release 任务并逐字节比较 APK 的检查；当前结果以 [PR #3 的 Checks](https://github.com/voyokee/ohmytrace/pull/3/checks) 为准。
 - Android SDK 安装显式指定 `platform-tools`，避免旧安装器默认请求已下线的 `tools` 包。
 - `node tests/life/toolbar-browser.mjs`：Chrome 156 下 320–430px 与桌面布局、触控安全区、全部 / 年份 / 旅程 / 阶段 / 预览分享通过。
