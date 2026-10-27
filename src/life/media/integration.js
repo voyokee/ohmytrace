@@ -97,7 +97,28 @@ const signature=async review=>[...new Uint8Array(await crypto.subtle.digest('SHA
 export class PhotoHistoryService {
   constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false,geonames=geoNameProvider,thumbnails=null,thumbnailGenerator=null}={}){this.geonames=geonames;this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;this.thumbnails=thumbnails||(globalThis.indexedDB?new ThumbnailStore():null);this.thumbnailGenerator=thumbnailGenerator||new ThumbnailGenerator();this.backups=this.thumbnails?new LibraryBackup({repository,manifest,thumbnails:this.thumbnails}):null;}
   async assetsFor(batch){const assets=await this.manifest.listAssets(),ids=new Set(batch.assetIds);return assets.filter(a=>ids.has(a.assetId));}
-  async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));for(const candidate of review.candidates)for(const visit of candidate.visits){if(visit.placeId)continue;try{const name=await this.geonames.reverse(visit.coordinates);if(name){visit.geoName=name;visit.placeName=name.displayName;}}catch{visit.namingDiagnostic='OFFLINE_NAMES_UNAVAILABLE';}}review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);await this.saveReview(batchId,review);return review;}
+  async createReview(batchId,{onProgress=()=>{},namingTimeoutMs=1500,namingBudgetMs=8000,namingConcurrency=4}={}){
+    const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');
+    onProgress({phase:'grouping',processed:0,total:batch.assetIds.length});await new Promise(r=>setTimeout(r,0));
+    const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));
+    review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);
+    // Coordinates/grouping are durable before optional static name-pack I/O.
+    await this.saveReview(batchId,review);
+    const groups=new Map();for(const c of review.candidates)for(const v of c.visits){if(v.placeId)continue;const key=JSON.stringify(v.coordinates);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(v);}
+    const queue=[...groups.values()],total=queue.reduce((n,g)=>n+g.length,0),deadline=performance.now()+namingBudgetMs;
+    let next=0,processed=0;onProgress({phase:'naming',processed,total});
+    const worker=async()=>{let lastYield=performance.now();while(next<queue.length){const visits=queue[next++];let name=null,diagnostic=null;
+      const remaining=deadline-performance.now();
+      if(remaining<=0)diagnostic='OFFLINE_NAMES_TIMEOUT';
+      else{let timer;try{name=await Promise.race([Promise.resolve().then(()=>this.geonames.reverse(visits[0].coordinates)),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OFFLINE_NAMES_TIMEOUT')),Math.min(namingTimeoutMs,remaining));})]);}
+        catch(error){diagnostic=error.message==='OFFLINE_NAMES_TIMEOUT'?error.message:'OFFLINE_NAMES_UNAVAILABLE';}finally{clearTimeout(timer);}}
+      for(const visit of visits){if(name){visit.geoName=name;visit.placeName=name.displayName;}else if(diagnostic)visit.namingDiagnostic=diagnostic;}
+      processed+=visits.length;onProgress({phase:'naming',processed,total});
+      if(performance.now()-lastYield>8){await new Promise(r=>setTimeout(r,0));lastYield=performance.now();}
+    }};
+    await Promise.all(Array.from({length:Math.min(queue.length,Math.max(1,namingConcurrency))},worker));
+    onProgress({phase:'saving-review',processed,total});await this.saveReview(batchId,review);onProgress({phase:'ready',processed,total});return review;
+  }
   async saveReview(batchId,review){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');await this.manifest.putBatch({...batch,review:clone(review)});}
   async preview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch?.review)throw new Error('请先生成并审核候选');const data=this.repository.getDataset();
     // A never-persisted empty/demo dataset gets a fresh ID on reload. Rebase only

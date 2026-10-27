@@ -62,6 +62,7 @@ final class MediaLibrary {
     }
     JSONObject enumerate(JSONObject options, CancellationSignal signal) throws Exception {
         if (photos().equals("denied")) throw new SecurityException("请先授权读取可访问的系统照片");
+        ScanWindow.requireLocation(granted(Manifest.permission.ACCESS_MEDIA_LOCATION));
         Long start = options.isNull("startMs") ? null : options.getLong("startMs"), end = options.isNull("endMs") ? null : options.getLong("endMs");
         int count = options.optInt("pageSize", 100); ScanWindow.validate(start, end, count);
         String key = String.valueOf(start) + "/" + String.valueOf(end);
@@ -105,6 +106,9 @@ final class MediaLibrary {
         return new JSONObject().put("entries", entries).put("cursor", next).put("scopeId", scope()).put("checkpoint", snapshot);
     }
     private Uri checkedUri(JSONObject handle, CancellationSignal signal) throws Exception {
+        return checkedUri(handle, signal, null);
+    }
+    private Uri checkedUri(JSONObject handle, CancellationSignal signal, long[] size) throws Exception {
         if (!handle.getString("source").equals("android") || !handle.getString("scopeId").equals(scope()) || photos().equals("denied")) throw new SecurityException("照片授权已失效，请重新扫描");
         String volume = handle.getString("volume"), id = handle.getString("localId");
         if (!volumes().contains(volume) || !id.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("照片标识无效");
@@ -113,6 +117,7 @@ final class MediaLibrary {
         try (Cursor c = resolver.query(uri, projection(), null, null, null, signal)) {
             if (c == null || !c.moveToFirst()) throw new IllegalStateException("照片已删除或无法访问");
             if (!stamp(c).equals(handle.getString("stamp"))) throw new IllegalStateException("照片内容已变化，请重新扫描");
+            if (size != null) size[0] = c.getLong(3);
         }
         return uri;
     }
@@ -123,9 +128,10 @@ final class MediaLibrary {
         }
     }
     JSONObject read(JSONObject options, CancellationSignal signal) throws Exception {
-        JSONObject handle = options.getJSONObject("handle"); Uri uri = checkedUri(handle, signal);
-        long size = stat(handle, signal).getLong("size"), offset = options.getLong("offset"); int length = options.getInt("length"); ScanWindow.range(offset, length, size);
-        if (granted(Manifest.permission.ACCESS_MEDIA_LOCATION)) uri = MediaStore.setRequireOriginal(uri);
+        ScanWindow.requireLocation(granted(Manifest.permission.ACCESS_MEDIA_LOCATION));
+        long[] size = new long[1]; JSONObject handle = options.getJSONObject("handle"); Uri uri = checkedUri(handle, signal, size);
+        long offset = options.getLong("offset"); int length = options.getInt("length"); ScanWindow.range(offset, length, size[0]);
+        uri = MediaStore.setRequireOriginal(uri);
         byte[] bytes = new byte[length];
         try (ParcelFileDescriptor fd = resolver.openFileDescriptor(uri, "r", signal)) {
             if (fd == null) throw new IllegalStateException("原图不可访问，可能尚未下载到本机");
@@ -135,6 +141,27 @@ final class MediaLibrary {
             }
         }
         return new JSONObject().put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP));
+    }
+    JSONObject samples(JSONObject options, CancellationSignal signal) throws Exception {
+        ScanWindow.requireLocation(granted(Manifest.permission.ACCESS_MEDIA_LOCATION));
+        long[] size = new long[1]; Uri uri = checkedUri(options.getJSONObject("handle"), signal, size);
+        int head = options.getInt("headLength"), tail = options.getInt("tailLength");
+        if (tail > 65536) throw new IllegalArgumentException("NATIVE_READ_BUDGET");
+        ScanWindow.range(0, head, size[0]); ScanWindow.range(size[0] - tail, tail, size[0]);
+        byte[] first = new byte[head], last = new byte[tail];
+        try (ParcelFileDescriptor fd = resolver.openFileDescriptor(MediaStore.setRequireOriginal(uri), "r", signal)) {
+            if (fd == null) throw new IllegalStateException("原图不可访问");
+            signal.setOnCancelListener(() -> { try { fd.close(); } catch (java.io.IOException ignored) { } });
+            try (FileInputStream stream = new ParcelFileDescriptor.AutoCloseInputStream(fd)) {
+                FileChannel channel = stream.getChannel(); readSample(channel, 0, first, signal);
+                if (tail > 0) readSample(channel, size[0] - tail, last, signal);
+            } finally { signal.setOnCancelListener(null); }
+        }
+        return new JSONObject().put("headBase64", Base64.encodeToString(first, Base64.NO_WRAP)).put("tailBase64", Base64.encodeToString(last, Base64.NO_WRAP)).put("tailOffset", size[0] - tail);
+    }
+    private void readSample(FileChannel channel, long offset, byte[] bytes, CancellationSignal signal) throws Exception {
+        signal.throwIfCanceled(); channel.position(offset); ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        while (buffer.hasRemaining()) { signal.throwIfCanceled(); if (channel.read(buffer) < 0) throw new IllegalStateException("照片读取不完整"); }
     }
     JSONObject thumbnail(JSONObject options, CancellationSignal signal) throws Exception {
         Uri uri = checkedUri(options.getJSONObject("handle"), signal); int edge = options.optInt("maxEdge", 512);

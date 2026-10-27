@@ -91,6 +91,7 @@ public final class MainActivity extends Activity {
                             case "permissionStatus": result = library.permissions(); break;
                             case "enumerate": result = library.enumerate(options, signal); break;
                             case "readRange": result = library.read(options, signal); break;
+                            case "readSamples": result = library.samples(options, signal); break;
                             case "stat": result = library.stat(options.getJSONObject("handle"), signal); break;
                             case "thumbnail": result = library.thumbnail(options, signal); break;
                             default: throw new IllegalArgumentException("未知相册请求");

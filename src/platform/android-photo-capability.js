@@ -1,5 +1,6 @@
 import {analyzePhotoFile} from '../life/media/exif.js';
 import {validateThumbnail} from '../life/media/thumbnail.js';
+import {MEDIA_LIMITS} from '../life/media/config.js';
 
 /** Origin-scoped WebMessageListener, installed only by the bundled Android app. */
 export class AndroidPhotoBridge {
@@ -30,6 +31,7 @@ export class AndroidPhotoFile {
   slice(start=0,end=this.size){
     const size=this.size,normalize=n=>Math.min(size,Math.max(0,n<0?size+n:n)),offset=normalize(start),length=Math.max(0,normalize(end)-offset);
     return {size:length,arrayBuffer:async()=>{
+      const cached=this.sampleRanges?.find(r=>offset>=r.offset&&offset+length<=r.offset+r.bytes.length);if(cached)return cached.bytes.slice(offset-cached.offset,offset-cached.offset+length).buffer;
       // Bridge payloads remain <=256 KiB even during the bounded legacy hash check.
       if(length>64*1024*1024)throw new Error('NATIVE_READ_BUDGET');
       const out=new Uint8Array(length);
@@ -47,8 +49,29 @@ export class AndroidPhotoCapability {
   async permissionStatus(){return (await this.permissionDetails()).photos;}
   permissionDetails(){return this.bridge.call('permissionStatus');}
   requestPermission({location=false}={}){return this.bridge.call('requestPermission',{location},{timeoutMs:180000});}
+  async ensureLocationAccess(){
+    let permission=await this.permissionDetails();
+    if(!['authorized','limited'].includes(permission.photos))permission=await this.requestPermission();
+    if(!['authorized','limited'].includes(permission.photos))throw new Error('PHOTO_PERMISSION_REQUIRED：未获相册访问授权，本次未扫描。请在系统设置中允许访问照片后重试。');
+    if(permission.location!=='authorized')permission=await this.requestPermission({location:true});
+    if(permission.location!=='authorized')throw new Error('GPS_PERMISSION_REQUIRED：未获照片位置授权，本次未扫描。请允许读取照片 GPS；若系统不再提示，请到设置 → 应用 → Oh My Trace → 权限中调整后重新扫描。');
+    return permission;
+  }
   async page(options){return this.bridge.call('enumerate',options,{signal:options.signal});}
   file(entry,signal){return new AndroidPhotoFile(this,entry.handle,entry,signal);}
+  async analyzeFile(file,options={}){
+    const limits=options.limits||MEDIA_LIMITS;
+    try{
+      if(file.size<=limits.maxFileBytes&&limits.sampleBytes<=262144&&limits.tailSampleBytes<=65536){
+        const headLength=Math.min(file.size,limits.sampleBytes),tailLength=file.size>headLength?Math.min(file.size,limits.tailSampleBytes):0;
+        const samples=await this.bridge.call('readSamples',{handle:file.nativeHandle,headLength,tailLength},{signal:file.signal});
+        const head=bytesFrom64(samples.headBase64),tail=bytesFrom64(samples.tailBase64);if(head.length!==headLength||tail.length!==tailLength||samples.tailOffset!==file.size-tailLength)throw new Error('照片读取不完整');
+        if(tailLength&&samples.tailOffset<=head.length){const bytes=new Uint8Array(file.size);bytes.set(head);bytes.set(tail,samples.tailOffset);file.sampleRanges=[{offset:0,bytes}];}
+        else file.sampleRanges=[{offset:0,bytes:head},{offset:samples.tailOffset,bytes:tail}];
+      }
+      return await analyzePhotoFile(file,options);
+    }finally{file.sampleRanges=null;}
+  }
   async readAssetMetadata(handle,{signal}={}){const info=await this.bridge.call('stat',{handle},{signal}),file=this.file({...info,handle},signal),observation=await analyzePhotoFile(file);return {handle,mimeType:info.mimeType,size:info.size,availability:'local',location:observation.coordinates?{state:'authorized',...observation.coordinates}:{state:info.locationAuthorized?'absent':'permission-required'},observation};}
   async requestThumbnail(handle,{maxEdge=512,signal}={}){const result=await this.bridge.call('thumbnail',{handle,maxEdge},{signal});const blob=new Blob([bytesFrom64(result.base64)],{type:'image/jpeg'});await validateThumbnail(blob);return blob;}
   async *enumerateAuthorizedAssets(options){let cursor=options.cursor||null;do{const page=await this.page({...options,cursor});yield {handles:page.entries.map(e=>e.handle),entries:page.entries,cursor:page.cursor,scopeId:page.scopeId,checkpoint:page.checkpoint};cursor=page.cursor;}while(cursor);}

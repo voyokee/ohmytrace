@@ -1,6 +1,5 @@
 import {PhotoScanner} from '../life/media/scanner.js';
 import {NativeScanStore} from './native-scan-store.js';
-import {analyzePhotoFile} from '../life/media/exif.js';
 
 // Inclusive start, exclusive end; datetime-local input is interpreted on the device.
 export function scanRange(start='',end=''){
@@ -21,10 +20,17 @@ export class AndroidLibraryImporter {
     this.running=true;this.controller=new AbortController();const signal=this.controller.signal;
     const key='checkpoint:'+JSON.stringify(range);let session;
     try{
+      // Missing location access is not evidence that every photo lacks GPS.
+      // Resolve consent before touching a durable batch or incremental cursor.
+      onProgress({processed:0,phase:'permission'});await this.capability.ensureLocationAccess();signal.throwIfAborted();
       session=resume?await this.latest():null;
       if(resume&&(!session||session.status==='complete'))throw new Error('没有可恢复的相册扫描');
       if(!session){const batch=await this.service.manifest.createBatch([]);session={version:1,range,key,batchId:batch.id,since:incremental?await this.store.get(key):null,cursor:null,pending:null,files:[],status:'scanning'};await this.store.put('active',session);}
       await this.attachFiles(session);
+      const knownFiles=new Set(session.files.map(e=>e.assetId));
+      onProgress({processed:session.files.length,phase:'indexing'});
+      this.scanner=new PhotoScanner(this.service.manifest,{workerFactory:null,concurrency:1,analyze:async(file,options)=>{const asset=await this.capability.analyzeFile(file,options);if(!file.locationAuthorized&&!asset.coordinates)asset.diagnostics=[...new Set([...asset.diagnostics,'GPS_PERMISSION_REQUIRED'])];return asset;}});
+      const deduplicationIndex=await this.scanner.createDeduplicationIndex();
       while(true){
         signal.throwIfAborted();let pending=session.pending;
         if(!pending){const page=await this.capability.page({...session.range,since:session.since,cursor:session.cursor,pageSize:100,signal});signal.throwIfAborted();
@@ -35,8 +41,8 @@ export class AndroidLibraryImporter {
         if(pending.batchId){
           scanned=await this.service.manifest.getBatch(pending.batchId);
           if(scanned.status!=='review'){
-            this.scanner=new PhotoScanner(this.service.manifest,{workerFactory:null,concurrency:1,analyze:async(file,options)=>{const asset=await analyzePhotoFile(file,options);if(!file.locationAuthorized&&!asset.coordinates)asset.diagnostics=[...new Set([...asset.diagnostics,'GPS_PERMISSION_REQUIRED'])];return asset;}});
-            scanned=await this.scanner.scan(files,{resumeBatchId:pending.batchId,onProgress:p=>onProgress({processed:session.files.length+p.processed,phase:'scanning'})});
+            const saved=await this.service.manifest.getBatch(session.batchId);
+            scanned=await this.scanner.scan(files,{resumeBatchId:pending.batchId,deduplicationIndex,onProgress:p=>onProgress({processed:saved.processed+p.processed,phase:'scanning'})});
             signal.throwIfAborted();
           }
         }
@@ -48,8 +54,9 @@ export class AndroidLibraryImporter {
         }
         // Re-analyzing is unnecessary after a crash between aggregate and journal writes.
         if(scanned){
-          const known=new Set(session.files.map(e=>e.assetId));for(const [i,e] of page.entries.entries()){const id=scanned.fileAssetIds[i];if(id){this.service.scanner.files.set(id,this.capability.file(e));if(!known.has(id)){session.files.push({...e,assetId:id});known.add(id);}}}
+          for(const [i,e] of page.entries.entries()){const id=scanned.fileAssetIds[i];if(id){this.service.scanner.files.set(id,this.capability.file(e));if(!knownFiles.has(id)){session.files.push({...e,assetId:id});knownFiles.add(id);}}}
         }
+        this.scanner.clearFiles();
         session.pending=null;session.cursor=page.cursor;session.status=page.cursor?'scanning':'complete';session.checkpoint=page.checkpoint;
         await this.store.put('active',session);onProgress({processed:aggregate.processed,phase:session.status});
         if(!page.cursor){aggregate.status='review';await this.service.manifest.putBatch(aggregate);

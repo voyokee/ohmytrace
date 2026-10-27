@@ -38,7 +38,8 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   function message(error){const el=dialog.querySelector('[data-photo-error]');if(el)el.textContent=error.message;onError(error);}
   function run(action){work=work.then(async()=>{busy=true;try{await action();}catch(error){message(error);}finally{busy=false;}});return work;}
   const currentData=()=>service.repository.getDataset();
-  async function loadBatch(id){await nativeImporter?.restoreFiles(id);batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);if(review.retainThumbnails!==undefined)retain=review.retainThumbnails;preview=null;focusedPreviewId=null;shown=CANDIDATE_PAGE;selected.clear();render();}
+  function reviewProgress(p){const el=dialog.querySelector('[data-photo-progress]');if(!el)return;el.textContent=p.phase==='grouping'?`照片读取完成，正在整理 ${p.total} 张照片的时间和地点…`:p.phase==='naming'?`正在识别地名 ${p.processed} / ${p.total}；读取超时会保留 GPS 并进入审核`:p.phase==='saving-review'?'正在保存审核草稿…':'照片已整理，可审核后保存。';}
+  async function loadBatch(id){reviewProgress({phase:'grouping',total:batch?.total||0});await nativeImporter?.restoreFiles(id);batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id,{onProgress:reviewProgress});if(review.retainThumbnails!==undefined)retain=review.retainThumbnails;preview=null;focusedPreviewId=null;shown=CANDIDATE_PAGE;selected.clear();render();}
   async function save(){preview=null;await service.saveReview(batch.id,review);render();}
   const count=c=>c.visits.reduce((n,v)=>n+v.assetIds.length,0);
   const saveBlob=(name,blob)=>{const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -141,8 +142,8 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       if(button.hasAttribute('data-photo-native-permission')||button.hasAttribute('data-photo-native-location')){nativePermission=await native.requestPermission({location:button.hasAttribute('data-photo-native-location')});render();return;}
       if(button.hasAttribute('data-photo-native-scan')||button.hasAttribute('data-photo-native-resume')){
         preview=null;review=null;onScanning(true);let scanning;
-        try{scanning=nativeImporter.scan({range:scanRange(nativeStart,nativeEnd),incremental:nativeIncremental,resume:button.hasAttribute('data-photo-native-resume'),onProgress:p=>{const el=dialog.querySelector('[data-photo-progress]');if(el)el.textContent=`系统相册已读取 ${p.processed} 张 · ${p.phase==='complete'?'等待统一审核':'正在扫描，可取消后续扫'}`;}});render();batch=await scanning;nativeResume=false;await loadBatch(batch.id);}
-        finally{onScanning(false);const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';render();}
+        try{scanning=nativeImporter.scan({range:scanRange(nativeStart,nativeEnd),incremental:nativeIncremental,resume:button.hasAttribute('data-photo-native-resume'),onProgress:p=>{const el=dialog.querySelector('[data-photo-progress]');if(el)el.textContent=p.phase==='permission'?'正在确认相册和照片 GPS 授权；未获授权不会扫描…':`系统相册已读取 ${p.processed} 张 · ${p.phase==='complete'?'等待统一审核':'正在扫描，可取消后续扫'}`;}});render();batch=await scanning;nativeResume=false;await loadBatch(batch.id);}
+        finally{onScanning(false);nativePermission=await native.permissionDetails().catch(()=>nativePermission);const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';render();}
         return;
       }
       const row=button.closest('[data-candidate]'),id=row?.dataset.candidate;

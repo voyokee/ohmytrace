@@ -2,6 +2,9 @@ package com.ohmytrace.app;
 
 /** Platform-independent paging rules, also exercised by JVM tests. */
 final class ScanWindow {
+    static void requireLocation(boolean authorized) {
+        if (!authorized) throw new SecurityException("GPS_PERMISSION_REQUIRED：照片位置未授权，已停止扫描。请允许读取照片 GPS 后重新扫描。");
+    }
     static boolean incremental(String oldScope, String scope, String oldVersion, String version, boolean limited) {
         return !limited && scope.equals(oldScope) && version.equals(oldVersion);
     }

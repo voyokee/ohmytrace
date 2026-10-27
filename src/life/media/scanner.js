@@ -55,7 +55,12 @@ export class PhotoScanner {
     for(let k=0;k<files.length;k++){if(this.cancelled)break;try{results.push(await this.analyze(files[k],{limits:this.limits,companion:companions[k]}));}catch(error){results.push({failure:error});}}
     return results;
   }
-  async scan(input,{onProgress=()=>{},resumeBatchId=null}={}) {
+  async createDeduplicationIndex(){
+    const existing=await this.manifest.listAssets(),similar=new Map();
+    for(const a of existing){const key=similarSignature(a);if(key)similar.set(key,[...(similar.get(key)||[]),a.assetId].slice(0,this.limits.maxDuplicateHints));}
+    return {manifest:this.manifest,known:new Set(existing.map(a=>a.assetId)),legacy:new Map(existing.filter(a=>a.identity!=='sampled-sha256-v2'&&a.deduplicationKey).map(a=>[legacySignature(a),a]).filter(([k])=>k)),similar};
+  }
+  async scan(input,{onProgress=()=>{},resumeBatchId=null,deduplicationIndex=null}={}) {
     if(this.running)throw new Error('已有照片扫描正在运行');
     const files=Array.from(input);if(!files.length||files.length>this.limits.maxFiles)throw new Error(`每批请选择 1–${this.limits.maxFiles} 张照片`);
     this.running=true;this.cancelled=false;this.usedWorker=false;this.workerUnavailable=false;let batch,chunk=[];
@@ -67,9 +72,8 @@ export class PhotoScanner {
       if(batch.status==='committed')throw new Error('这个批次已确认；可重新选择以补充或查看');
       batch.status='scanning';await this.manifest.putBatch(batch);
       if(this.workerFactory){this.pool=new WorkerPool(this.workerFactory,this.concurrency);this.usedWorker=this.pool.start()>0;if(!this.usedWorker)this.workerUnavailable=true;}
-      const existing=await this.manifest.listAssets(),known=new Set(existing.map(a=>a.assetId)),batchIds=new Set(batch.assetIds);
-      const legacy=new Map(existing.filter(a=>a.identity!=='sampled-sha256-v2'&&a.deduplicationKey).map(a=>[legacySignature(a),a]).filter(([k])=>k));
-      const similar=new Map();for(const a of existing){const key=similarSignature(a);if(key)similar.set(key,[...(similar.get(key)||[]),a.assetId].slice(0,this.limits.maxDuplicateHints));}
+      const index=deduplicationIndex||await this.createDeduplicationIndex();if(index.manifest!==this.manifest)throw new Error('去重索引不属于当前媒体库');
+      const {known,legacy,similar}=index,batchIds=new Set(batch.assetIds);
       const resumeCursor=batch.processed;
       // Up to `window` groups of files are analyzed concurrently, but results are committed
       // strictly in input order so the durable resume cursor never skips a file.
@@ -94,6 +98,7 @@ export class PhotoScanner {
         }
         const hintKey=similarSignature(asset),hints=hintKey?(similar.get(hintKey)||[]).filter(id=>id!==asset.assetId).slice(0,this.limits.maxDuplicateHints):[];if(hints.length)asset.possibleDuplicateAssetIds=[...new Set([...(asset.possibleDuplicateAssetIds||[]),...hints])].slice(0,this.limits.maxDuplicateHints);
         if(hintKey)similar.set(hintKey,[...new Set([...(similar.get(hintKey)||[]),asset.assetId])].slice(0,this.limits.maxDuplicateHints));
+        if(asset.identity!=='sampled-sha256-v2'&&asset.deduplicationKey){const key=legacySignature(asset);if(key)legacy.set(key,asset);}
         // Preserve the file-to-asset relation even when names/sizes/times collide.
         (batch.fileAssetIds??=[])[i]=asset.assetId;
         if(i<resumeCursor){if(asset.deduplicationKey&&!batchIds.has(asset.assetId))throw new Error('续扫文件内容与已保存批次不同，请新建导入而不是继续此批次');this.files.set(asset.assetId,file);continue;}

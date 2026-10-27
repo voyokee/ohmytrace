@@ -20,8 +20,12 @@ selection; a Web page cannot gain MediaStore access by deploying this code.
 In the app, open **从相册恢复足迹**:
 
 1. Choose **授权 / 调整可访问照片**. Full, selected-only and denied access are distinct.
-2. Optionally choose **允许读取照片 GPS**. This requests `ACCESS_MEDIA_LOCATION`,
-   not live device location. Missing/redacted GPS never receives a guessed location.
+2. Map scanning requires **允许读取照片 GPS** (`ACCESS_MEDIA_LOCATION`), not live
+   device location. The Scan action checks/requests album access first, then photo
+   GPS access before enumerating any rows or creating a scan journal. Denial stops
+   with an actionable message. Native enumeration and original-range reads also
+   enforce this permission and never fall back to a redacted original. Missing GPS
+   in an authorized original still never receives a guessed location.
 3. Set optional start/end local date-times. Start is inclusive, end is exclusive.
    Both blank means all accessible dates. MediaStore DATE_TAKEN is used for
    acquisition filtering, falling back to DATE_ADDED when missing. Only original
@@ -99,3 +103,21 @@ Phone acceptance must also cover Android 14+ limited selection expansion/revocat
 denial, original GPS permission, HEIC codec behavior, SD/cloud availability,
 background/foreground interruption, 1k/10k real-photo resource use and WebView
 globe interaction. Desktop scan timings do not establish mobile performance.
+
+## GPS permission correction (0.1.2-onboarding)
+
+The previous UI allowed all-library scanning without photo GPS permission, then
+reported redacted metadata as thousands of unlocated files. A two-case regression
+failed on the previous implementation (no rejection on denial, no GPS request
+before enumeration) and passes after adding consent preflight and native guards.
+The browser flow additionally denies GPS first (zero enumeration/read calls), then
+grants it via the Scan action and verifies imports, refresh and supplementation.
+119 Life tests pass; native JVM and instrumentation guard tests cover the same rule.
+Physical-device execution still requires an attached device.
+
+To retry a completed redacted batch, cover-install the new APK, use the system
+album Scan action, allow photo GPS access and start a new scan. Do not resume the
+old redacted batch. Permission scope changes force re-enumeration of the selected
+range; existing canonical memories are retained and deduplicated. No app-data
+clear or uninstall is necessary. Originals stripped of metadata before reaching
+MediaStore cannot have GPS reconstructed from their pixels.

@@ -38,6 +38,16 @@ public class MediaLibraryTest {
         }
     }
     @After public void cleanup() { for (Uri uri : inserted) context.getContentResolver().delete(uri, null, null); }
+    @Test public void deniedGpsBlocksEnumerationAndReadsBeforeOpeningAnyOriginal() throws Exception {
+        Context deniedGps = new android.content.ContextWrapper(context) {
+            @Override public int checkSelfPermission(String permission) {
+                return Manifest.permission.ACCESS_MEDIA_LOCATION.equals(permission) ? android.content.pm.PackageManager.PERMISSION_DENIED : super.checkSelfPermission(permission);
+            }
+        };
+        MediaLibrary blocked = new MediaLibrary(deniedGps);
+        try { blocked.enumerate(options(null, 100), new CancellationSignal()); fail("GPS-redacted enumeration accepted"); } catch (SecurityException expected) { assertTrue(expected.getMessage().contains("GPS_PERMISSION_REQUIRED")); }
+        try { blocked.read(new JSONObject(), new CancellationSignal()); fail("GPS-redacted original read accepted"); } catch (SecurityException expected) { assertTrue(expected.getMessage().contains("GPS_PERMISSION_REQUIRED")); }
+    }
     private Uri insert(String fixture, String mime, long taken) throws Exception {
         ContentValues values = new ContentValues(); values.put(MediaStore.Images.Media.DISPLAY_NAME, "ohmytrace-test-" + System.nanoTime() + "." + (mime.equals("image/heic") ? "heic" : "jpg"));
         values.put(MediaStore.Images.Media.MIME_TYPE, mime); values.put(MediaStore.Images.Media.DATE_TAKEN, taken); values.put(MediaStore.Images.Media.IS_PENDING, 1);
