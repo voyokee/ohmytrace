@@ -24,6 +24,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - run: npm run build:android -- lintDebug assembleDebugAndroidTest assembleRelease
+      - name: Verify unsigned release reproducibility
+        run: |
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/oncehere-release-first.apk"
+          cd android
+          ./gradlew --no-daemon --no-build-cache --rerun-tasks assembleRelease
+          cmp "$RUNNER_TEMP/oncehere-release-first.apk" app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Checksums
         run: sha256sum android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/release/app-release-unsigned.apk > android/app/build/outputs/apk/SHA256SUMS
       - uses: actions/upload-artifact@v4
