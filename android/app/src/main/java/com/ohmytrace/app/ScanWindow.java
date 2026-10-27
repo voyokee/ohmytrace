@@ -1,0 +1,16 @@
+package com.ohmytrace.app;
+
+/** Platform-independent paging rules, also exercised by JVM tests. */
+final class ScanWindow {
+    static boolean incremental(String oldScope, String scope, String oldVersion, String version, boolean limited) {
+        return !limited && scope.equals(oldScope) && version.equals(oldVersion);
+    }
+    static void validate(Long start, Long end, int pageSize) {
+        if (start != null && end != null && start >= end) throw new IllegalArgumentException("结束时间必须晚于开始时间");
+        if (pageSize < 1 || pageSize > 100) throw new IllegalArgumentException("相册分页数量无效");
+    }
+    static void range(long offset, int length, long size) {
+        if (offset < 0 || length < 0 || length > 262144 || offset > size || length > size - offset)
+            throw new IllegalArgumentException("NATIVE_READ_BUDGET");
+    }
+}

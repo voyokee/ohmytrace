@@ -1,4 +1,15 @@
-# Native platform boundary — M5.2 design only
+# Native platform boundary
+
+## Android implementation (2026-10-27)
+
+`feat/photo-import` now includes an Android 10+ WebView application, an
+origin-scoped native message bridge, MediaStore permission/date-range/generation
+paging, durable resumable acquisition and native HEIC thumbnail generation.
+See [Android photo import](ANDROID_PHOTO_IMPORT.md) for build, tests and remaining
+device acceptance. Web and iOS boundaries below remain unchanged; the old
+no-Android-source statement below describes the earlier M5.2 milestone.
+
+## Earlier M5.2 milestone
 
 M5.0 emits `dist/native/`, the same audited Web runtime as Editor. This is a
 `webDir` candidate, not an Android/iOS application. There is no APK, IPA,

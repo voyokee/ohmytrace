@@ -36,6 +36,8 @@ test('production build cannot replace unrelated files or follow a destination sy
   try{
     const unrelated=resolve(temp,'unrelated');await mkdir(unrelated);await writeFile(resolve(unrelated,'keep.txt'),'keep');
     await assert.rejects(buildWeb({outDir:unrelated}),/owned build directory/);assert.equal(await readFile(resolve(unrelated,'keep.txt'),'utf8'),'keep');
-    await symlink(unrelated,resolve(temp,'link'),'dir');await assert.rejects(buildWeb({outDir:resolve(temp,'link')}),/real directory/);
+    // Windows junctions exercise the same link boundary without requiring the
+    // optional CreateSymbolicLink privilege / Developer Mode.
+    await symlink(unrelated,resolve(temp,'link'),process.platform==='win32'?'junction':'dir');await assert.rejects(buildWeb({outDir:resolve(temp,'link')}),/real directory/);
   }finally{await rm(temp,{recursive:true,force:true});}
 });
