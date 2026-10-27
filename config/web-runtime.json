@@ -297,6 +297,7 @@
     "src/life/media/thumbnail.js",
     "src/life/media/time.js",
     "src/life/media/transit.js",
+    "src/life/record-card.js",
     "src/life/renderer-adapter.js",
     "src/life/repository.js",
     "src/life/schema.js",

@@ -3,7 +3,7 @@
 const publicViewer=document.body.hasAttribute('data-story-viewer');
 const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
-const {mountRecordCard}=publicViewer?{}:await import('./src/life/record-card.js');
+const {mountRecordCard,recordCardModel}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
@@ -238,8 +238,8 @@ async function load() {
       onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
     recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,
       onClose:()=>deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>syncRecordSelection(target),
-      onReplay:scope=>storyExperience?.replay(scope.type+':'+scope.id),
-      onShare:scope=>storyExperience?.composer.open({source:scope.type+':'+scope.id}),
+      onReplay:scope=>{if(!storyExperience)throw new Error('回放正在准备，请稍后重试');return storyExperience.replay(scope);},
+      onShare:scope=>{if(!storyExperience)throw new Error('分享正在准备，请稍后重试');return storyExperience.composer.open({source:scope});},
       onExplore:id=>{const name=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===id);if(name)focusCardPlace(name);},
       thumbnail:(memory,options)=>photoUI.thumbnail(memory,options)});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
@@ -1781,7 +1781,7 @@ function bindEvents() {
     if (draft && i != null && k) draft[+i][k] = e.target.value;
   });
   document.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea')) {
+    if (e.target.matches('input, textarea, select')) {
       if (e.key === 'Enter' && e.target.closest('.search-box')) e.target.closest('.search-row').querySelector('[data-act=do-search]').click();
       return;
     }
@@ -1797,12 +1797,14 @@ function bindEvents() {
       e.preventDefault();return;
     }
     if (e.key === 'Escape') {
+      if(document.querySelector('dialog[open]'))return;
       if(menu&&!menu.hidden){closeMenu(true);e.preventDefault();return;}
       if (mapChooser?.close(true)) return;
+      if(!storyBaseLife&&recordCard?.escape()){e.preventDefault();return;}
       if (pickName) endPick();
       else if (body.classList.contains('modal-open')) closeModal();
       else if (state.playing) stopPlay();
-      else if (state.sel) deselect();
+      else if (state.sel||recordCard?.selection) deselect();
       else homeView();
     } else if (e.key.toLowerCase() === 'n') toggleTone();
     else if (state.sel && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) step(e.key === 'ArrowRight' ? 1 : -1);
@@ -1853,12 +1855,12 @@ async function boot() {
   await initGlobe();
   refresh();
   geocodeMissing();
-  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:{type:'all'};},
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const owner=storyBaseLife||life,selected=storyBaseSelection&&storyBaseLife?storyBaseSelection.card:recordCard?.selection;if(selected){const model=recordCardModel(owner.repository.getDataset(),selected,{year:storyBaseLife?storyBaseSelection.year:state.year});if(model)return model.scope;}const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:owner.adapter.scope.type==='chapter'?owner.adapter.scope:{type:'all'};},
     reducedMotion,cancel:()=>pauseOverviewMotion(),
-    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places,card:recordCard?.selection};recordCard?.close();}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
-    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');if(storyBaseSelection.card)recordCard?.open(storyBaseSelection.card);lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
     onError:error=>toast('回放失败：'+error.message,5000),
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{

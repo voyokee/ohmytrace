@@ -122,7 +122,7 @@ function split(data,{kind,id,visitIds,title}){
 function refreshAutomaticTitles(data,changed){
  const touched=new Set(changed.flatMap(c=>c.collection==='trips'?[c.id]:c.collection==='visits'?[c.before?.value.tripId,c.after?.value.tripId]:c.collection==='places'?data.visits.filter(v=>v.placeId===c.id).map(v=>v.tripId):[]));
  for(const t of data.trips){
-  if(!touched.has(t.id)||!t.autoTitle||t.title!==t.autoTitle)continue;
+  if(t.hidden||!touched.has(t.id)||!t.autoTitle||t.title!==t.autoTitle)continue;
   if(!t.visitType&&t.type==='转机'&&t.visitIds.some(id=>data.visits.find(v=>v.id===id)?.legacy.type==='旅行'))t.type='旅行';
   const ids=new Set(t.visitIds.map(id=>data.visits.find(v=>v.id===id)).filter(v=>visitCountsAsTravel(data,v,t)).map(v=>v.placeId));
   const photos=data.memories.filter(m=>m.tripIds.includes(t.id)&&m.photoObservation&&m.placeIds.some(id=>ids.has(id))).sort((a,b)=>a.photoObservation.takenMs-b.photoObservation.takenMs||a.uri.localeCompare(b.uri)).map(m=>{const p=data.places.find(p=>p.id===m.placeIds[0]);return {day:m.photoObservation.day,city:{...m.photoObservation.city,key:p.id,label:p.name}};});

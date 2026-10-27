@@ -1,4 +1,4 @@
-import {validatePeriod,clone} from '../schema.js';
+import {validatePeriod,clone,dateBound} from '../schema.js';
 
 export const STORY_VERSION=1;
 export const SCENE_KINDS=['globe','chapter','trip','place','memory','closing'];
@@ -37,3 +37,10 @@ export function validateStory(story){
   return story;
 }
 export function parseStory(input){return validateStory(clone(typeof input==='string'?JSON.parse(input):input));}
+
+// Standalone city/residence scenes can own photos without inventing a journey.
+export function memoryInStory(story,data,memory){
+ if(memory.hidden)return false;
+ if(memory.tripIds.some(id=>story.selectedTripIds.includes(id)&&(!memory.placeIds.length||story.orderedScenes.some(s=>s.kind==='place'&&s.tripId===id&&memory.placeIds.includes(s.placeId))))||data.chapters.some(c=>!c.hidden&&story.selectedChapterIds.includes(c.id)&&(c.memoryIds.includes(memory.id)||c.homeAnchors.some(id=>memory.placeIds.includes(id))&&(dateBound(memory.start)??-Infinity)<=(dateBound(c.end,true)??Infinity)&&(dateBound(memory.end,true)??Infinity)>=(dateBound(c.start)??-Infinity))))return true;
+ return story.orderedScenes.some(s=>s.kind==='place'&&!s.tripId&&!s.chapterId&&memory.placeIds.includes(s.placeId)&&(dateBound(memory.start)??-Infinity)<=(dateBound(s.end,true)??Infinity)&&(dateBound(memory.end,true)??Infinity)>=(dateBound(s.start)??-Infinity));
+}

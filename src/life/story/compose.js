@@ -1,5 +1,5 @@
 import {validateDataset,newId,clone,dateBound,partialDate} from '../schema.js';
-import {validateStory,unknown} from './schema.js';
+import {validateStory,unknown,memoryInStory} from './schema.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
 
 function coverage(entity,data){
@@ -23,20 +23,21 @@ export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回�
   if(scope.type==='range'&&(from===null||to===null||from>to))throw new Error('请选择有效的开始和结束时间');
   const byRange=e=>{const d=coverage(e,data);return d!==null&&d.start<=to&&d.end>=from;},inScope=e=>scope.type==='year'?byYear(e):scope.type==='range'&&byRange(e);
   if(scope.type==='chapter'&&!data.chapters.some(c=>c.id===scope.id)||scope.type==='trip'&&!data.trips.some(t=>t.id===scope.id))throw new Error('故事范围不存在');
-  if(scope.type==='year'&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效故事年份');
+  if((scope.type==='year'||scope.year!==undefined)&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效故事年份');
+  const cityYear=v=>scope.year===undefined||byYear(v);
   const chapters=data.chapters.filter(c=>!c.hidden&&(chapterIds?chapterIds.includes(c.id):scope.type==='chapter'?c.id===scope.id:scope.type==='all'||inScope(c)));
-  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&(tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:scope.type==='place'?t.visitIds.some(id=>{const v=data.visits.find(v=>v.id===id);return !v.hidden&&v.placeId===place.id;}):scope.type==='residence'?((coverage(t,data)?.start??Infinity)<=(dateBound(residence.end,true)??Infinity)&&(coverage(t,data)?.end??-Infinity)>=(dateBound(residence.start)??-Infinity)):['year','range'].includes(scope.type)?inScope(t):true))
+  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&(tripIds?tripIds.includes(t.id):scope.type==='chapter'?chapters.some(c=>c.relatedTripIds.includes(t.id)):scope.type==='trip'?t.id===scope.id:scope.type==='place'?t.visitIds.some(id=>{const v=data.visits.find(v=>v.id===id);return visitCountsAsTravel(data,v,t)&&v.placeId===place.id&&cityYear(v);}):scope.type==='residence'?((coverage(t,data)?.start??Infinity)<=(dateBound(residence.end,true)??Infinity)&&(coverage(t,data)?.end??-Infinity)>=(dateBound(residence.start)??-Infinity)):['year','range'].includes(scope.type)?inScope(t):true))
     .sort((a,b)=>(dateBound(a.start)??Infinity)-(dateBound(b.start)??Infinity));
   if(chapterIds?.some(id=>!chapters.some(c=>c.id===id))||tripIds?.some(id=>!trips.some(t=>t.id===id)))throw new Error('故事选择包含不存在的记录');
   const scenes=[];
   const add=(kind,title,entity={},refs={})=>scenes.push({id:newId('scene'),kind,title,description:'',start:clone(entity.start||unknown()),end:clone(entity.end||unknown()),chapterId:null,tripId:null,placeId:null,memoryId:null,...refs,duration:kind==='place'?4:3});
   add('globe',title);
-  if(place)add('place',place.name,{}, {placeId:place.id});
+  if(place){const time=scope.year?{start:partialDate(String(scope.year)),end:partialDate(String(scope.year))}:{};add('place',place.name,time,{placeId:place.id});}
   if(residence){const p=data.places.find(p=>p.id===residence.placeId);add('place',p.name,residence,{placeId:p.id});}
   const seen=new Set();
   function tripScenes(t,chapterId=null){
     seen.add(t.id);add('trip',t.title,t,{tripId:t.id,chapterId});
-    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(visitCountsAsTravel(data,v,t))add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
+    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(visitCountsAsTravel(data,v,t)&&(!place||v.placeId===place.id&&cityYear(v)))add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
   }
   for(const c of chapters){
     add('chapter',c.title,c,{chapterId:c.id});
@@ -54,8 +55,8 @@ export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回�
 export function setStoryMemories(story,data,memoryIds){
   const next=clone(story);next.includedMemories=[...new Set(memoryIds)];next.orderedScenes=next.orderedScenes.filter(s=>s.kind!=='memory'||next.includedMemories.includes(s.memoryId));
   for(const id of next.includedMemories){
-    const m=data.memories.find(m=>m.id===id);if(!m)throw new Error('记忆不存在');
-    if(!m.tripIds.some(id=>next.selectedTripIds.includes(id))&&!data.chapters.some(c=>next.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(id)))throw new Error('记忆不在所选人生范围内');
+    const m=data.memories.find(m=>m.id===id);if(!m||m.hidden)throw new Error('照片或记录不存在');
+    if(!memoryInStory(next,data,m))throw new Error('照片或记录不在所选范围内');
     if(next.orderedScenes.some(s=>s.kind==='memory'&&s.memoryId===id))continue;
     const after=next.orderedScenes.findLastIndex(s=>m.tripIds.length?m.tripIds.includes(s.tripId)&&(s.kind==='trip'||s.kind==='place'&&m.placeIds.includes(s.placeId)):s.kind==='place'&&m.placeIds.includes(s.placeId));
     next.orderedScenes.splice(after>=0?after+1:Math.max(1,next.orderedScenes.length-1),0,{id:newId('scene'),kind:'memory',title:m.title||'记忆时刻',description:'',start:clone(m.start),end:clone(m.end),chapterId:null,tripId:m.tripIds.find(id=>next.selectedTripIds.includes(id))||null,placeId:m.placeIds[0]||null,memoryId:id,duration:5});

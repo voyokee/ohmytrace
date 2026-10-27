@@ -36,7 +36,7 @@ test('city, journey, residence and chapter use the same actions with scoped phot
   const city=recordCardModel(d,{kind:'place',id:d.places[1].id});
   assert.equal(city.journeys.length,2);assert.equal(city.photoIds.length,1);assert.equal(city.scope.type,'place');
   const home=recordCardModel(d,{kind:'residence',id:d.residences[0].id});assert.equal(home.photoIds.length,1);assert.equal(home.scope.type,'residence');
-  const chapter=recordCardModel(d,{kind:'chapter',id:d.chapters[0].id});assert.equal(chapter.photoIds.length,1);
+  const chapter=recordCardModel(d,{kind:'chapter',id:d.chapters[0].id});assert.equal(chapter.photoIds.length,2,'Home-anchor photos within the stage period belong to the stage');
 });
 test('the card keeps canonical IDs and manual provenance after a city is renamed',async()=>{
   const {repository,edits}=await fixture(),id=repository.getDataset().places[1].id;
@@ -92,4 +92,26 @@ test('hidden automatic journeys stay hidden after regrouping without deleting ph
   await repository.update(d=>applyAutoImport(d,[],names,{force:true,now:new Date('2026-10-28')}));
   const d=repository.getDataset();assert.equal(d.trips.find(t=>t.id===id).hidden,true);assert.equal(projectDataset(d).trips.length,0);
   assert.deepEqual(d.memories.map(m=>m.id),before.memories.map(m=>m.id));await history.undo();assert.ok(projectDataset(repository.getDataset()).trips.some(t=>t.id===id));
+});
+test('a year-scoped city replay and share include only that city and the matching visit year',async()=>{
+  const {repository}=await fixture(),d=repository.getDataset(),id=d.places[1].id;
+  const card=recordCardModel(d,{kind:'place',id},{year:2025});assert.deepEqual(card.scope,{type:'place',id,year:2025});
+  const story=composeStory(d,{scope:card.scope}),artifact=projectShare(d,story);
+  assert.deepEqual(story.selectedTripIds,[d.trips[1].id]);assert.deepEqual(artifact.places.map(p=>p.name),['京都']);assert.equal(artifact.trips.length,1);
+  const fullCity=projectShare(d,composeStory(d,{scope:{type:'place',id}}));assert.ok(!fullCity.places.some(p=>p.name==='大阪'),'A city share cannot silently include the rest of a multi-city itinerary');
+});
+test('a home card can explicitly include its own photo and rejects a stale draft after hiding the city',async()=>{
+  const {repository,edits}=await fixture(),d=repository.getDataset(),p=d.places[0];
+  const {setStoryMemories}=await import('../../src/life/story/compose.js');let story=composeStory(d,{scope:{type:'place',id:p.id}});
+  story=setStoryMemories(story,d,[d.memories[1].id]);story.privacySettings.includePhotos=true;assert.equal(projectShare(d,story).memories.length,1);
+  await edits.execute({type:'delete',target:{kind:'place',id:p.id}});assert.throws(()=>projectShare(repository.getDataset(),story),/已改变/);
+  assert.ok(!projectDataset(repository.getDataset()).rows.some(r=>r.place===p.name));await edits.undo();assert.ok(projectDataset(repository.getDataset()).rows.some(r=>r.place===p.name));
+});
+test('standalone home/city share has a visible Viewer map point without inventing a journey or photo',async()=>{
+ const {repository}=await fixture(),d=repository.getDataset(),home=d.places[0],artifact=projectShare(d,composeStory(d,{scope:{type:'place',id:home.id}}));
+ const {createStoryBridge}=await import('../../src/life/story/viewer-bridge.js');const snapshot=createStoryBridge(artifact).adapter.getRenderSnapshot();assert.equal(snapshot.trips.length,0);assert.equal(snapshot.rows.length,1);assert.equal(snapshot.photoPlaces[0].count,0);assert.equal(snapshot.photoPlaces[0].source,'story-scene');
+});
+test('city sharing cannot select another stop’s photo from the same journey',async()=>{
+ const {repository}=await fixture(),d=repository.getDataset(),kyoto=d.places[1],osaka=d.places[2];addMemory(d,{kind:'photo',title:'大阪照片',uri:'android-media:external_primary/3',start:'2024-03-01',end:'2024-03-01',placeIds:[osaka.id],tripIds:[d.trips[0].id],state:'observed',source:{kind:'photo-exif'}});
+ const {setStoryMemories}=await import('../../src/life/story/compose.js');const story=composeStory(d,{scope:{type:'place',id:kyoto.id}});assert.throws(()=>setStoryMemories(story,d,[d.memories.at(-1).id]),/不在所选范围/);
 });
