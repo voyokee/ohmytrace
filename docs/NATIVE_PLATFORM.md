@@ -1,4 +1,15 @@
-# Native platform boundary — M5.2 design only
+# Native platform boundary
+
+## Android implementation (2026-10-27)
+
+`feat/photo-import` now includes an Android 10+ WebView application, an
+origin-scoped native message bridge, MediaStore permission/date-range/generation
+paging, durable resumable acquisition and native HEIC thumbnail generation.
+See [Android photo import](ANDROID_PHOTO_IMPORT.md) for build, tests and remaining
+device acceptance. Web and iOS boundaries below remain unchanged; the old
+no-Android-source statement below describes the earlier M5.2 milestone.
+
+## Earlier M5.2 milestone
 
 M5.0 emits `dist/native/`, the same audited Web runtime as Editor. This is a
 `webDir` candidate, not an Android/iOS application. There is no APK, IPA,
@@ -30,3 +41,17 @@ behavior. Current Chrome touch tests certify browser behavior only. IndexedDB
 must be tested inside each WebView; app installation does not guarantee permanent
 storage. Keep explicit complete backup/restore and document uninstall, app-data
 clear, operating-system cleanup and Web-to-native migration behavior.
+
+## Photo Library V2 Web boundary (2026-10-27)
+
+`src/platform/web-photo-capability.js` now supplies an executable scoped Web
+adapter and bounded directory/ZIP input preparation. `photoObservation()` exposes
+normalized time and WGS84 semantics while keeping canonical/media identities.
+The production album UI uses this input preparation and the existing scanner and
+PhotoHistoryService. User-selected File handles are page-scoped; release/cancel
+is explicit. Web cannot enumerate the operating system gallery, monitor incremental
+library changes, authorize background PhotoKit/MediaStore access or fetch arbitrary
+iCloud/Android cloud assets. Missing/redacted picker GPS remains absent. Native
+metadata/thumbnail decoders can later replace acquisition, preserving the same
+human review, reconstruction, stable ID and Repository behavior. Android/iOS
+builds and physical-device acceptance remain pending, as described above.

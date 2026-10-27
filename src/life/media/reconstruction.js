@@ -25,14 +25,29 @@ function residenceFor(asset,data,rules) {
 function placeFor(coordinates,data,rules) {
   return data.places.filter(p=>p.coordinates).map(p=>({place:p,distance:distanceKm(p.coordinates,coordinates,rules)})).filter(p=>p.distance<=rules.existingPlaceRadiusKm).sort((a,b)=>a.distance-b.distance||a.place.id.localeCompare(b.place.id))[0]?.place||null;
 }
-function visitFor(assets,data,rules) {
-  const first=assets[0],place=placeFor(first.coordinates,data,rules),residence=residenceFor(first,data,rules);
+/** Suggests a home base from photo days when no residence is recorded. Never written to the graph. */
+export function inferHomeBase(located,data,rules=RECONSTRUCTION_RULES) {
+  if(data.residences.length||!rules.inferHomeMinDays)return null;
+  const cells=new Map(),allDays=new Set(),size=rules.inferHomeCellDegrees;
+  for(const a of located){const day=localDay(a);if(!day)continue;allDays.add(day);
+    const key=`${Math.round(a.coordinates.latitude/size)}:${Math.round(a.coordinates.longitude/size)}`,cell=cells.get(key)||{days:new Set(),lat:0,lon:0,n:0};
+    cell.days.add(day);cell.lat+=a.coordinates.latitude;cell.lon+=a.coordinates.longitude;cell.n++;cells.set(key,cell);}
+  const best=[...cells.values()].sort((a,b)=>b.days.size-a.days.size||b.n-a.n)[0];
+  if(!best||best.days.size<rules.inferHomeMinDays||best.days.size<allDays.size*rules.inferHomeMinShare)return null;
+  return {coordinates:{latitude:best.lat/best.n,longitude:best.lon/best.n},days:best.days.size,share:best.days.size/allDays.size,state:'inferred'};
+}
+function homeFor(asset,data,rules,home) {
+  const residence=residenceFor(asset,data,rules);if(residence)return residence.id;
+  return home&&distanceKm(home.coordinates,asset.coordinates,rules)<=rules.homeRadiusKm?'inferred-home':null;
+}
+function visitFor(assets,data,rules,home) {
+  const first=assets[0],place=placeFor(first.coordinates,data,rules),residence=residenceFor(first,data,rules),nearHome=!residence&&homeFor(first,data,rules,home)==='inferred-home';
   const covered=coveredDates(assets);
   return {id:newId('visit_candidate'),proposedPlaceId:newId('place'),proposedVisitId:newId('visit'),placeId:place?.id||null,
     placeName:place?.name||`城市未知 · ${first.coordinates.latitude.toFixed(4)}, ${first.coordinates.longitude.toFixed(4)}`,
     coordinates:clone(first.coordinates),assetIds:assets.map(a=>a.assetId),observedStart:covered.start,observedEnd:covered.end,
-    arrival:'unknown',departure:'unknown',residenceId:residence?.id||null,
-    reasons:[place?'existing-place-within-radius':'photo-gps-observation',residence?'within-dated-residence':'residence-not-established']};
+    arrival:'unknown',departure:'unknown',residenceId:residence?.id||null,homeBase:nearHome?'inferred':null,
+    reasons:[place?'existing-place-within-radius':'photo-gps-observation',residence?'within-dated-residence':nearHome?'near-inferred-home-base':'residence-not-established']};
 }
 function tripCoverage(trip,data) {
   let a=dateBound(trip.start),b=dateBound(trip.end,true);
@@ -51,11 +66,11 @@ export function matchExistingTrips(visits,data,rules=RECONSTRUCTION_RULES) {
   }).sort((a,b)=>b.matchedStops-a.matchedStops||a.tripId.localeCompare(b.tripId));
 }
 function candidateFor(visits,data,rules) {
-  const matches=matchExistingTrips(visits,data,rules),allHome=visits.every(v=>v.residenceId);
+  const matches=matchExistingTrips(visits,data,rules),allHome=visits.every(v=>v.residenceId||v.homeBase);
   return {id:newId('trip_candidate'),proposedTripId:newId('trip'),title:`照片记录 · ${visits[0].observedStart||'日期未知'}`,
     visits,action:matches.length?'link':allHome?'memory':'create',relatedTripId:matches[0]?.tripId||null,matches,
     start:'',end:'',transport:'unknown',chapterIds:[],excluded:false,
-    reasons:[allHome?'daily-photos-within-residence':'possible-away-visit',visits.reduce((n,v)=>n+v.assetIds.length,0)===1?'single-photo-boundaries-unknown':'photo-coverage-not-complete-trip']};
+    reasons:[allHome?(visits.some(v=>v.homeBase)?'daily-photos-near-inferred-home':'daily-photos-within-residence'):'possible-away-visit',visits.reduce((n,v)=>n+v.assetIds.length,0)===1?'single-photo-boundaries-unknown':'photo-coverage-not-complete-trip']};
 }
 export function reconstructPhotos(input,data,{rules=RECONSTRUCTION_RULES}={}) {
   const assets=[...new Map(input.map(a=>[a.assetId,a])).values()];
@@ -63,11 +78,11 @@ export function reconstructPhotos(input,data,{rules=RECONSTRUCTION_RULES}={}) {
   const allZoned=located.filter(a=>a.extractedTime).every(a=>Number.isFinite(a.extractedTime.utcEpochMs));
   const stamp=a=>!a.extractedTime?Infinity:allZoned?a.extractedTime.utcEpochMs:ordinal(a);
   located.sort((a,b)=>stamp(a)-stamp(b)||a.assetId.localeCompare(b.assetId));
-  const visits=[];let group=[];
-  const flush=()=>{if(group.length){visits.push(visitFor(group,data,rules));group=[];}};
+  const home=inferHomeBase(located,data,rules),visits=[];let group=[];
+  const flush=()=>{if(group.length){visits.push(visitFor(group,data,rules,home));group=[];}};
   for(const asset of located) {
     const previous=group.at(-1),gap=previous?gapHours(previous,asset):null;
-    if(previous&&(gap.hours===null||gap.hours<0||gap.hours>rules.visitGapHours||distanceKm(group[0].coordinates,asset.coordinates,rules)>rules.placeRadiusKm||residenceFor(previous,data,rules)?.id!==residenceFor(asset,data,rules)?.id))flush();
+    if(previous&&(gap.hours===null||gap.hours<0||gap.hours>rules.visitGapHours||distanceKm(group[0].coordinates,asset.coordinates,rules)>rules.placeRadiusKm||homeFor(previous,data,rules,home)!==homeFor(asset,data,rules,home)))flush();
     group.push(asset);
   }flush();
   const clock=a=>a?.extractedTime?{localDateTime:a.extractedTime.localDateTime,offsetMinutes:a.extractedTime.offsetMinutes,utcEpochMs:a.extractedTime.utcEpochMs}:null;
@@ -80,11 +95,13 @@ export function reconstructPhotos(input,data,{rules=RECONSTRUCTION_RULES}={}) {
   const flushTrip=()=>{if(trip.length){candidates.push(candidateFor(trip,data,rules));trip=[];}};
   for(const visit of visits) {
     const prior=trip.at(-1),a=prior&&assetMap.get(prior.assetIds.at(-1)),b=assetMap.get(visit.assetIds[0]),gap=a?gapHours(a,b):null;
-    if(prior&&(gap.hours===null||gap.hours<0||gap.hours>rules.tripGapHours||Boolean(prior.residenceId)!==Boolean(visit.residenceId)))flushTrip();
+    if(prior&&(gap.hours===null||gap.hours<0||gap.hours>rules.tripGapHours||Boolean(prior.residenceId||prior.homeBase)!==Boolean(visit.residenceId||visit.homeBase)))flushTrip();
     trip.push(visit);
   }flushTrip();
-  return {version:1,baseDatasetId:data.id,baseRevision:data.revision,rules:clone(rules),candidates,
-    unlocatedAssetIds:supported.filter(a=>!a.coordinates).map(a=>a.assetId),includeUnlocated:true,
+  return {version:1,baseDatasetId:data.id,baseRevision:data.revision,rules:clone(rules),candidates,inferredHome:home,
+    // Photos without GPS are filtered out by default and reported; the user may opt in
+    // to keep them as unlocated memories. They never receive a guessed location.
+    unlocatedAssetIds:supported.filter(a=>!a.coordinates).map(a=>a.assetId),includeUnlocated:false,
     diagnosticAssetIds:assets.filter(a=>a.processingStatus!=='analyzed').map(a=>a.assetId),
     timeOrderBasis:allZoned?'offset-instant':'local-order-uncertain',manualRevisions:[]};
 }

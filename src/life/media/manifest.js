@@ -1,19 +1,25 @@
 import {clone,newId} from '../schema.js';
 import {MEDIA_LIMITS} from './config.js';
-import {extractCaptureTime} from './exif.js';
+import {reparseTime,TIME_FIELDS} from './time.js';
 
 export function validateAsset(asset) {
   if(!asset||typeof asset.assetId!=='string'||!asset.originalFile||typeof asset.originalFile.name!=='string'||!Number.isSafeInteger(asset.originalFile.size)||asset.originalFile.size<0||!Array.isArray(asset.diagnostics))throw new Error('媒体索引记录损坏');
+  if(asset.coordinates?.crs&&asset.coordinates.crs!=='WGS84')throw new Error('媒体坐标必须为 WGS84');
   if(asset.coordinates&&(!Number.isFinite(asset.coordinates.latitude)||!Number.isFinite(asset.coordinates.longitude)||Math.abs(asset.coordinates.latitude)>90||Math.abs(asset.coordinates.longitude)>180))throw new Error('媒体索引坐标无效');
   if(asset.deduplicationKey!==null&&(!/^[a-f0-9]{64}$/.test(asset.deduplicationKey)||asset.assetId!==`asset_${asset.deduplicationKey}`))throw new Error('媒体内容标识无效');
-  if(!['analyzed','error','unsupported','oversize'].includes(asset.processingStatus)||!['parsed','missing','error','unsupported'].includes(asset.metadataStatus)||asset.diagnostics.some(d=>typeof d!=='string'))throw new Error('媒体处理状态无效');
-  if(asset.extractedTime){const t=asset.extractedTime,parsed=extractCaptureTime(t.raw,t.offsetRaw,t.subsecondRaw);
-    if(!parsed||['localDateTime','wallClockOrdinal','offsetMinutes','utcEpochMs','timeBasis'].some(k=>parsed[k]!==t[k]))throw new Error('媒体时间语义无效');
+  if(!['analyzed','error','unsupported','oversize','deferred'].includes(asset.processingStatus)||!['parsed','missing','error','unsupported'].includes(asset.metadataStatus)||asset.diagnostics.some(d=>typeof d!=='string'))throw new Error('媒体处理状态无效');
+  // Every stored time must be reproducible from its raw source string, whichever
+  // container (EXIF/XMP) supplied it; a backup cannot invent a UTC instant.
+  for(const t of [asset.extractedTime,asset.mediaCreatedTime].filter(Boolean)){const parsed=reparseTime(t);
+    if(!parsed||TIME_FIELDS.some(k=>parsed[k]!==t[k]))throw new Error('媒体时间语义无效');
   }
+  if(asset.thumbnailReference&&(asset.thumbnailReference.store!=='ohmytrace.thumbnails'||asset.thumbnailReference.assetId!==asset.assetId))throw new Error('缩略图引用无效');
+  if(asset.thumbnailStatus&&!['saved','THUMBNAIL_UNAVAILABLE','THUMBNAIL_CAPACITY_LIMIT','THUMBNAIL_RESELECT_REQUIRED'].includes(asset.thumbnailStatus))throw new Error('缩略图处理状态无效');
   return asset;
 }
 export function validateManifest(input) {
-  if(input?.kind!=='ohmytrace.media-manifest'||input.version!==MEDIA_LIMITS.manifestVersion||!Array.isArray(input.assets)||!Array.isArray(input.batches))throw new Error('不支持的媒体索引备份版本');
+  // v1 assets are a strict subset of v2 (no format/XMP/secondary-time fields), so they restore unchanged.
+  if(input?.kind!=='ohmytrace.media-manifest'||![1,MEDIA_LIMITS.manifestVersion].includes(input.version)||!Array.isArray(input.assets)||!Array.isArray(input.batches))throw new Error('不支持的媒体索引备份版本');
   const ids=new Set();for(const asset of input.assets){validateAsset(asset);if(ids.has(asset.assetId))throw new Error('重复媒体 ID');ids.add(asset.assetId);}
   const batches=new Set();for(const batch of input.batches){
     if(typeof batch.id!=='string'||batches.has(batch.id)||!Array.isArray(batch.assetIds)||new Set(batch.assetIds).size!==batch.assetIds.length||batch.assetIds.some(id=>!ids.has(id))||typeof batch.startedAt!=='string'||!Number.isSafeInteger(batch.processed)||!Number.isSafeInteger(batch.total)||batch.processed<0||batch.processed>batch.total||!Array.isArray(batch.filePlan)||batch.filePlan.length!==batch.total||!['scanning','review','prepared','committed','cancelled','interrupted'].includes(batch.status))throw new Error('媒体批次关系无效');
@@ -64,15 +70,16 @@ export class MediaManifest {
       tx.objectStore('batches').put(clone(batch));
     });
   }
+  async updateAsset(id,patch){await this.transaction(['assets'],'readwrite',tx=>{const store=tx.objectStore('assets'),r=store.get(id);r.onsuccess=()=>{if(r.result)store.put({...r.result,...clone(patch)});};});}
   async acknowledge(batchId,links){
     await this.transaction(['assets','batches'],'readwrite',tx=>{
       const assets=tx.objectStore('assets'),batches=tx.objectStore('batches');
-      for(const [id,memoryId]of Object.entries(links)){const r=assets.get(id);r.onsuccess=()=>{if(r.result)assets.put({...r.result,linkedMemoryId:memoryId});};}
-      const req=batches.get(batchId);req.onsuccess=()=>{if(req.result)batches.put({...req.result,status:'committed',commitState:'acknowledged',committedAt:new Date().toISOString()});};
+      for(const [id,memoryId]of Object.entries(links)){const r=assets.get(id);r.onsuccess=()=>{if(!r.result){tx.abort();return;}assets.put({...r.result,linkedMemoryId:memoryId});};}
+      const req=batches.get(batchId);req.onsuccess=()=>{if(!req.result){tx.abort();return;}batches.put({...req.result,status:'committed',commitState:'acknowledged',committedAt:new Date().toISOString()});};
     });
   }
   async backup(){return this.transaction(['assets','batches'],'readonly',tx=>{
-    const a=tx.objectStore('assets').getAll(),b=tx.objectStore('batches').getAll();return ()=>({kind:'ohmytrace.media-manifest',version:1,scope:'metadata-and-review-only; no originals or thumbnails',assets:a.result,batches:b.result});
+    const a=tx.objectStore('assets').getAll(),b=tx.objectStore('batches').getAll();return ()=>({kind:'ohmytrace.media-manifest',version:MEDIA_LIMITS.manifestVersion,scope:'metadata-and-review-only; no originals or thumbnails',assets:a.result,batches:b.result});
   });}
   async restore(input){
     validateManifest(input);
@@ -90,7 +97,8 @@ export class MemoryManifest {
   async createBatch(files){const b=batchRecord(files);await this.putBatch(b);return b;}
   async putBatch(b){this.batches.set(b.id,clone(b));}
   async saveChunk(batch,assets){assets.forEach(validateAsset);for(const a of assets){const old=this.assets.get(a.assetId);this.assets.set(a.assetId,old?{...old,importBatchIds:[...new Set([...old.importBatchIds,batch.id])]}:{...clone(a),importBatchId:batch.id,importBatchIds:[batch.id]});}await this.putBatch(batch);}
-  async acknowledge(id,links){for(const [a,m]of Object.entries(links))if(this.assets.has(a))this.assets.get(a).linkedMemoryId=m;const b=this.batches.get(id);if(b){b.status='committed';b.commitState='acknowledged';}}
-  async backup(){return {kind:'ohmytrace.media-manifest',version:1,assets:await this.listAssets(),batches:await this.listBatches()};}
+  async updateAsset(id,patch){if(this.assets.has(id))this.assets.set(id,{...this.assets.get(id),...clone(patch)});}
+  async acknowledge(id,links){if(!this.batches.has(id)||Object.keys(links).some(a=>!this.assets.has(a)))throw new Error('媒体确认缺少索引记录');for(const [a,m]of Object.entries(links))if(this.assets.has(a))this.assets.get(a).linkedMemoryId=m;const b=this.batches.get(id);if(b){b.status='committed';b.commitState='acknowledged';}}
+  async backup(){return {kind:'ohmytrace.media-manifest',version:MEDIA_LIMITS.manifestVersion,assets:await this.listAssets(),batches:await this.listBatches()};}
   async restore(input){validateManifest(input);this.assets=new Map(input.assets.map(a=>[a.assetId,clone(a)]));this.batches=new Map(input.batches.map(b=>[b.id,clone(b)]));}
 }

@@ -7,6 +7,7 @@ const {mountStoryExperience}=await import('./src/life/story/app-integration.js')
 const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
+const {geoNameProvider}=publicViewer?{}:await import('./src/life/geocoding/provider.js');
 const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-mobile-clear');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
@@ -21,7 +22,7 @@ const {syncCameraSun}=await import('./src/rendering/sunlight.js');
 const { CameraDirector } = await import('./src/rendering/camera-director.js');
 const {inYear:matchesYear,yearOptions,scopedDays,timelineBuckets}=await import('./src/ui/year-scope.js?v=20261026-places');
 const {createFootprintOverlay}=await import('./src/ui/footprint-overlay.js?v=20261026-touch');
-const {createMapChooser}=await import('./src/ui/map-chooser.js?v=20261026-places');
+const {createMapChooser,cityHistory}=await import('./src/ui/map-chooser.js?v=20261027-city');
 const {GEOCODER_VERSION,needsGeocoding:legacyNeedsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries}=await import('./src/geocoding/region-scope.js?v=20261026-places');
 const { sceneTemplateFor } = await import('./src/scenery/scene-templates.js');
 const { SCENE_DEMOS,demoCsv } = await import('./src/scenery/scene-demos.js');
@@ -186,7 +187,7 @@ function toast(msg, ms = 2600) {
 
 /* ================= state ================= */
 
-const state = { rows: [], places: {}, sel: null, year: null, playing: false };
+const state = { rows: [], places: {}, sel: null, city: null, year: null, playing: false };
 let trips = [], homes = [], typeColors = {};
 let viewer, scene, terrainReady = false;
 let flying = false, flightGeneration = 0, orbit = null, lastInput = 0, pickName = null, playToken = 0;
@@ -203,12 +204,12 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI;
+let life, lifeSnapshot, lifeUI, photoUI;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
   const el=$('#life-storage-error');el.hidden=false;
-  el.textContent='Life Atlas：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
+  el.textContent='OnceHere：'+error.message+'。修改未确认保存；请保留原始文件或备份，刷新后重试。';
   toast('保存失败：'+error.message,6000);
 }
 async function mutateLife(action) {
@@ -221,13 +222,19 @@ async function load() {
   try {
     life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
     lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
-      status:()=>life.status(),onBackup:()=>download('LifeAtlas.json',life.repository.backup(),'application/json'),
-      onRestore:async file=>{const text=await file.text();if(!confirm('用此 JSON 备份替换当前 Life Atlas？建议先下载当前 JSON 备份。'))return;
-        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('JSON 备份已恢复');}});
+      status:()=>life.status(),onBackup:()=>download('OnceHere-records.json',life.repository.backup(),'application/json'),
+      onRestore:async file=>{const text=await file.text();if(!confirm('用此记录备份替换当前人生记录？建议先下载当前备份。'))return;
+        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
-    mountPhotoUI({service:photos,download,onError:error=>toast('照片处理失败：'+error.message,6000),
-      onCommitted:result=>{stopPlay();state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+    // The dialog covers the globe while a scan runs; pausing its render loop keeps
+    // worker replies and storage commits from queueing behind globe frames.
+    let photoPausedLoop=false;
+    const onScanning=active=>{if(!viewer)return;
+      if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
+      else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
+    photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
+      onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
 async function importCsvText(text,mode) {
@@ -238,7 +245,8 @@ function download(name,text,type='text/csv;charset=utf-8') {
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([type==='application/json'?text:'\uFEFF'+text],{type}));
   a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
-function exportCsv() { if(life)download('我的足迹.csv',life.exportCSV()); }
+function exportCsv() { if(life)download('OnceHere.csv',life.exportCSV()); }
+function exitDemo() { if(!life?.exitDemo?.())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
 
 async function readFileText(file) {
   const buf = await file.arrayBuffer();
@@ -340,16 +348,8 @@ const located = name => { const p = state.places[name]; return p && p.lat != nul
 
 /* ================= geocoding ================= */
 
-let lastGeo = 0;
 async function nominatim(q, limit = 6, scope = {}) {
-  const wait = lastGeo + 1100 - Date.now(); // public Nominatim allows ~1 request/second
-  if (wait > 0) await sleep(wait);
-  lastGeo = Date.now();
-  const params=new URLSearchParams({format:'jsonv2','accept-language':'zh-CN,zh,en',addressdetails:'1',limit:String(limit),q,...scope});
-  const url = 'https://nominatim.openstreetmap.org/search?'+params;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  return geoNameProvider.search(q,{limit,...scope});
 }
 
 const CJK = /[㐀-鿿]/;
@@ -1096,6 +1096,10 @@ function renderMarkers() {
     if(!markerInfo.has(h.place))markerInfo.set(h.place,{trips:[],homes:[]});
     markerInfo.get(h.place).homes.push(h);
   }
+  for(const p of lifeSnapshot?.photoPlaces||[]){
+    if(!markerInfo.has(p.place))markerInfo.set(p.place,{trips:[],homes:[]});
+    const info=markerInfo.get(p.place);(info.photos||=[]).push(p);
+  }
   updateMarkerClasses();
 }
 function markerTarget(info) {
@@ -1103,32 +1107,49 @@ function markerTarget(info) {
 }
 function onMarkerClick(name,info) {
   storyExperience?.pauseForInteraction();
-  const target=markerTarget(info);if(!target)return;
-  const sel=byId(state.sel);
-  if(sel&&(sel.kind==='trip'?sel.stops.some(s=>s.place===name):sel.place===name)) {
-    flyToPoints([posOf(name)],{close:true,placeName:name});return;
-  }
-  select(target.id);
+  if(!info)return;
+  showCity(name,info,lastTap,lastTap.element);
+}
+let lastTap={x:innerWidth/2,y:innerHeight/2,element:null},lastCluster={key:'',at:0};
+document.addEventListener('pointerup',e=>{lastTap={x:e.clientX,y:e.clientY,element:e.target.closest?.('.mk,.mk-cluster')||null};},true);
+function showCity(name,info,anchor,element) {
+  pauseOverviewMotion();
+  state.sel=null;state.city=name;expandedCardId=null;
+  life?.adapter.focusPlace(lifeSnapshot.placeIds[name]);renderCard();updateSelectionUI();
+  const history=cityHistory(info,name,{year:state.year});
+  const residenceGroup=(title,items)=>({title,items:items.map(h=>({title:h.title,meta:h.date?.label||'时间未填写',select:()=>select(h.id,{fly:false})}))});
+  const groups=[];
+  if(history.current.length)groups.push(residenceGroup('现住',history.current));
+  if(history.past.length)groups.push(residenceGroup('曾住',history.past));
+  groups.push({title:'旅行到访',items:history.journeys.map(({trip,date})=>({title:trip.title,meta:date?.label||'到访日期未知',select:()=>select(trip.id)})),empty:history.journeys.length?'':'没有关联的旅行记录'});
+  if(isMobile())body.classList.remove('list-open');
+  flyToPoints([posOf(name)],{placeName:name});
+  mapChooser.open({title:coreName(name),subtitle:`${history.category} · ${state.year==null?'全部记录':state.year+' 年'} · ${history.journeys.length} 次旅程`,anchor,element,type:'city',groups,
+    primary:{title:'近看这里',select:()=>flyToPoints([posOf(name)],{close:true,placeName:name})}});
 }
 function showPlaceCluster(names,anchor,element) {
   storyExperience?.pauseForInteraction();
   pauseOverviewMotion();
+  // First tap zooms in so the cities in this area light up separately; the list is
+  // for a second tap on the same cluster when the cities still overlap.
+  const key=[...names].sort().join('|');
+  if(key!==lastCluster.key||Date.now()-lastCluster.at>15000){lastCluster={key,at:Date.now()};flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:1.6});return;}
+  lastCluster={key:'',at:0};
   mapChooser.open({title:`这一带 · ${names.length} 个地点`,subtitle:'放大地图展开足迹，或直接选择地点',anchor,element,
-    items:names.map(name=>{const info=markerInfo.get(name),target=markerTarget(info),count=info.trips.filter(inYear).length,st=statusOf(state.places[name]);
-      return {title:name,meta:(count?`${count} 次旅行`:(target?.anchor?'阶段地点':target?.kind==='home'?'现居地':'曾居地'))+(st.pending?` · ${st.text}`:''),select:()=>{
-        if(target)select(target.id,{fly:false});flyToPoints([posOf(name)],{placeName:name});
-      }};}),primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
+    items:names.map(name=>{const info=markerInfo.get(name),history=cityHistory(info,name,{year:state.year}),st=statusOf(state.places[name]);
+      return {title:name,meta:`${history.category} · ${history.journeys.length} 次旅程`+(st.pending?` · ${st.text}`:''),select:()=>showCity(name,info,anchor,element)};}),
+    primary:{title:'放大这片区域',select:()=>flyToPoints(names.map(n=>posOf(n)).filter(Boolean),{duration:2})}});
 }
 function updateMarkerClasses() {
   if(!footprintOverlay)return;
-  const sel=byId(state.sel),selected=new Set(sel?(sel.kind==='trip'?[...sel.stops.map(s=>s.place),...(sel.origin?[sel.origin.place]:[])]:[sel.place]):[]);
+  const sel=byId(state.sel),selected=new Set(state.city?[state.city]:sel?(sel.kind==='trip'?sel.stops.map(s=>s.place):[sel.place]):[]);
   const data=[];
   for(const [name,info]of markerInfo) {
     const p=state.places[name],position=posOf(name);if(!position)continue;
     const activeTrips=info.trips.filter(inYear),activeHomes=info.homes.filter(inYear);
-    const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name);
+    const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name),observed=info.photos?.some(p=>state.year==null||p.years.includes(state.year));
     data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.anchor?undefined:home?.kind,
-      active:!!(activeTrips.length||home||chosen),selected:chosen,dim:!!sel&&!chosen,
+      active:!!(activeTrips.length||home||chosen||observed),selected:chosen,dim:!!(sel||state.city)&&!chosen,
       color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:home?300:0)+(latest?.date?.start||0)/1e13});
   }
   footprintOverlay.setItems(data);
@@ -1157,7 +1178,7 @@ function renderArcs(){arcSignature=null;updateArcs();}
 function updateArcs() {
   if(!arcSource)return;
   const sel=byId(state.sel),list=visibleTrips();
-  const wanted=sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
+  const wanted=state.city?[]:sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
   const signature=wanted.map(t=>t.id).join('\u0001');
   if(signature!==arcSignature) {
     arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
@@ -1173,7 +1194,7 @@ function updateArcs() {
   }
   // Dashed arc from where the person lived at the time to the selected trip.
   if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
-  if (sel && sel.kind === 'trip' && sel.origin) {
+  if (sel && sel.kind === 'trip' && sel.origin && !sel.inferredConnections) {
     const a = posOf(sel.origin.place), firstStop = sel.stops.find(s => located(s.place));
     const b = firstStop && posOf(firstStop.place);
     if (a && b && Cesium.Cartesian3.distance(a, b) > 30000) {
@@ -1189,9 +1210,11 @@ function updateArcs() {
 
 function refresh() {
   buildModel();
+  if(state.city&&!state.places[state.city]){state.city=null;mapChooser?.close();}
   if(state.sel&&!byId(state.sel))state.sel=null;
   if(state.year!=null&&!yearOptions(trips).includes(state.year))state.year=null;
   body.classList.toggle('is-empty', !state.rows.length);
+  if(!publicViewer)$('#empty-demo').hidden=!life?.canPreviewDemo?.();
   renderStats();
   renderChips();
   renderList();
@@ -1206,7 +1229,7 @@ function refresh() {
 
 function renderStats() {
   const list=visibleTrips(),days=list.reduce((n,t)=>n+scopedDays(t,state.year),0);
-  const places=new Set(list.flatMap(t=>t.stops.map(s=>s.place))),years=yearOptions(list),parts=[];
+  const places=new Set([...list.flatMap(t=>t.stops.map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>state.year==null||p.years.includes(state.year)).map(p=>p.place)]),years=yearOptions(list),parts=[];
   if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
   parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
   if(days)parts.push(`<b>${days}</b> 天在路上`);
@@ -1240,12 +1263,21 @@ function statusOf(p) {
 }
 const pendingPlaces = () => placeNames().filter(n => state.places[n] && state.places[n].status !== 'confirmed');
 
+// One tap replays what the visitor is looking at: the chosen year, else the latest trip.
+function replayTarget() {
+  if(state.year!=null&&trips.some(t=>matchesYear(t,state.year)))return {source:`year:${state.year}`,label:` ${state.year} 年`};
+  const latest=[...trips].sort((a,b)=>(b.date?.end??-Infinity)-(a.date?.end??-Infinity))[0];
+  return latest?{source:`trip:${latest.id}`,label:`「${latest.title.length>8?latest.title.slice(0,8)+'…':latest.title}」`}:null;
+}
 function renderChips() {
   const out = [];
-  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读人生故事 · 不连接个人数据库':'只读故事预览 · 未改动人生数据'}</span>`;return;}
-  if(life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo)out.push('<span class="chip">虚构示例<span class="chip-extra"> · 导入 CSV 开始记录人生</span></span>');
-  if(life&&!sceneDemo)out.push(`<button class="chip" data-story-compose ${storyExperience?'':'disabled'}>${storyExperience?'生成人生故事 →':'故事准备中…'}</button>`);
-  if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回我的足迹</a>');
+  if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读分享 · 不会读取你的数据':'回放中'}</span>`;return;}
+  const demo=life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo;
+  if(demo)out.push('<button class="chip" data-act="exit-demo" aria-label="退出示例，回到开始">示例 · 退出</button><button class="chip" data-act="demo-photos">用我的照片开始 →</button>');
+  // Replays are made from the visitor's own footprints, so the entry waits for real trips.
+  const replay=life&&!sceneDemo&&!demo?replayTarget():null;
+  if(replay)out.push(`<button class="chip chip-replay" data-story-quick="${esc(replay.source)}" ${storyExperience?'':'disabled'}>${storyExperience?`▶ 回放${esc(replay.label)}`:'回放准备中…'}</button>`);
+  if(sceneDemo)out.push('<a class="chip" href="./">景观演示 · 返回 OnceHere</a>');
   if (geo.busy) out.push(`<span class="chip busy"><span class="spin"></span>正在定位地点 ${geo.done}/${geo.total}</span>`);
   else if (geo.failed) out.push('<button class="chip bad" data-act="retry">定位服务连接失败 · 重试</button>');
   const n = pendingPlaces().length;
@@ -1253,6 +1285,9 @@ function renderChips() {
   $('#chips').innerHTML = out.join('');
   $('#tab-badge').textContent = n || '';
   $('#data-dot').hidden = !n;
+  for(const id of ['#more-dot','#menu-data-dot'])if($(id))$(id).hidden=!n;
+  const share=$('#btn-share');
+  if(share){const data=(storyBaseLife||life)?.repository?.getDataset();share.disabled=!storyExperience?.composer||!data||data.meta.origin==='demo'||!['places','visits','memories','chapters'].some(key=>data[key].length);}
 }
 
 function itemHTML(x) {
@@ -1362,8 +1397,9 @@ function renderCard() {
   if (!show) { el.classList.remove('show','expanded'); return; }
   const expanded=expandedCardId===x.id;el.classList.toggle('expanded',expanded);
   const primary=x.kind==='trip'?x.stops.find(s=>located(s.place))?.place:x.place;
-  const mobileActions=`<div class="card-mobile-actions">${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
-  let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>`;
+  const replayButton=x.kind==='trip'&&!storyScene&&!publicViewer&&!storyBaseLife&&life?.repository?.getDataset().meta.origin!=='demo'?`<button class="card-replay" data-story-quick="trip:${esc(x.id)}">▶ 回放</button>`:'';
+  const mobileActions=`<div class="card-mobile-actions">${replayButton}${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
+  let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>${storyScene?'<button class="card-story-back" data-act="story-back">‹ 回到回放</button>':''}`;
   if (x.kind === 'trip') {
     const color = typeColors[x.type];
     const list = visibleTrips(), idx = list.indexOf(x);
@@ -1373,7 +1409,7 @@ function renderCard() {
       <div class="card-date">${esc(x.date ? x.date.label : '日期未知')}${x.date && x.date.days ? ` <span>· ${x.date.days} 天</span>` : ''}</div>
       ${mobileActions}<div class="card-detail" id="card-detail-body">
       ${x.inferredConnections?`<p class="hint">${x.memoryCount>0?`${x.memoryCount} 张照片记忆 · 照片只提供拍摄位置，`:''}记录地点间的虚线为推测连接，交通方式未知。</p>`:''}
-      ${x.origin ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
+      ${x.origin&&!x.inferredConnections ? `<div class="card-from">从 <button data-id="${esc(x.origin.id)}">${esc(coreName(x.origin.place))}</button> 出发</div>` : ''}
       <ol class="stops">${x.stops.map(s => stopHTML(s.place, s.note, color)).join('')}</ol>
       <div class="card-nav"><button data-act="prev"${idx <= 0 ? ' disabled' : ''}>‹ 上一次</button>
       <span>${idx + 1} / ${list.length}</span><button data-act="next"${idx < 0 || idx >= list.length - 1 ? ' disabled' : ''}>下一次 ›</button></div></div>`;
@@ -1409,6 +1445,7 @@ function select(id, { fly = true } = {}) {
   const x = byId(id);
   if (!x) return;
   if(state.sel!==id)expandedCardId=null;
+  state.city=null;mapChooser?.close();
   state.sel = id;
   if(x.kind==='trip')life?.adapter.focusTrip(id);
   renderCard();
@@ -1419,6 +1456,7 @@ function select(id, { fly = true } = {}) {
 
 function deselect({ home = true } = {}) {
   expandedCardId=null;
+  state.city=null;
   state.sel = null;
   renderCard();
   updateSelectionUI();
@@ -1433,9 +1471,9 @@ function step(dir) {
 }
 
 function setYear(y) {
-  const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!flying&&!orbit&&!scenery.name)return;
+  const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!state.city&&!flying&&!orbit&&!scenery.name)return;
   if(next!=null&&!yearOptions(trips).includes(next))return;
-  stopPlay();mapChooser?.close();state.year=next;
+  stopPlay();mapChooser?.close();state.city=null;state.year=next;
   life?.adapter.setScope({type:'all'});lifeUI?.renderStrip();
   state.sel=null;refresh();
   lightsAnimating=true;scene?.requestRender();
@@ -1444,7 +1482,7 @@ function setYear(y) {
 }
 
 function setChapter(id) {
-  stopPlay();mapChooser?.close();state.sel=null;state.year=null;
+  stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;
   life.adapter.setScope(id?{type:'chapter',id}:{type:'all'});refresh();
   if(id)body.classList.add('list-open');
   if(viewer)homeView(1.8);
@@ -1566,6 +1604,7 @@ function renderTab() {
       <div class="row-actions">
         <button class="btn" data-act="template">下载模板</button>
         <button class="btn" data-act="export">导出当前数据（含坐标）</button>
+        ${photoUI?'<button class="btn" data-act="photo-storage">照片备份与存储</button>':''}
         <button class="btn danger" data-act="clear">清空全部</button>
       </div>`;
     const drop = $('#drop');
@@ -1670,9 +1709,11 @@ function bindEvents() {
         const el=$('#card'),expanded=el.classList.toggle('expanded');expandedCardId=expanded?state.sel:null;
         t.setAttribute('aria-expanded',String(expanded));t.textContent=expanded?'收起详情 ▴':'地点与详情 ▾';footprintOverlay?.invalidate();return;
       }
-      case 'close': deselect(); return;
+      case 'close': case 'story-back': deselect({home:!storyScene}); return;
       case 'prev': step(-1); return;
       case 'next': step(1); return;
+      case 'exit-demo': exitDemo(); return;
+      case 'demo-photos': exitDemo(); $('#btn-photos').click(); return;
       case 'fix': openModal('places'); return;
       case 'retry': geo.failed = false; geocodeMissing(); return;
       case 'clear-year': case 'all-years': setYear(null); return;
@@ -1681,8 +1722,9 @@ function bindEvents() {
       case 'import': doImport(); return;
       case 'template': download('足迹模板.csv', TEMPLATE_CSV); return;
       case 'export': exportCsv(); return;
+      case 'photo-storage': closeModal(); photoUI?.open({storage:true}); return;
       case 'clear':
-        if (confirm('确定清空全部足迹与人生阶段吗？建议先下载 JSON 备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
+        if (confirm('确定清空全部足迹与人生阶段吗？建议先下载完整备份。')) { if(await mutateLife(()=>life.clear())){state.sel=null;state.year=null;life.adapter.setScope({type:'all'});closeModal();refresh();homeView();} }
         return;
       case 'add-row': draft.push({ date: '', trip: '', place: '', type: '旅行', note: '' }); renderTab(); return;
       case 'del-row': draft.splice(+t.dataset.i, 1); renderTab(); return;
@@ -1719,6 +1761,7 @@ function bindEvents() {
       e.preventDefault();return;
     }
     if (e.key === 'Escape') {
+      if(menu&&!menu.hidden){closeMenu(true);e.preventDefault();return;}
       if (mapChooser?.close(true)) return;
       if (pickName) endPick();
       else if (body.classList.contains('modal-open')) closeModal();
@@ -1731,12 +1774,30 @@ function bindEvents() {
 
   $('#btn-home').addEventListener('click', () => { storyExperience?.pauseForInteraction();stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
+  $('#btn-share')?.addEventListener('click',()=>{
+    if((storyBaseLife||life)?.repository?.getDataset().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
+    storyExperience?.pauseForInteraction();
+    storyExperience?.composer?.open({resume:!!storyBaseLife});
+  });
+  // Phones keep the frequent actions in the bar; the rest live under "更多".
+  const menu=$('#toolbar-menu'),more=$('#btn-more'),closeMenu=(restore=false)=>{if(menu&&!menu.hidden){menu.hidden=true;more.setAttribute('aria-expanded','false');if(restore)more.focus({preventScroll:true});}};
+  const openMenu=()=>{menu.hidden=false;more.setAttribute('aria-expanded','true');menu.querySelector('[role=menuitem]')?.focus({preventScroll:true});};
+  more?.addEventListener('click',()=>{if(menu.hidden)openMenu();else closeMenu();});
+  more?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();e.stopPropagation();openMenu();}});
+  menu?.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;e.preventDefault();e.stopPropagation();
+    const items=[...menu.querySelectorAll('[role=menuitem]')],i=items.indexOf(document.activeElement),next=e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus();});
+  menu?.addEventListener('click',e=>{const b=e.target.closest('[data-proxy]');if(!b)return;closeMenu(true);$('#'+b.dataset.proxy).click();});
+  menu?.addEventListener('focusout',e=>{if(!menu.contains(e.relatedTarget)&&e.relatedTarget!==more)closeMenu();});
+  document.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target)&&!more.contains(e.target))closeMenu();});
+  window.addEventListener('resize',()=>{if(innerWidth>720)closeMenu();});
   $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
   $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
   $('#btn-data').addEventListener('click', () => openModal(pendingPlaces().length ? 'places' : 'import'));
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
   $('#empty-import').addEventListener('click', () => openModal('import'));
+  $('#empty-photos')?.addEventListener('click', () => $('#btn-photos').click());
+  $('#empty-demo')?.addEventListener('click', () => { if(life?.previewDemo?.()){ stopPlay(); state.sel=null; state.year=null; refresh(); sampleHeights(); homeView(); } });
   $('#btn-play').addEventListener('click', play);
   $('.tl-main').addEventListener('scroll',()=>{const e=$('.tl-main');if(Math.abs(e.clientWidth-timelineViewportWidth)<=1)timelineAtLatest=e.scrollWidth-e.clientWidth-e.scrollLeft<2;},{passive:true});
   new ResizeObserver(()=>{if(Math.abs($('.tl-main').clientWidth-timelineViewportWidth)>1)renderTimeline();}).observe($('.tl-main'));
@@ -1756,16 +1817,17 @@ async function boot() {
   await initGlobe();
   refresh();
   geocodeMissing();
-  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>life.repository.getDataset(),getScope:()=>state.year?{type:'year',year:state.year}:life.adapter.scope,
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:{type:'all'};},
     reducedMotion,cancel:()=>pauseOverviewMotion(),
-    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;state.year=null;state.sel=null;body.classList.add('story-readonly');
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
     restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    onError:error=>toast('回放失败：'+error.message,5000),
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{
       if(signal.aborted)return;storyScene=item;storyExploreCard=false;$('#toast').classList.remove('show');signal.addEventListener('abort',()=>pauseOverviewMotion(),{once:true});
-      state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
+      mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope(item.tripId?{type:'trip',id:item.tripId}:item.chapterId?{type:'chapter',id:item.chapterId}:{type:'all'});
       if(item.tripId)state.sel=item.tripId;refresh();
       const duration=instant?0:Math.min(2.4,1.8/speed);
       const name=item.placeId?Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===item.placeId):null;

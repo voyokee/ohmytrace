@@ -1,9 +1,11 @@
 name: Web production
 on:
   push:
-    branches: [feat/life-atlas-mvp]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest

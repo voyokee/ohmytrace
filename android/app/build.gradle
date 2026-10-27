@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.ohmytrace.app'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'com.ohmytrace.app'
+        minSdk 29
+        targetSdk 35
+        versionCode 5
+        versionName '0.2.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/web-assets')
+    sourceSets.androidTest.assets.srcDir '../../tests/life/fixtures'
+}
+
+tasks.register('prepareWebAssets', Sync) {
+    from '../../dist/native'
+    into layout.buildDirectory.dir('generated/web-assets')
+    doFirst {
+        if (!file('../../dist/native/build-manifest.json').exists()) throw new GradleException('Run node scripts/build-web.mjs before building Android')
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'prepareWebAssets' }
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+}

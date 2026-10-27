@@ -4,3 +4,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+.android-tools/
+android/.gradle/
+android/**/build/
+android/local.properties
+.DS_Store

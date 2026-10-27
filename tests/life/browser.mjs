@@ -27,9 +27,11 @@ const fixture='日期,行程,地点,类型,备注,坐标\n2024~2026,,新加坡,�
 try {
   await page.goto(url+'?perf');await page.waitForSelector('#globe canvas');
   await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'),null,{timeout:60000});
-  await page.waitForSelector('#chips .chip');assert.match(await page.locator('#chips').innerText(),/虚构示例/);assert.equal(await dataset(),undefined);
+  await page.waitForSelector('body.is-empty #empty-photos');assert.equal(await page.locator('#btn-data').isVisible(),false);assert.equal(await dataset(),undefined);
   await page.screenshot({path:resolve(output,'01-new-browser.png')});
-  await page.locator('#btn-data').click();await page.locator('[data-tab=import]').click();
+  await page.locator('#empty-demo').click();await page.waitForSelector('[data-act=exit-demo]');assert.equal(await page.locator('[data-story-compose]').count(),0);assert.equal(await dataset(),undefined);
+  await page.locator('[data-act=exit-demo]').click();await page.waitForSelector('body.is-empty #empty-demo');assert.equal(await dataset(),undefined);
+  await page.locator('#empty-import').click();await page.locator('[data-tab=import]').click();
   await page.locator('#file').setInputFiles({name:'history.csv',mimeType:'text/csv',buffer:Buffer.from(fixture)});
   await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));
   let d=await dataset();assert.equal(d.trips.length,2);assert.equal(d.places.length,4);assert.equal(d.meta.origin,'user');

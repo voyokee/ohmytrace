@@ -17,7 +17,7 @@ export function staticZip(entries){
   const size=directory.reduce((n,b)=>n+b.length,0),end=header(22),v=end.view;v.setUint32(0,0x06054b50,true);v.setUint16(8,entries.length,true);v.setUint16(10,entries.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);
   return new Blob([...parts,...directory,end.bytes],{type:'application/zip'});
 }
-const allowed=path=>/^(assets\/|vendor\/cesium\/|src\/(rendering|scenery|performance|ui|geocoding)\/)/.test(path)||['app.js','styles.css','story-viewer.html','src/life/schema.js','src/life/timeline-layout.js'].includes(path)||/^src\/life\/story\/(schema|share|viewer|viewer-config|viewer-bridge|app-integration|player-ui|playback|story)\.(js|css)$/.test(path);
+const allowed=path=>/^(assets\/|vendor\/cesium\/|src\/(rendering|scenery|performance|ui|geocoding)\/)/.test(path)||['app.js','styles.css','story-viewer.html','src/life/schema.js','src/life/timeline-layout.js','src/life/story/publishing/publisher.js'].includes(path)||/^src\/life\/story\/(schema|share|viewer|viewer-config|viewer-bridge|app-integration|player-ui|playback|story)\.(js|css)$/.test(path);
 export async function createSharePackage(input,{fetchFile=async path=>{const r=await fetch(new URL('../../../'+path,import.meta.url));if(!r.ok)throw new Error(`分享包资源缺失：${path}`);return new Uint8Array(await r.arrayBuffer());},onProgress=()=>{}}={}){
   const artifact=parseArtifact(input),manifest=JSON.parse(new TextDecoder().decode(await fetchFile('src/life/story/runtime-files.json'))),entries=[];
   if(!Array.isArray(manifest)||manifest.some(path=>typeof path!=='string'||!allowed(path)||path.includes('..'))||new Set(manifest).size!==manifest.length)throw new Error('分享运行时清单无效');
@@ -31,6 +31,6 @@ export async function createSharePackage(input,{fetchFile=async path=>{const r=a
     }
   }));
   const json=JSON.stringify(artifact,null,2),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(json)))].map(b=>b.toString(16).padStart(2,'0')).join('');
-  entries.push(['story.json',json],['story.sha256',digest],['README.txt','OhMyTrace Life Story — static package\nExtract the ZIP and publish the entire folder to a static HTTPS host on a separate origin. No build step or login required. Open index.html through HTTP(S), not file://. For local testing: python -m http.server 8080\nIncludes only reviewed Story data, embedded approved thumbnails and public engine/assets. No personal database, CSV or original media files. External terrain/imagery is optional; the local globe remains usable when offline. No cloud upload was performed.\n']);
+  entries.push(['story.json',json],['story.sha256',digest],['README.txt','OnceHere — static story package\nExtract the ZIP and publish the entire folder to a static HTTPS host on a separate origin. No build step or login required. Open index.html through HTTP(S), not file://. For local testing: python -m http.server 8080\nIncludes only reviewed Story data, embedded approved thumbnails and public engine/assets. No personal database, CSV or original media files. External terrain/imagery is optional; the local globe remains usable when offline. No cloud upload was performed.\n']);
   onProgress('静态分享包已生成；未上传任何数据');return staticZip(entries);
 }

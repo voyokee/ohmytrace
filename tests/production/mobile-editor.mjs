@@ -40,11 +40,9 @@ try{
     await page.waitForTimeout(120);
     await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x+2,y:point.y+1}]});
     await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-    await page.waitForSelector('#map-chooser:not([hidden])',{timeout:2000});await page.waitForTimeout(250);
-    assert.equal(await page.locator('#map-chooser').isVisible(),true,'One tap must keep the chooser open after the next camera frame');
-    assert.equal(await page.locator('#map-chooser .chooser-item').count(),point.count);
-    clusterTaps.push({attempt:attempt+1,count:point.count,oneTap:true});
-    await page.getByRole('button',{name:'关闭足迹详情',exact:true}).tap();
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('#map-chooser').isVisible(),false,'The first tap on an area zooms in so its cities light up, without a list');
+    clusterTaps.push({attempt:attempt+1,count:point.count,zoomedFirst:true});
   }
   await page.locator('#tl-track').getByRole('button',{name:'独库公路',exact:true}).tap();await page.waitForSelector('#card.show');
   await page.waitForFunction(()=>getComputedStyle(document.querySelector('#card')).opacity==='1');

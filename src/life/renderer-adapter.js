@@ -33,9 +33,16 @@ export function projectDataset(data,scope={type:'all'}) {
       if(starts.length&&ends.length){date=renderDate(t.start.precision==='unknown'?starts[0].start:t.start,t.end.precision==='unknown'?ends.at(-1).end:t.end);date={...date,days:null,label:`照片观测 ${date.label} · 旅行起止未完全确认`,short:`照片观测 ${date.short}`};}
     }
     return {id:t.id,kind:'trip',title:t.title,type:t.type,date,inferredConnections,originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
-      stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note};})};
+      stops:t.visitIds.map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note,date:renderDate(v.start,v.end)};})};
   });
-  let homes=data.residences.map(r=>({id:r.id,kind:r.kind,title:r.title,place:keys.get(r.placeId),placeId:r.placeId,type:r.type,note:r.note,date:renderDate(r.start,r.end)}));
+  const evidence=new Map(data.evidence.map(e=>[e.id,e])),grouping=data.meta.photoAutoGrouping,currentYear=String(new Date().getFullYear());
+  let homes=data.residences.map(r=>{
+    const edited=[...r.evidenceIds,...(visits.get(r.visitId)?.evidenceIds||[])].some(id=>evidence.get(id)?.state==='manual');
+    const staleAuto=grouping&&grouping.year!==currentYear&&r.evidenceIds.some(id=>evidence.get(id)?.source?.kind==='photo-auto-import');
+    const replaced=grouping?.year===currentYear&&grouping.currentHomePlaceId!==r.placeId;
+    const kind=r.kind==='home'&&!edited&&(staleAuto||replaced)?'past':r.kind;
+    return {id:r.id,kind,title:r.title,place:keys.get(r.placeId),placeId:r.placeId,type:r.type,note:r.note,date:renderDate(r.start,r.end)};
+  });
   const chapter=scope.type==='chapter'?data.chapters.find(c=>c.id===scope.id):null;
   if(scope.type==='chapter') {
     if(!chapter)throw new Error('人生阶段不存在');
@@ -53,8 +60,15 @@ export function projectDataset(data,scope={type:'all'}) {
     const undated=homes.filter(h=>!h.anchor&&h.kind==='home'&&!h.date);
     t.origin=t.originUncertain?null:dated.sort((a,b)=>b.date.start-a.date.start)[0]||(undated.length===1?undated[0]:null);
   });
-  const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)}));
-  return {rows,places,placeIds,trips,homes,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter.start,chapter.end):null,scope:clone(scope)};
+  const photoMap=new Map(),tripIds=new Set(trips.map(t=>t.id));
+  for(const m of data.memories)if(m.kind==='photo'&&(!chapter||chapter.memoryIds.includes(m.id)||m.tripIds.some(id=>tripIds.has(id))))for(const id of m.placeIds){
+    if(!photoMap.has(id))photoMap.set(id,{place:keys.get(id),placeId:id,years:new Set(),count:0});
+    const p=photoMap.get(id),year=m.start.value?Number(m.start.value.slice(0,4)):null;p.count++;if(year)p.years.add(year);
+  }
+  const photoPlaces=[...photoMap.values()].map(p=>({...p,years:[...p.years]}));
+  const rows=datasetRows(data).map(r=>({...r,place:keys.get(r._lifePlaceId)})),represented=new Set(rows.map(r=>r.place));
+  for(const p of photoPlaces)if(!represented.has(p.place))rows.push({place:p.place});
+  return {rows,places,placeIds,trips,homes,photoPlaces,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter.start,chapter.end):null,scope:clone(scope)};
 }
 export class RendererAdapter {
   constructor(repository) {

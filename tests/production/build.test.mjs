@@ -17,6 +17,9 @@ test('production build is reproducible, complete, isolated and free of private/d
       assert.ok(!files.some(p=>p.startsWith('tests/')||p.startsWith('docs/')||p.includes('.DS_Store')||p.endsWith('.csv')||p.startsWith('.git/')||p.startsWith('server/')));
       const config=JSON.parse(await readFile(resolve(outDir,manifest.target,'runtime-config.json'),'utf8'));assert.equal(config.publisher,null);
       assert.match(await readFile(resolve(outDir,manifest.target,'index.html'),'utf8'),new RegExp('build='+first.buildId));
+      const html=await readFile(resolve(outDir,manifest.target,'index.html'),'utf8');
+      assert.match(html,/<title>[^<]*OnceHere[^<]*<\/title>/,'Every shipped entry point identifies OnceHere');
+      assert.doesNotMatch(html,/Oh\s?My\s?Trace|Life Atlas|我的足迹/,'Old product names must not ship in entry pages');
     }
     const viewer=manifests.find(m=>m.target==='viewer').files.map(f=>f.path);
     assert.ok(!viewer.includes('src/life/repository.js'));assert.ok(!viewer.includes('src/life/app-bridge.js'));assert.ok(!viewer.some(p=>p.startsWith('src/life/media/')));
@@ -31,11 +34,21 @@ test('production build is reproducible, complete, isolated and free of private/d
   }finally{await rm(temp,{recursive:true,force:true});}
 });
 
+test('Android display name and update prompt use OnceHere without changing installed app identity',async()=>{
+  const resources=await readFile(new URL('../../android/app/src/main/res/values/strings.xml',import.meta.url),'utf8');
+  assert.match(resources,/<string name="app_name">OnceHere<\/string>/);
+  assert.match(resources,/<string name="webview_update_required">[^<]*OnceHere<\/string>/);
+  const gradle=await readFile(new URL('../../android/app/build.gradle',import.meta.url),'utf8');
+  assert.match(gradle,/applicationId 'com\.ohmytrace\.app'/,'Existing Android installations must retain their data on upgrade');
+});
+
 test('production build cannot replace unrelated files or follow a destination symlink',async()=>{
   const temp=await mkdtemp(resolve(tmpdir(),'ohmytrace-build-boundary-'));
   try{
     const unrelated=resolve(temp,'unrelated');await mkdir(unrelated);await writeFile(resolve(unrelated,'keep.txt'),'keep');
     await assert.rejects(buildWeb({outDir:unrelated}),/owned build directory/);assert.equal(await readFile(resolve(unrelated,'keep.txt'),'utf8'),'keep');
-    await symlink(unrelated,resolve(temp,'link'),'dir');await assert.rejects(buildWeb({outDir:resolve(temp,'link')}),/real directory/);
+    // Windows junctions exercise the same link boundary without requiring the
+    // optional CreateSymbolicLink privilege / Developer Mode.
+    await symlink(unrelated,resolve(temp,'link'),process.platform==='win32'?'junction':'dir');await assert.rejects(buildWeb({outDir:resolve(temp,'link')}),/real directory/);
   }finally{await rm(temp,{recursive:true,force:true});}
 });

@@ -7,6 +7,6 @@ test('existing marker driver counts a returning Trip once per Place while retain
   // Exercise the actual app aggregation; only GPU/DOM setup and rendering are
   // stubbed. The Stop sequence remains available to the real replay caller.
   const info=vm.runInNewContext(app.slice(start,end)+'\nrenderMarkers(); markerInfo;',{
-    viewer:{},mapChooser:{},footprintOverlay:{},markerInfo:new Map(),trips,homes:[],syncLights(){},updateMarkerClasses(){}});
+    viewer:{},mapChooser:{},footprintOverlay:{},markerInfo:new Map(),trips,homes:[],lifeSnapshot:{photoPlaces:[]},syncLights(){},updateMarkerClasses(){}});
   assert.equal(info.get('A').trips.length,2,'A-B-A must not count as two separate Trips to A');assert.equal(info.get('B').trips.length,2);assert.equal(trips[0].stops.length,3);
 });

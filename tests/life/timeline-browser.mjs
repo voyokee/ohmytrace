@@ -25,13 +25,13 @@ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(
 try {
   await page.goto(url);await page.waitForSelector('#globe canvas');
   await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'),null,{timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#tl-track .tl-dot').length===4);
+  await page.locator('#empty-demo').click();await page.waitForFunction(()=>document.querySelectorAll('#tl-track .tl-dot').length===4);
   const first=await page.locator('#tl-track .tl-dot').first().evaluate(e=>parseFloat(e.style.left));
   assert.ok(first<25,`First recorded year must occupy the first timeline slot, not leave an empty residence-only span (${first}%)`);
   assert.equal(await page.locator('#btn-life svg').count(),1);
   assert.equal(await page.locator('#btn-photos svg').count(),1);
   assert.equal(await page.locator('#btn-life').getAttribute('aria-label'),'人生阶段');
-  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'导入照片');
+  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'从相册恢复足迹');
   await page.setViewportSize({width:910,height:1220});
   await page.waitForTimeout(1500);await page.screenshot({path:resolve(output,'timeline-demo.png')});
   const fixture='日期,行程,地点,类型,备注,坐标\n2000~至今,,上海,现居地,,"31.23,121.47"\n'+

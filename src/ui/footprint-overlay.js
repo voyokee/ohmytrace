@@ -52,7 +52,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
   const C=Cesium,items=new Map(),clusters=new Map(),matrix=new C.Matrix4();
   const occluder=new C.EllipsoidalOccluder(C.Ellipsoid.WGS84,C.Cartesian3.ZERO);
   const scratch=new C.Cartesian3(),position=new C.Cartesian3(),windowPoint=new C.Cartesian2();
-  let dirty=true,lastMix=-1,lastGroundBlend=-1,lastRatio=-1,lastRelief=false,lastWidth=0,lastHeight=0,lastUI='',previousSeeds=[],statistics={};
+  let dirty=true,lastMix=-1,lastGroundBlend=-1,lastRatio=-1,lastRelief=false,lastWidth=0,lastHeight=0,lastUI='',previousSeeds=[],statistics={},blocked=null,blockedAt=0,blockedUI='',wasNear=false;
   const pressed=new Set();
   function wire(node,readValue,activate){node.activation=bindMarkerActivation(node.el,{readValue,activate,
     onPress:()=>{pressed.add(node);onInteract?.();},onRelease:()=>{pressed.delete(node);dirty=true;viewer.scene.requestRender();}});}
@@ -80,7 +80,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       if(pressed.size){dirty=true;return;}
       const camera=viewer.camera,width=viewer.canvas.clientWidth,height=viewer.canvas.clientHeight;
       const resized=width!==lastWidth||height!==lastHeight;
-      const mix=+(viewer.canvas.dataset.earthMix||0),relief=viewer.canvas.dataset.worldRelief==='true',ui=document.body.className;
+      const mix=+(viewer.canvas.dataset.earthMix||0),relief=viewer.canvas.dataset.worldRelief==='true',ui=document.body.className.replace(/(^| )near( |$)/,' ').trim();
       const groundBlend=+(viewer.canvas.dataset.worldGroundBlend||0),ratio=+(viewer.canvas.dataset.worldNativeReliefRatio||1.65/30);
       const moved=!C.Matrix4.equals(camera.viewMatrix,matrix);
       if(!dirty&&!moved&&mix===lastMix&&groundBlend===lastGroundBlend&&ratio===lastRatio&&relief===lastRelief&&width===lastWidth&&height===lastHeight&&ui===lastUI)return;
@@ -104,8 +104,12 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
         if(!w||w.x<0||w.x>width||w.y<0||w.y>height)continue;
         projected.push({id:d.id,x:w.x,y:w.y,priority:d.priority,labelWidth:m.labelWidth,labelHeight:m.labelHeight});
       }
-      const blocked=obstacles().filter(Boolean).map(el=>{const r=el.getBoundingClientRect();return {left:r.left-6,right:r.right+6,top:r.top-6,bottom:r.bottom+6};});
-      const near=camera.positionCartographic.height<1800000,mobile=width<=720;
+      // Panel rectangles force layout; while the camera moves they are re-read only when the
+      // UI state or size changes, or every 500 ms to follow panel transitions.
+      const now=performance.now();
+      if(!blocked||ui!==blockedUI||resized||now-blockedAt>500){blocked=obstacles().filter(Boolean).map(el=>{const r=el.getBoundingClientRect();return {left:r.left-6,right:r.right+6,top:r.top-6,bottom:r.bottom+6};});blockedAt=now;blockedUI=ui;}
+      // Hysteresis keeps the body class from flipping (and restyling the page) at the threshold.
+      const altitude=camera.positionCartographic.height,near=wasNear?altitude<2000000:altitude<1800000;wasNear=near;const mobile=width<=720;
       const groups=layoutFootprints(projected,{width,height,obstacles:blocked,radius:mobile?38:42,previousSeeds,labelLimit:mobile?(near?6:4):(near?10:6)});
       previousSeeds=groups.map(g=>g.key);
       // Batch projection/layout reads before visibility and transform writes.
@@ -141,7 +145,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       for(const node of clusters.values())show(node,!!node.nextVisible);
       document.body.classList.toggle('near',near);
       statistics={markerPlaces:items.size,markerProjected:projected.length,markerGroups:groups.length,markerClusters:groups.filter(g=>g.members.length>1).length,markerLabels:groups.filter(g=>g.label).length};
-      for(const [key,value]of Object.entries(statistics))container.dataset[key]=value;
+      for(const [key,value]of Object.entries(statistics))if(container.dataset[key]!==String(value))container.dataset[key]=value;
     },
     details:()=>statistics,
     dispose(){for(const node of [...items.values(),...clusters.values()])node.activation.dispose();container.replaceChildren();items.clear();clusters.clear();pressed.clear();}

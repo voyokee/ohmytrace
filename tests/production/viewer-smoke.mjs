@@ -23,9 +23,9 @@ try{
   await page.waitForSelector('[data-story-file]',{state:'attached'});await page.locator('[data-story-file]').setInputFiles({name:'reviewed-demo.story.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(artifact))});
   await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-play]').tap();
   assert.equal(await page.locator('#story-player').getAttribute('data-status'),'paused');
-  await page.locator('[data-story-speed]').selectOption('4');await page.locator('[data-story-play]').tap();
+  await openMore(page);await page.locator('[data-story-speed]').selectOption('4');await page.locator('[data-story-play]').tap();
   await page.waitForFunction(()=>document.querySelector('#story-player').dataset.status==='ended',null,{timeout:60000});
-  await page.locator('[data-story-jump]').selectOption(String(artifact.orderedScenes.findIndex(s=>s.kind==='memory')));
+  await page.locator(`[data-story-dot="${String(artifact.orderedScenes.findIndex(s=>s.kind==='memory'))}"]`).click();
   await page.waitForFunction(()=>document.querySelector('.story-memory-image')?.naturalWidth>0);
   assert.equal(await page.evaluate(()=>window.storageReads),0);assert.deepEqual(errors,[]);
   assert.ok(!requests.some(path=>/repository\.js|app-bridge\.js|\/life\/media\//.test(path)));
@@ -37,3 +37,6 @@ try{
   const result={result:'PASS',origin,https:true,anonymous:process.env.LIFE_APP_AUTH_STDIN!=='1',sourceMatches:true,wasmMatches:true,storageReads:0,fullPlayback:true,photoMemory:true,mobile:true,externalServicesBlocked:true,pageErrors:errors,htmlCacheControl:response.headers()['cache-control'],scriptCacheControl:app.headers()['cache-control']};
   await writeFile(resolve(output,'viewer-https-smoke.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
 }finally{await context.close();await browser.close();}
+
+// Speed, jump-to and restart live under the player's collapsed "更多" section.
+async function openMore(p){if(!await p.locator('.story-more').evaluate(e=>e.open))await p.locator('.story-more summary').click();}

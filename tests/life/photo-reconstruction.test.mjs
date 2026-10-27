@@ -11,10 +11,10 @@ test('antimeridian and exact temporal boundaries use centralized rules',async()=
   assert.equal(reconstructPhotos(a,emptyDataset()).candidates[0].visits.length,1);
   a[1].extractedTime.utcEpochMs+=1;a[1].extractedTime.wallClockOrdinal+=1;
   assert.equal(reconstructPhotos(a,emptyDataset()).candidates[0].visits.length,2);
-  const b=await assets([{time:'2025:01:01 00:00:00'},{time:'2025:01:05 00:00:00',lat:30,lon:120}]);
+  const b=await assets([{time:'2025:01:01 00:00:00'},{time:'2025:01:04 00:00:00',lat:30,lon:120}]);
   assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,1);
   b[1].extractedTime.utcEpochMs+=1;b[1].extractedTime.wallClockOrdinal+=1;
-  assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,2);assert.equal(RECONSTRUCTION_RULES.tripGapHours,96);
+  assert.equal(reconstructPhotos(b,emptyDataset()).candidates.length,2);assert.equal(RECONSTRUCTION_RULES.tripGapHours,72);
 });
 test('multi-city, same-day stops and A-B-A returns retain separate visits',async()=>{
   const a=await assets([{time:'2025:05:01 08:00:00'},{time:'2025:05:01 10:00:00',lat:30,lon:120},{time:'2025:05:01 15:00:00'}]);
@@ -49,11 +49,12 @@ test('manual merge/split/edit preserves immutable photo evidence and revision hi
   assert.deepEqual(a,original);assert.deepEqual(r.manualRevisions.map(v=>v.action),['merge','edit','split']);
 });
 test('spatial grouping and residence thresholds distinguish exact boundary from just outside',async()=>{
-  const a=await assets([{lat:0,lon:0,time:'2025:05:01 08:00:00'},{lat:0,lon:0.01,time:'2025:05:01 09:00:00'}]);
+  // Exact 0,0 is rejected as a no-fix GPS value, so the equator boundary starts just east of it.
+  const a=await assets([{lat:0,lon:0.001,time:'2025:05:01 08:00:00'},{lat:0,lon:0.011,time:'2025:05:01 09:00:00'}]);
   const distance=distanceKm(a[0].coordinates,a[1].coordinates),d=emptyDataset();
   assert.equal(reconstructPhotos(a,d,{rules:{...RECONSTRUCTION_RULES,placeRadiusKm:distance}}).candidates[0].visits.length,1);
   assert.equal(reconstructPhotos(a,d,{rules:{...RECONSTRUCTION_RULES,placeRadiusKm:distance-1e-6}}).candidates[0].visits.length,2);
-  importCSVInto(d,'日期,地点,类型,坐标\n2025,家,现居地,"0,0"');
+  importCSVInto(d,'日期,地点,类型,坐标\n2025,家,现居地,"0,0.001"');
   assert.equal(reconstructPhotos([a[1]],d,{rules:{...RECONSTRUCTION_RULES,homeRadiusKm:distance}}).candidates[0].action,'memory');
   assert.equal(reconstructPhotos([a[1]],d,{rules:{...RECONSTRUCTION_RULES,homeRadiusKm:distance-1e-6}}).candidates[0].action,'create');
 });
