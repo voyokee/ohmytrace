@@ -39,3 +39,24 @@ may be absent. System picker exports may redact GPS or transcode HEIC; neither a
 extension nor a successful selection proves original metadata access. Unsupported
 HEIC display must keep successfully parsed metadata. Physical iPhone/Android
 acceptance requires authorized native phone photos and is not implied by fixtures.
+
+## M2 — location intelligence
+
+`GeoNameProvider` unifies legacy place search and photo reverse naming. Public
+Nominatim queries serialize at ≥1.1 seconds, have a timeout, and are cached. Offline
+photo naming is the default. The review UI offers a single-location online button
+with explicit coordinate-sharing confirmation, source attribution and offline
+fallback. No photo batch calls public Nominatim. Providers can be replaced via the
+service's `geonames` dependency / `GeoNameProvider` constructor; the online adapter
+accepts another compatible endpoint. Precise local cache keys never bleed a label
+across nearby borders; the bounded cache is local to the origin and expendable.
+
+Pinned Natural Earth v5.1.2 country/admin1 polygons and 7,342 sampled populated
+places are processed into 242 country packs, loaded only during name lookup.
+Source/license/reproduction and simplification limits are in
+`src/life/geocoding/data/SOURCES.md`. Pack cache is bounded to eight countries.
+Country/admin containment precedes nearest-city lookup. City centres never count
+as city boundaries: all city suggestions say “附近城市” and report distance.
+Offshore, ambiguous or missing coverage retains original GPS and manual naming.
+Derived names are inferred Evidence, independent of observed WGS84 GPS and manual
+renaming. Existing manually corrected Place names/coordinates are preserved.

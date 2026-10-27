@@ -7,6 +7,7 @@ const {mountStoryExperience}=await import('./src/life/story/app-integration.js')
 const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
+const {geoNameProvider}=publicViewer?{}:await import('./src/life/geocoding/provider.js');
 const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-mobile-clear');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
@@ -346,16 +347,8 @@ const located = name => { const p = state.places[name]; return p && p.lat != nul
 
 /* ================= geocoding ================= */
 
-let lastGeo = 0;
 async function nominatim(q, limit = 6, scope = {}) {
-  const wait = lastGeo + 1100 - Date.now(); // public Nominatim allows ~1 request/second
-  if (wait > 0) await sleep(wait);
-  lastGeo = Date.now();
-  const params=new URLSearchParams({format:'jsonv2','accept-language':'zh-CN,zh,en',addressdetails:'1',limit:String(limit),q,...scope});
-  const url = 'https://nominatim.openstreetmap.org/search?'+params;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  return geoNameProvider.search(q,{limit,...scope});
 }
 
 const CJK = /[㐀-鿿]/;

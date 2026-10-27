@@ -1,4 +1,5 @@
 import {preparePhotoInput} from '../../platform/web-photo-capability.js';
+import {geoNameProvider} from '../geocoding/provider.js';
 import {clone} from '../schema.js';
 import {editCandidate,editVisitName,mergeCandidates,splitCandidate} from './reconstruction.js';
 import {MEDIA_LIMITS} from './config.js';
@@ -69,7 +70,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
         ${c.action==='link'?`<label class="life-field">已有旅行<select data-photo-field="relatedTripId"><option value="">请选择</option>${data.trips.map(t=>`<option value="${esc(t.id)}" ${t.id===c.relatedTripId?'selected':''}>${esc(t.title)}${c.matches.some(m=>m.tripId===t.id)?' · 时间与地点相符':''}</option>`).join('')}</select></label>`:''}
         <details><summary>已知的旅行起止（可留空为未知）</summary><div class="life-dates"><label class="life-field">实际开始<input data-photo-field="start" value="${esc(c.start)}" placeholder="未知；或 YYYY-MM-DD"></label><label class="life-field">实际结束<input data-photo-field="end" value="${esc(c.end)}" placeholder="未知；或 YYYY-MM-DD"></label></div></details>
         <details><summary>关联人生阶段（可选多个）</summary><div class="life-options">${data.chapters.map(ch=>`<label><input type="checkbox" data-photo-chapter value="${esc(ch.id)}" ${c.chapterIds.includes(ch.id)?'checked':''}>${esc(ch.title)}</label>`).join('')||'<p class="hint">可稍后在「章」中关联。</p>'}</div></details>
-        <ol>${c.visits.map(v=>`<li data-visit="${esc(v.id)}"><label class="life-field">地点<input data-photo-place value="${esc(v.placeName)}"></label><p class="hint">${v.observedStart||'日期未知'} — ${v.observedEnd||'日期未知'} · ${v.coordinates.latitude.toFixed(5)}, ${v.coordinates.longitude.toFixed(5)} · ${v.assetIds.length} 张；到达/离开时间未知</p>${imageFor(v.assetIds[0])}</li>`).join('')}</ol>
+        <ol>${c.visits.map(v=>`<li data-visit="${esc(v.id)}"><label class="life-field">地点<input data-photo-place value="${esc(v.placeName)}"></label><p class="hint">${v.observedStart||'日期未知'} — ${v.observedEnd||'日期未知'} · ${v.coordinates.latitude.toFixed(5)}, ${v.coordinates.longitude.toFixed(5)} · ${v.assetIds.length} 张；到达/离开时间未知</p>${v.geoName?`<p class="hint">地名来源：${esc(v.geoName.source)} · ${v.geoName.precision==='nearby-city'?'附近城市中心匹配，非城市边界':'概化行政区边界，需确认'}${v.geoName.distanceKm!=null?` · 距城市中心约 ${v.geoName.distanceKm.toFixed(1)} km`:''}</p>`:''}<button class="btn sm" type="button" data-photo-online-name="${esc(v.id)}">在线查询此地点（仅发送此坐标）</button>${imageFor(v.assetIds[0])}</li>`).join('')}</ol>
         <div class="row-actions"><button class="btn sm" type="button" data-photo-split ${c.visits.length<2?'disabled':''}>按地点拆分</button><button class="btn sm" type="button" data-photo-split-images ${count(c)<2?'disabled':''}>按照片拆分</button></div>
       </section>`).join('')}</div>
       ${review.candidates.length>shown?`<button class="btn" type="button" data-photo-more>显示更多候选（还有 ${review.candidates.length-shown} 组）</button>`:''}
@@ -112,6 +113,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     if(button.hasAttribute('data-photo-cancel')){service.scanner.cancel();return;}
     run(async()=>{
       const row=button.closest('[data-candidate]'),id=row?.dataset.candidate;
+      if(button.dataset.photoOnlineName){const visit=review.candidates.find(c=>c.id===id)?.visits.find(v=>v.id===button.dataset.photoOnlineName);if(!visit||!confirm('将这一个地点的 GPS 发送给 Nominatim / OpenStreetMap 查询名称？不发送照片；导入其他照片不会触发在线查询。'))return;const name=await geoNameProvider.reverse(visit.coordinates,{online:true,consent:true});if(name){editVisitName(review,id,visit.id,name.displayName);visit.geoName=name;await save();}}
       if(button.dataset.photoPreviewAsset){focusedPreviewId=button.dataset.photoPreviewAsset;render();}
       if(button.hasAttribute('data-photo-more')){shown+=CANDIDATE_PAGE;render();}
       if(button.hasAttribute('data-photo-exclude')){const c=review.candidates.find(c=>c.id===id);editCandidate(review,id,{excluded:!c.excluded});await save();}

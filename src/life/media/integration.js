@@ -1,3 +1,4 @@
+import {geoNameProvider} from '../geocoding/provider.js';
 import {clone,COLLECTIONS,partialDate,unknownDate,validateDataset,addEvidence,manualEvidence} from '../schema.js';
 import {MediaManifest} from './manifest.js';import {PhotoScanner} from './scanner.js';
 import {reconstructPhotos,distanceKm} from './reconstruction.js';import {RECONSTRUCTION_RULES} from './config.js';
@@ -63,7 +64,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
       const newAssets=v.assetIds.map(id=>assetMap.get(id)).filter(a=>!byUri.has(uriFor(a.assetId)));
       if(!newAssets.length){for(const id of v.assetIds){const m=byUri.get(uriFor(id));if(m)links[id]=m.id;}continue;}
       let place=v.placeId?data.places.find(p=>p.id===v.placeId):data.places.find(p=>p.coordinates&&distanceKm(p.coordinates,v.coordinates)<=RECONSTRUCTION_RULES.existingPlaceRadiusKm);
-      if(!place){place={id:v.proposedPlaceId,name:v.placeName.trim(),coordinates:clone(v.coordinates),location:{status:'confirmed',label:'照片 GPS · 用户确认关联'},evidenceIds:[observedEvidence(data,newAssets[0],batchId,knownEvidence),reviewEvidence()]};data.places.push(place);}
+      if(!place){place={id:v.proposedPlaceId,name:v.placeName.trim(),coordinates:clone(v.coordinates),location:{status:'confirmed',label:'照片 GPS · 用户确认关联'},evidenceIds:[observedEvidence(data,newAssets[0],batchId,knownEvidence),...(v.geoName?addEvidence(data,'inferred',{kind:'photo-place-name',...clone(v.geoName)}):[]),reviewEvidence()]};data.places.push(place);}
       let visit=null;
       if(trip){
         const available=prior=>existingVisitIds.has(prior.id)&&!matchedVisitIds.has(prior.id)&&prior.tripId===trip.id&&prior.placeId===place.id;
@@ -91,9 +92,9 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
 const signature=async review=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(review))))].map(v=>v.toString(16).padStart(2,'0')).join('');
 
 export class PhotoHistoryService {
-  constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false}={}){this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;}
+  constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false,geonames=geoNameProvider}={}){this.geonames=geonames;this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;}
   async assetsFor(batch){const assets=await this.manifest.listAssets(),ids=new Set(batch.assetIds);return assets.filter(a=>ids.has(a.assetId));}
-  async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);await this.saveReview(batchId,review);return review;}
+  async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));for(const candidate of review.candidates)for(const visit of candidate.visits){if(visit.placeId)continue;try{const name=await this.geonames.reverse(visit.coordinates);if(name){visit.geoName=name;visit.placeName=name.displayName;}}catch{visit.namingDiagnostic='OFFLINE_NAMES_UNAVAILABLE';}}review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);await this.saveReview(batchId,review);return review;}
   async saveReview(batchId,review){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');await this.manifest.putBatch({...batch,review:clone(review)});}
   async preview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch?.review)throw new Error('请先生成并审核候选');const data=this.repository.getDataset();
     // A never-persisted empty/demo dataset gets a fresh ID on reload. Rebase only

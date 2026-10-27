@@ -11,3 +11,10 @@ These are synthetic test images, not an accuracy evaluation on a real phone libr
 
 Physical iOS Safari and Android Chrome acceptance is pending authorized devices
 and native photo samples. No private photos were added to the repository.
+
+M2: four location tests pass (actual Hangzhou/Zhejiang offline data; holes, exact
+edges and multipolygons; WGS84 rejection; ocean missing coverage; country lazy
+loading; explicit online consent; failure fallback; serialized requests and cache).
+Existing 11 photo integration tests also pass. Dataset source Chinese country name
+is “中华人民共和国”; the test accepts the source name without inventing a label.
+No precision/accuracy percentage is claimed from these tests.
