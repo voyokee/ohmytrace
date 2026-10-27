@@ -3,7 +3,7 @@ Download ne_50m_admin_0_countries, ne_10m_admin_1_states_provinces and
 ne_10m_populated_places_simple into INPUT as countries.json/admin1-full.json/cities.json.
 No invented rectangles or city boundaries. Coordinates quantized to 4 decimals.
 """
-import json, pathlib, sys, hashlib
+import json, pathlib, sys
 source=pathlib.Path(sys.argv[1]);out=pathlib.Path(__file__).resolve().parents[1]/'src/life/geocoding/data';out.mkdir(parents=True,exist_ok=True)
 def load(n):return json.loads((source/(n+'.json')).read_text())['features']
 def rounded(x):return [rounded(i) for i in x] if isinstance(x,list) else round(x,4)

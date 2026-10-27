@@ -1,9 +1,8 @@
 # Photo Library Reconstruction V2
 
-2026-10-27. Development branch `feat/photo-library-v2` starts from freshly fetched
+2026-10-27. Development continues on `feat/photo-import` from freshly fetched
 `feat/photo-import` HEAD `2e7f20ef71cc954c9b6ff338d4f38d562f3b2158` (newer than audit
-`ac6d85b`). The request's final instruction to create a new branch takes precedence
-over its older `feat/life-atlas-mvp` delivery line. M1–M3 are this iteration;
+`ac6d85b`). M1–M3 are this iteration;
 M4–M6 remain subsequent acceptance-gated work.
 
 ## M1 — input and observations
@@ -60,3 +59,75 @@ as city boundaries: all city suggestions say “附近城市” and report dista
 Offshore, ambiguous or missing coverage retains original GPS and manual naming.
 Derived names are inferred Evidence, independent of observed WGS84 GPS and manual
 renaming. Existing manually corrected Place names/coordinates are preserved.
+
+## M3 — retained memories and unified backup
+
+The import UI has an explicit unchecked thumbnail-retention option. Only confirmed
+Memory assets are processed. At most one photo is decoded at a time, preferably
+in an OffscreenCanvas Worker, with a bounded main-thread fallback. Metadata
+parsing never requires image decoding. Decoder/source/pixel-budget failures keep
+the observation and report a per-asset thumbnail diagnostic. Re-selecting originals
+and confirming again can supplement thumbnails without new Memory/Trip IDs.
+
+Thumbnail policy: max edge 512 px, JPEG ≤100 KiB after re-encoding and strict
+EXIF/XMP/comment/extra-metadata removal; 100 MiB origin budget. Source decoding is
+bounded to 64 MiB / 50 MP, with a requested resized bitmap. These bound requested
+work, not native browser decoder peak memory. The gallery paginates 12 thumbnails.
+Retention progress is visible. Capacity exhaustion stops adding images and reports
+metadata-only results rather than a false full-photo success.
+
+`ThumbnailStore` uses verified OPFS files with an IndexedDB reference/size/checksum
+index; if OPFS acquisition or writing fails it falls back to IndexedDB Blobs. A
+new file is verified before publishing its index, and old files are removed only
+after replacement succeeds. The store supports read, replace, delete, stats and
+unreferenced-resource collection. Stable `media:<assetId>` canonical URIs are
+unchanged. Read failures remain visible. Origin data clearance, browser cleanup
+or uninstall can lose all local stores; this is not permanent archival.
+
+Photo confirmation retains the existing prepared → canonical verified commit →
+media acknowledgement protocol. Optional thumbnail staging happens after prepared
+and before canonical commit. Every retained resource has its own verified store
+index; metadata-only failures are explicit and do not create a broken thumbnail
+reference. A pre-graph interruption can be retried from its durable review, and
+post-graph media acknowledgement is reconciled against canonical Memory URIs.
+
+The UI downloads `OhMyTrace-Backup.zip` locally, containing `manifest.json` (time,
+counts, scope), `life-dataset.json`, `media-index.json`, `thumbnails/asset_*.jpg`,
+and `checksums.json`. JPEG is used rather than the example's optional WebP. The
+archive omits original photos and is never automatically uploaded. CRC and SHA-256
+validate contents, paths, versions, image metadata, dimensions, and graph/index
+relations before restore preview. SHA-256 detects accidental corruption; it is not
+a signature authenticating a backup's creator. Restore is additive for nonconflicting
+records and refuses conflicting existing IDs, preserving local manual edits. It
+never blindly overwrites a newer local dataset. Existing resources are preserved;
+new resources are staged and capacity checked. A durable restore journal holds
+before/target manifests and graph intentions. Failures before canonical commit
+roll back staging; after a verified canonical commit recovery completes the media
+acknowledgement. Unexpected subsequent changes refuse automatic overwrite.
+
+Original canonical JSON and media-index JSON restore remain available. Unified
+packages without retained images are valid; unsupported future versions fail before
+writes. The new thumbnail database has version 1 with `thumbnails` / `journal`
+stores; existing canonical/media databases and versions do not change. Manifest
+v2 adds only optional `thumbnailReference`, `thumbnailStatus` and suspected-duplicate
+hints, with pointer validation. No original Blob enters a manifest or canonical JSON.
+
+The previous legacy-hash migration no longer aliases files on metadata similarity
+alone: a ≤64 MiB candidate must match its actual full SHA-256 before reusing a
+legacy full-hash ID. Otherwise it remains a separate suspected duplicate. Converted
+formats with matching normalized capture/GPS/dimensions are hints only. The base
+scanner's large-file sampled identity remains an explicit throughput tradeoff;
+these tests are not a real-library duplicate-quality measurement.
+
+Name packs use origin Cache Storage when available after first lookup. A never
+loaded pack requires its static asset to be available; offline lookup without it
+keeps coordinates and emits a naming diagnostic. No exact GPS is sent to a name
+service during a batch. Clearing origin data can also clear cached name packs.
+
+Legacy standalone media-index restores now reject an index missing any current
+canonical photo Memory asset. An index JSON cannot restore Blobs: absent resources
+are explicitly reset to metadata-only / reselect-required. Media acknowledgement
+also rejects missing asset/batch records rather than announcing silent success.
+Suspected-duplicate references are bounded to five per asset, including pathological
+same-time/same-location imports. Thumbnail mutation/collection serializes with Web
+Locks when supported; simultaneous multi-tab bulk imports are still discouraged.

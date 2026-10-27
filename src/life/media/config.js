@@ -5,7 +5,7 @@
 // work rather than memory. workerConcurrency is an upper bound; the scanner also caps
 // it by navigator.hardwareConcurrency.
 export const MEDIA_LIMITS=Object.freeze({maxFileBytes:1024*1024*1024,maxHeaderBytes:4*1024*1024,sampleBytes:64*1024,tailSampleBytes:16*1024,
-  maxIfdEntries:512,maxTagValues:256,maxFiles:20000,workerConcurrency:4,filesPerJob:16,flushEvery:100,
+  maxIfdEntries:512,maxTagValues:256,maxFiles:20000,workerConcurrency:4,filesPerJob:16,flushEvery:100,maxDuplicateHints:5,
   previewMaxPixels:16_000_000,maxPreviewImages:2,manifestVersion:2});
 export const RECONSTRUCTION_RULES=Object.freeze({placeRadiusKm:1,visitGapHours:18,
   tripGapHours:96,homeRadiusKm:15,existingPlaceRadiusKm:1,existingTripDayPadding:1,

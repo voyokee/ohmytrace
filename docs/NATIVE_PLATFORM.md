@@ -30,3 +30,17 @@ behavior. Current Chrome touch tests certify browser behavior only. IndexedDB
 must be tested inside each WebView; app installation does not guarantee permanent
 storage. Keep explicit complete backup/restore and document uninstall, app-data
 clear, operating-system cleanup and Web-to-native migration behavior.
+
+## Photo Library V2 Web boundary (2026-10-27)
+
+`src/platform/web-photo-capability.js` now supplies an executable scoped Web
+adapter and bounded directory/ZIP input preparation. `photoObservation()` exposes
+normalized time and WGS84 semantics while keeping canonical/media identities.
+The production album UI uses this input preparation and the existing scanner and
+PhotoHistoryService. User-selected File handles are page-scoped; release/cancel
+is explicit. Web cannot enumerate the operating system gallery, monitor incremental
+library changes, authorize background PhotoKit/MediaStore access or fetch arbitrary
+iCloud/Android cloud assets. Missing/redacted picker GPS remains absent. Native
+metadata/thumbnail decoders can later replace acquisition, preserving the same
+human review, reconstruction, stable ID and Repository behavior. Android/iOS
+builds and physical-device acceptance remain pending, as described above.

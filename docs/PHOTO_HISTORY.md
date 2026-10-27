@@ -1,5 +1,18 @@
 # Phase 3 — Photo History Reconstruction
 
+## Photo Library V2 M1–M3 extension (2026-10-27)
+
+Development continues on `feat/photo-import`, based on latest fetched `2e7f20e`.
+[PHOTO_LIBRARY_V2.md](PHOTO_LIBRARY_V2.md) supersedes the earlier scope exclusions
+below: safe directory/ZIP album input, normalized observations, lazy offline
+country/admin/nearby-city labels, opt-in retained thumbnails (OPFS / IndexedDB Blob),
+refreshable photo gallery and a checked unified backup/restore are now implemented.
+The historical sections below describe their original milestones. Canonical v1,
+Manifest v1/v2 compatibility, existing Story/sharing and Renderer remain intact.
+The photo entry is “从相册恢复足迹”; originals remain private and unpersisted.
+See [PHOTO_LIBRARY_VERIFICATION.md](PHOTO_LIBRARY_VERIFICATION.md) for current
+browser, failure-recovery and scale results and real-device limitations.
+
 Development stays on `feat/life-atlas-mvp`, starting at `480ea69`.
 
 ## Photo Import V2（2026-10-27，分支 `feat/photo-import`）

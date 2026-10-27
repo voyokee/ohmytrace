@@ -5,6 +5,9 @@
 import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
 import {LifeRepository,MemoryStore} from '../../src/life/repository.js';
 import {MemoryManifest} from '../../src/life/media/manifest.js';import {PhotoScanner} from '../../src/life/media/scanner.js';
+import {GeoNameProvider} from '../../src/life/geocoding/provider.js';
+import {OfflineAdminResolver} from '../../src/life/geocoding/offline-admin-resolver.js';
+import {PlaceNameCache} from '../../src/life/geocoding/place-name-cache.js';
 import {PhotoHistoryService} from '../../src/life/media/integration.js';import {photoJPEG} from './photo-fixtures.mjs';
 
 const count=Number(process.argv[2]||10000),heic=readFileSync(new URL('./fixtures/photo-gps.heic',import.meta.url));
@@ -19,10 +22,10 @@ for(let i=0;i<count;i++){
 files.push(new File([heic],'IMG_HEIC.heic',{type:'image/heic',lastModified:1}),new File([new Uint8Array([0,0,0,20,...new TextEncoder().encode('ftypqt  '),0,0,0,0,...new TextEncoder().encode('qt  ')])],'IMG_HEIC.MOV',{lastModified:1}));
 
 const repository=new LifeRepository(new MemoryStore());await repository.initialize({legacyStorage:null});
-const manifest=new MemoryManifest(),scanner=new PhotoScanner(manifest,{workerFactory:null}),service=new PhotoHistoryService(repository,{manifest,scanner});
+const manifest=new MemoryManifest(),scanner=new PhotoScanner(manifest,{workerFactory:null}),service=new PhotoHistoryService(repository,{manifest,scanner,geonames:new GeoNameProvider({offline:new OfflineAdminResolver({load:async path=>JSON.parse(readFileSync(new URL('../../src/life/geocoding/data/'+path,import.meta.url),'utf8'))}),cache:new PlaceNameCache({storage:null})})});
 const t=()=>performance.now(),m={count:files.length};let s=t();
 const batch=await scanner.scan(files);m.scanMs=Math.round(t()-s);
-s=t();const review=await service.createReview(batch.id);m.reviewMs=Math.round(t()-s);m.candidates=review.candidates.length;
+s=t();const review=await service.createReview(batch.id);m.reviewMs=Math.round(t()-s);m.candidates=review.candidates.length;m.namedVisits=review.candidates.flatMap(c=>c.visits).filter(v=>v.geoName).length;m.namingSource='Natural Earth v5.1.2 offline packs';
 m.filteredNoGps=review.unlocatedAssetIds.length;m.deferredVideo=(await service.assetsFor(batch)).filter(a=>a.processingStatus==='deferred').length;
 s=t();const preview=await service.preview(batch.id);m.dryRunMs=Math.round(t()-s);
 s=t();const result=await service.commit(batch.id,preview);m.commitMs=Math.round(t()-s);

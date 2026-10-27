@@ -31,7 +31,7 @@ try {
   assert.equal(await page.locator('#btn-life svg').count(),1);
   assert.equal(await page.locator('#btn-photos svg').count(),1);
   assert.equal(await page.locator('#btn-life').getAttribute('aria-label'),'人生阶段');
-  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'导入照片');
+  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'从相册恢复足迹');
   await page.setViewportSize({width:910,height:1220});
   await page.waitForTimeout(1500);await page.screenshot({path:resolve(output,'timeline-demo.png')});
   const fixture='日期,行程,地点,类型,备注,坐标\n2000~至今,,上海,现居地,,"31.23,121.47"\n'+

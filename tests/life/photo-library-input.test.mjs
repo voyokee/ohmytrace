@@ -30,3 +30,15 @@ test('Web capability only reads scoped user-selected files and releases access',
  assert.equal(await cap.permissionStatus(),'limited');const m=await cap.readAssetMetadata(groups[0]);assert.equal(m.location.state,'authorized');assert.equal(m.observation.extractedTime.timeBasis,'offset-instant');
  await assert.rejects(cap.readAssetContent({...groups[0],scopeId:'wrong'}));await cap.releaseResources();await assert.rejects(cap.readAssetContent(groups[0]));
 });
+test('similar legacy metadata never aliases changed pixels; transformed files are only suspected duplicates',async()=>{
+ const {MemoryManifest}=await import('../../src/life/media/manifest.js'),{PhotoScanner}=await import('../../src/life/media/scanner.js'),{MEDIA_LIMITS}=await import('../../src/life/media/config.js');
+ const manifest=new MemoryManifest(),scanner=new PhotoScanner(manifest,{workerFactory:null});
+ const bytes=new Uint8Array(100000);bytes.set(photoJPEG());bytes[90000]=1;const file=new File([bytes],'legacy.jpg',{type:'image/jpeg'});
+ const legacy=await analyzePhotoFile(file,{limits:{...MEDIA_LIMITS,sampleBytes:200000}}),batch=await manifest.createBatch([file]);batch.processed=1;batch.assetIds=[legacy.assetId];batch.status='review';await manifest.saveChunk(batch,[legacy]);
+ bytes[90000]=2;const changed=new File([bytes],'transformed.jpg',{type:'image/jpeg'});const scanned=await scanner.scan([changed]),assets=await manifest.listAssets(),fresh=assets.find(a=>a.assetId!==legacy.assetId);
+ assert.equal(scanned.duplicateCount,0);assert.equal(assets.length,2);assert.ok(fresh.possibleDuplicateAssetIds.includes(legacy.assetId));
+});
+test('suspected duplicate hints remain bounded for large same-time same-location albums',async()=>{
+ const {MemoryManifest}=await import('../../src/life/media/manifest.js'),{PhotoScanner}=await import('../../src/life/media/scanner.js'),{MEDIA_LIMITS}=await import('../../src/life/media/config.js');const manifest=new MemoryManifest(),scanner=new PhotoScanner(manifest,{workerFactory:null});
+ await scanner.scan(Array.from({length:150},(_,nonce)=>photoFile({nonce})));const assets=await manifest.listAssets();assert.equal(assets.length,150);assert.ok(assets.every(a=>(a.possibleDuplicateAssetIds||[]).length<=MEDIA_LIMITS.maxDuplicateHints));
+});

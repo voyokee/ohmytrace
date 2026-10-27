@@ -21,3 +21,14 @@ export interface PhotoCapability {
 }
 /** Mapping is device-local. A native URI/local identifier is never a portable ID. */
 export interface MediaIdentityMapping {deviceId:string;handle:MediaHandle;assetId:string;contentHash?:string;}
+
+/** Unified observation view. Canonical schema and media manifest retain their versions. */
+export interface PhotoObservation {
+ assetId:string; source:Platform; format:string;
+ capturedTime:{raw:string; localDateTime:string; timeBasis:'local-unzoned'|'offset-instant'; offsetMinutes:number|null; utcEpochMs:number|null}|null;
+ timezoneEvidence:{basis:string;offsetMinutes:number|null}|null;
+ gps:{latitude:number;longitude:number;crs:'WGS84';state:'observed'}|null;
+ altitude:unknown;orientation:number|null;dimensions:{width:number;height:number}|null;
+ fileMetadata:{name:string;type:string;size:number;lastModified:number|null};
+ metadataSource:string[];diagnostics:string[];
+}

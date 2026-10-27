@@ -12,6 +12,7 @@ export function livePhotoCompanions(files) {
 // Earlier releases identified every file by its full-content hash. Large files now
 // use a sampled identity, so the same original is re-matched to its legacy asset by
 // size and exact capture evidence instead of producing a second Memory.
+const similarSignature=a=>a.extractedTime&&a.coordinates?JSON.stringify([a.extractedTime.localDateTime,a.coordinates,a.dimensions]):null;
 const legacySignature=a=>a.extractedTime&&a.originalFile?.size?JSON.stringify([a.originalFile.size,a.extractedTime.raw,a.extractedTime.offsetRaw,a.extractedTime.subsecondRaw,a.coordinates]):null;
 
 class WorkerPool {
@@ -68,6 +69,7 @@ export class PhotoScanner {
       if(this.workerFactory){this.pool=new WorkerPool(this.workerFactory,this.concurrency);this.usedWorker=this.pool.start()>0;if(!this.usedWorker)this.workerUnavailable=true;}
       const existing=await this.manifest.listAssets(),known=new Set(existing.map(a=>a.assetId)),batchIds=new Set(batch.assetIds);
       const legacy=new Map(existing.filter(a=>a.identity!=='sampled-sha256-v2'&&a.deduplicationKey).map(a=>[legacySignature(a),a]).filter(([k])=>k));
+      const similar=new Map();for(const a of existing){const key=similarSignature(a);if(key)similar.set(key,[...(similar.get(key)||[]),a.assetId].slice(0,this.limits.maxDuplicateHints));}
       const resumeCursor=batch.processed;
       // Up to `window` groups of files are analyzed concurrently, but results are committed
       // strictly in input order so the durable resume cursor never skips a file.
@@ -83,7 +85,15 @@ export class PhotoScanner {
           asset={assetId:newId('diagnostic'),deduplicationKey:null,originalFile:{name:file.name,type:file.type,size:file.size,lastModified:file.lastModified??null},processingStatus:'error',metadataStatus:'error',extractedTime:null,coordinates:null,metadataEvidence:{state:'unknown',source:{kind:'file-diagnostic',reason:asset?.failure?.message||'SCAN_FAILED'}},diagnostics:[asset?.failure?.message||'SCAN_FAILED'],linkedMemoryId:null,thumbnailReference:null};
         }
         const alias=asset.identity==='sampled-sha256-v2'&&legacy.get(legacySignature(asset));
-        if(alias)asset={...asset,assetId:alias.assetId,deduplicationKey:alias.deduplicationKey,identity:alias.identity||'content-sha256'};
+        if(alias){
+          // Legacy metadata similarity is only a lookup hint. Verify actual bytes
+          // before reusing a full-content identity; otherwise retain both records.
+          let verified=false;if(file.size<=64*1024*1024){const full=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(b=>b.toString(16).padStart(2,'0')).join('');verified=full===alias.deduplicationKey;}
+          if(verified)asset={...asset,assetId:alias.assetId,deduplicationKey:alias.deduplicationKey,identity:'content-sha256'};
+          else asset.possibleDuplicateAssetIds=[alias.assetId];
+        }
+        const hintKey=similarSignature(asset),hints=hintKey?(similar.get(hintKey)||[]).filter(id=>id!==asset.assetId).slice(0,this.limits.maxDuplicateHints):[];if(hints.length)asset.possibleDuplicateAssetIds=[...new Set([...(asset.possibleDuplicateAssetIds||[]),...hints])].slice(0,this.limits.maxDuplicateHints);
+        if(hintKey)similar.set(hintKey,[...new Set([...(similar.get(hintKey)||[]),asset.assetId])].slice(0,this.limits.maxDuplicateHints));
         if(i<resumeCursor){if(asset.deduplicationKey&&!batchIds.has(asset.assetId))throw new Error('续扫文件内容与已保存批次不同，请新建导入而不是继续此批次');this.files.set(asset.assetId,file);continue;}
         if(firstResultMs===null)firstResultMs=performance.now()-started;
         if(known.has(asset.assetId))batch.duplicateCount++;known.add(asset.assetId);

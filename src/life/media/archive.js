@@ -19,7 +19,7 @@ export async function readZip(blob,{limits=ZIP_LIMITS,signal}={}){
     const flags=d.getUint16(p+8,true),method=d.getUint16(p+10,true),crc=d.getUint32(p+16,true),compressed=d.getUint32(p+20,true),uncompressed=d.getUint32(p+24,true),nl=d.getUint16(p+28,true),el=d.getUint16(p+30,true),cl=d.getUint16(p+32,true),local=d.getUint32(p+42,true),mode=d.getUint32(p+38,true)>>>16;
     if(p+46+nl+el+cl>dir.length)throw new Error('ZIP 文件名越界');
     const rawName=dir.slice(p+46,p+46+nl),name=new TextDecoder('utf-8',{fatal:true}).decode(rawName),folder=name.endsWith('/'),path=(folder?name.slice(0,-1):name).normalize('NFC');
-    if(!safeArchivePath(path)||names.has(path)||flags&1||![0,8].includes(method)||(mode&0xf000)===0xa000||d.getUint16(p+34,true)||uncompressed>limits.entryBytes||uncompressed>Math.max(1,compressed)*limits.ratio||local+30+compressed>offset)throw new Error('ZIP 含不安全路径、重复文件、加密、链接或超限内容');
+    if(!safeArchivePath(path)||names.has(path)||flags&0x41||![0,8].includes(method)||(mode&0xf000)===0xa000||d.getUint16(p+34,true)||uncompressed>limits.entryBytes||uncompressed>Math.max(1,compressed)*limits.ratio||local+30+compressed>offset)throw new Error('ZIP 含不安全路径、重复文件、加密、链接或超限内容');
     names.add(path);total+=uncompressed;if(total>limits.totalBytes)throw new Error('ZIP 解包容量超过预算');
     if(!folder)entries.push({path,size:uncompressed,async read(){
       abort(signal);const h=await bytes(blob,local,local+30),lv=new DataView(h.buffer);if(lv.getUint32(0,true)!==0x04034b50||lv.getUint16(6,true)!==flags||lv.getUint16(8,true)!==method)throw new Error('ZIP 本地头不一致');

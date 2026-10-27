@@ -1,13 +1,16 @@
+import {ThumbnailStore} from './thumbnail-store.js';
+import {ThumbnailGenerator} from './thumbnail.js';
+import {LibraryBackup} from './library-backup.js';
 import {geoNameProvider} from '../geocoding/provider.js';
 import {clone,COLLECTIONS,partialDate,unknownDate,validateDataset,addEvidence,manualEvidence} from '../schema.js';
-import {MediaManifest} from './manifest.js';import {PhotoScanner} from './scanner.js';
+import {MediaManifest,validateManifest} from './manifest.js';import {PhotoScanner} from './scanner.js';
 import {reconstructPhotos,distanceKm} from './reconstruction.js';import {RECONSTRUCTION_RULES} from './config.js';
 
 export function photoBase(data){const next=clone(data);if(next.meta.origin==='demo')for(const key of COLLECTIONS)next[key]=[];next.meta.origin='user';return next;}
 const coverageDate=(a,b)=>a?(a===b||!b?a:`${a}~${b}`):'';
 const uriFor=id=>`media:${id}`;
 function observedEvidence(data,asset,batchId,known){
-  const id=`evidence_photo_${asset.deduplicationKey}`;if(!known.has(id)){known.add(id);data.evidence.push({id,state:asset.metadataStatus==='parsed'?'observed':'unknown',source:{kind:'photo-exif',assetId:asset.assetId,batchId,format:asset.format||'jpeg',originalFile:clone(asset.originalFile),extractedTime:clone(asset.extractedTime),coordinates:clone(asset.coordinates),altitude:clone(asset.altitude??null),orientation:asset.orientation??null,rawTags:clone(asset.rawTags||{}),diagnostics:clone(asset.diagnostics)},revisions:[]});}return id;
+  const id=`evidence_photo_${asset.deduplicationKey}`;if(!known.has(id)){known.add(id);data.evidence.push({id,state:asset.metadataStatus==='parsed'?'observed':'unknown',source:{kind:'photo-exif',assetId:asset.assetId,batchId,format:asset.format||'jpeg',originalFile:clone(asset.originalFile),coordinateReferenceSystem:'WGS84',metadataSources:clone(asset.metadataSources||['exif']),xmpTags:clone(asset.xmpTags||{}),mediaCreatedTime:clone(asset.mediaCreatedTime||null),gpsTime:clone(asset.gpsTime||null),extractedTime:clone(asset.extractedTime),coordinates:clone(asset.coordinates),altitude:clone(asset.altitude??null),orientation:asset.orientation??null,rawTags:clone(asset.rawTags||{}),diagnostics:clone(asset.diagnostics)},revisions:[]});}return id;
 }
 function assertReview(review,assetMap,data){
   if(review?.version!==1||!Array.isArray(review.candidates)||!Array.isArray(review.manualRevisions)||!Array.isArray(review.unlocatedAssetIds))throw new Error('审核草稿格式无效');
@@ -92,7 +95,7 @@ export function buildPhotoPlan(input,assets,review,{batchId='preview'}={}) {
 const signature=async review=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(review))))].map(v=>v.toString(16).padStart(2,'0')).join('');
 
 export class PhotoHistoryService {
-  constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false,geonames=geoNameProvider}={}){this.geonames=geonames;this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;}
+  constructor(repository,{manifest=new MediaManifest(),scanner=null,readOnly=false,geonames=geoNameProvider,thumbnails=null,thumbnailGenerator=null}={}){this.geonames=geonames;this.repository=repository;this.manifest=manifest;this.scanner=scanner||new PhotoScanner(manifest);this.readOnly=readOnly;this.thumbnails=thumbnails||(globalThis.indexedDB?new ThumbnailStore():null);this.thumbnailGenerator=thumbnailGenerator||new ThumbnailGenerator();this.backups=this.thumbnails?new LibraryBackup({repository,manifest,thumbnails:this.thumbnails}):null;}
   async assetsFor(batch){const assets=await this.manifest.listAssets(),ids=new Set(batch.assetIds);return assets.filter(a=>ids.has(a.assetId));}
   async createReview(batchId){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');const current=this.repository.getDataset(),review=reconstructPhotos(await this.assetsFor(batch),photoBase(current));for(const candidate of review.candidates)for(const visit of candidate.visits){if(visit.placeId)continue;try{const name=await this.geonames.reverse(visit.coordinates);if(name){visit.geoName=name;visit.placeName=name.displayName;}}catch{visit.namingDiagnostic='OFFLINE_NAMES_UNAVAILABLE';}}review.baseWasEphemeral=current.revision===0&&['new','demo'].includes(current.meta.origin);await this.saveReview(batchId,review);return review;}
   async saveReview(batchId,review){const batch=await this.manifest.getBatch(batchId);if(!batch)throw new Error('导入批次不存在');await this.manifest.putBatch({...batch,review:clone(review)});}
@@ -101,7 +104,8 @@ export class PhotoHistoryService {
     // this explicitly ephemeral draft; a replaced real dataset still requires review.
     if(batch.review.baseDatasetId!==data.id&&batch.review.baseWasEphemeral&&data.revision===0&&['new','demo'].includes(data.meta.origin)){batch.review.baseDatasetId=data.id;await this.saveReview(batchId,batch.review);}
     const plan=buildPhotoPlan(data,await this.assetsFor(batch),batch.review,{batchId});return {batchId,baseRevision:data.revision,signature:await signature(batch.review),summary:plan.summary};}
-  async commit(batchId,preview){
+  async commit(batchId,preview,{onThumbnailProgress=()=>{}}={}){
+    if(this.backups&&await this.thumbnails.getJournal())throw new Error('统一备份恢复尚未完成，请刷新后修复再导入');
     if(this.readOnly)throw new Error('景观演示不能保存照片历史，请返回首页');
     if(this.scanner.running)throw new Error('请等待扫描结束或取消扫描');
     const batch=await this.manifest.getBatch(batchId);
@@ -111,14 +115,26 @@ export class PhotoHistoryService {
     // Prepare the durable intent first. Separate databases cannot share a
     // transaction: authoritative Memory URIs make post-commit recovery idempotent.
     await this.manifest.putBatch({...batch,status:'prepared',commitState:'prepared',preparedRevision:preview.baseRevision});
+    let thumbnailWarnings=[];if(batch.review.retainThumbnails&&this.thumbnails){thumbnailWarnings=await this.retainThumbnails(Object.keys(plan.links),{onProgress:onThumbnailProgress});}
     if(plan.changed)await this.repository.update(d=>{
       if(d.revision!==preview.baseRevision)throw new Error('人生数据已变化，请重新预览再确认');
       plan=buildPhotoPlan(d,assets,batch.review,{batchId});Object.assign(d,plan.dataset);
     });
     let warning=null;try{await this.manifest.acknowledge(batchId,plan.links);}catch(error){warning=`人生数据已保存，媒体索引确认未完成；刷新后可修复：${error.message}`;}
-    return {createdMemories:plan.summary.createMemories,summary:plan.summary,links:plan.links,warning,tripId:plan.summary.createdTripIds[0]||batch.review.candidates.find(c=>!c.excluded&&c.action==='link')?.relatedTripId||null};
+    if(thumbnailWarnings.length)warning=[warning,`照片记忆已保存；${thumbnailWarnings.length} 张未能生成或保留缩略图，请查看照片诊断。`].filter(Boolean).join(' ');
+    return {thumbnailWarnings,createdMemories:plan.summary.createMemories,summary:plan.summary,links:plan.links,warning,tripId:plan.summary.createdTripIds[0]||batch.review.candidates.find(c=>!c.excluded&&c.action==='link')?.relatedTripId||null};
+  }
+  async retainThumbnails(ids,{onProgress=()=>{}}={}){
+    const warnings=[];let capacity=false,done=0;
+    for(const id of ids){const asset=await this.manifest.getAsset(id);if(!asset)continue;
+      try{let retained=null;try{retained=await this.thumbnails.read(id);}catch{/* Reselecting an original can replace a broken retained resource. */}if(retained){onProgress({processed:++done,total:ids.length});continue;}if(capacity)throw new Error('THUMBNAIL_CAPACITY_LIMIT');const file=this.scanner.fileFor(id);if(!file)throw new Error('THUMBNAIL_RESELECT_REQUIRED');
+        const blob=await this.thumbnailGenerator.create(file,{dimensions:asset.dimensions,orientation:asset.orientation});const reference=await this.thumbnails.put(id,blob);await this.manifest.updateAsset(id,{thumbnailReference:reference,thumbnailStatus:'saved'});
+      }catch(error){const code=/CAPACITY_LIMIT/.test(error.message)?'THUMBNAIL_CAPACITY_LIMIT':error.message==='THUMBNAIL_RESELECT_REQUIRED'?error.message:'THUMBNAIL_UNAVAILABLE';if(code==='THUMBNAIL_CAPACITY_LIMIT')capacity=true;warnings.push({assetId:id,code});await this.manifest.updateAsset(id,{thumbnailStatus:code,diagnostics:[...new Set([...asset.diagnostics,code])]});}
+      onProgress({processed:++done,total:ids.length});
+    }this.thumbnailGenerator.close();return warnings;
   }
   async recover(){
+    if(this.backups)await this.backups.recover();
     const data=this.repository.getDataset(),links=Object.fromEntries(data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('media:')).map(m=>[m.uri.slice(6),m.id]));
     for(const batch of await this.manifest.listBatches()){
       if(batch.status==='scanning')await this.manifest.putBatch({...batch,status:'interrupted',error:'页面关闭中断；重新选择原文件可续扫'});
@@ -129,5 +145,5 @@ export class PhotoHistoryService {
       }
     }
   }
-  async restoreManifest(input){if(this.scanner.running)throw new Error('请先停止扫描');await this.manifest.restore(input);await this.recover();}
+  async restoreManifest(input){if(this.scanner.running)throw new Error('请先停止扫描');validateManifest(input);input=clone(input);const ids=new Set(input.assets.map(a=>a.assetId));if(this.repository.getDataset().memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:')&&!ids.has(m.uri.slice(6))))throw new Error('此媒体索引缺少现有照片记忆引用，未替换本地索引；请使用对应的统一备份');for(const asset of input.assets)if(asset.thumbnailReference){let retained=null;try{retained=await this.thumbnails?.read(asset.assetId);}catch{/* A metadata-only backup cannot restore a missing Blob. */}if(!retained){asset.thumbnailReference=null;asset.thumbnailStatus='THUMBNAIL_RESELECT_REQUIRED';asset.diagnostics=[...new Set([...asset.diagnostics,'THUMBNAIL_RESELECT_REQUIRED'])];}}await this.manifest.restore(input);await this.recover();}
 }
