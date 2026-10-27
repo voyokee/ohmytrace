@@ -582,3 +582,49 @@ body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { 
 .auto-result b { font-size:24px; color:var(--accent); margin:0 2px; }
 .auto-error { margin:0; color:var(--bad); font-size:14px; }
 #photo-dialog .photo-auto .auto-main { justify-content:center; text-align:center; }
+
+/* One bottom card for private city, journey and life-stage records. */
+#card.record-card { top:auto; bottom:150px; left:34px; width:min(440px,calc(100vw - 68px)); max-height:min(540px,52dvh); padding:16px; display:flex; flex-direction:column; overflow:hidden; }
+body:has(#timeline.has-chapters) #card.record-card { bottom:190px; }
+#card.record-card h2 { flex:none; font-size:23px; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+#card.record-card .card-kicker,#card.record-card .card-date { flex:none; }
+.record-source { flex:none; margin-top:8px; font-size:12px; color:var(--muted); }
+.record-source summary { cursor:pointer; min-height:28px; padding:4px 0; }
+.record-source .hint { margin:4px 0 8px; max-height:70px; overflow:auto; }
+.record-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:8px 0; flex:none; }
+.record-actions button { min-height:44px; padding:7px 3px; border:1px solid var(--line-2); border-radius:10px; font-size:13px; }
+.record-actions .card-replay { color:var(--home); background:rgba(234,201,151,.08); }
+.record-actions button:hover,.record-more:hover { background:rgba(255,255,255,.08); }
+.record-body { min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.record-body h3 { font-size:13px; color:var(--muted); margin:12px 0 6px; }
+.record-links .mini { display:flex; flex-direction:column; align-items:flex-start; width:100%; min-height:44px; text-align:left; padding:8px; border-bottom:1px solid var(--line); gap:4px; overflow-wrap:anywhere; }
+.record-links .mini strong { font-size:14px; font-weight:500; }
+.record-links .mini small { color:var(--faint); font-size:11px; }
+.record-more { min-height:44px; padding:8px; color:var(--home); font-size:12px; }
+.record-corrections form { padding:10px 0; border-bottom:1px solid var(--line); }
+.record-corrections label { display:block; font-size:12px; color:var(--muted); }
+.record-corrections input:not([type=checkbox]),.record-corrections select { display:block; width:100%; min-height:44px; font-size:16px; margin:6px 0 8px; }
+.record-corrections .btn { min-height:44px; }
+.record-corrections .danger { color:#efafa5; }
+.record-split-options { max-height:150px; overflow:auto; }
+.record-split-options label { display:flex; gap:8px; align-items:center; min-height:44px; }
+.record-split-options input { flex:none; }
+.record-photo-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.record-photo-grid figure { margin:0; min-width:0; }
+.record-photo-grid figure>span { display:flex; align-items:center; justify-content:center; min-height:85px; font-size:10px; color:var(--faint); background:rgba(255,255,255,.04); border-radius:7px; overflow:hidden; }
+.record-photo-grid img { width:100%; aspect-ratio:1; object-fit:cover; }
+.record-photo-grid figcaption { font-size:10px; overflow-wrap:anywhere; padding:4px 0; }
+.record-photo-grid small { display:block; color:var(--faint); }
+#record-feedback { position:fixed; top:108px; right:20px; max-width:calc(100vw - 40px); z-index:16; padding:8px 12px; display:flex; align-items:center; gap:12px; font-size:13px; }
+#record-feedback[hidden] { display:none; }
+#record-feedback button { min-width:44px; min-height:44px; color:var(--home); }
+@media(max-width:700px) {
+  #card.record-card,body:has(#timeline.has-chapters) #card.record-card { left:12px; right:12px; width:auto; bottom:calc(var(--mobile-timeline-height,110px) + 24px + env(safe-area-inset-bottom)); max-height:min(460px,49dvh); padding:12px; }
+  #card.record-card h2 { font-size:20px; }
+  .record-actions { gap:6px; margin:5px 0; }
+  .record-actions button { font-size:12px; }
+  .record-source { margin-top:3px; }
+  #record-feedback { top:calc(104px + env(safe-area-inset-top)); right:12px; max-width:calc(100vw - 24px); padding:4px 10px; gap:5px; }
+}
+body.story-readonly #record-feedback { display:none; }
+#card.record-card .card-x { width:44px; height:44px; top:4px; right:4px; }

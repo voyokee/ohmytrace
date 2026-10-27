@@ -59,7 +59,7 @@ try{
   await page.locator('#chapter-form [name=title]').fill('云南阶段');await page.locator('#chapter-form [name=start]').fill('2023');await page.locator('#chapter-form [name=end]').fill('2025');
   await page.locator('#chapter-form details').first().locator('summary').click();await page.locator('#chapter-form [name=relatedTripIds]').first().check();
   await page.locator('#chapter-form button[type=submit]').click();await page.waitForSelector('[data-life-view]');await page.locator('[data-life-view]').first().click();
-  await openShare();assert.equal(await shareSource(),'all','A Chapter view falls back to all when no journey or year is selected');await closeShare();
+  await openShare();assert.match(await shareSource(),/^chapter:/,'A stage card shares that stage');await closeShare();
   for(const width of [320,375,390,430]){
     await page.setViewportSize({width,height:844});const buttons=await geometry();assert.equal(buttons.length,5);assert.ok(buttons.every(b=>b.width===42&&b.height===42&&b.x>=0&&b.right<=width));
     const layout=await page.evaluate(()=>{const box=s=>document.querySelector(s).getBoundingClientRect();return {titleRight:box('#brand h1').right,toolbarLeft:box('#toolbar').left,titleBottom:box('#brand h1').bottom,toolbarTop:box('#toolbar').top,statsTop:box('#stats').top,toolbarBottom:box('#toolbar').bottom};});

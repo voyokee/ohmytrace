@@ -8,7 +8,7 @@ export function cityHistory({trips=[],homes=[],photos=[]},place,{year=null,now=D
     const dates=t.stops.filter(s=>s.place===place&&overlaps(s.date)).map(s=>s.date).filter(Boolean).sort((a,b)=>b.start-a.start);
     return {trip:t,date:dates[0]||null};
   }).sort((a,b)=>(b.date?.start??-Infinity)-(a.date?.start??-Infinity));
-  return {category:active.length?'现住':past.length?'曾住':journeys.length?'旅行到访':photos.length?'照片到访':'阶段地点',
+  return {category:active.length?'现住':past.length?'曾住':journeys.length?'旅行到访':photos.length?(photos.every(p=>p.source==='story-scene')?'分享地点':'照片到访'):'阶段地点',
     current:active.filter(h=>overlaps(h.date)),past:past.filter(h=>overlaps(h.date)),journeys};
 }
 

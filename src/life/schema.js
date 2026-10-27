@@ -61,6 +61,7 @@ export function validateDataset(data) {
     if (!Array.isArray(data[key])) throw new Error(`缺少集合：${key}`);
     sets[key] = new Set();
     for (const entity of data[key]) {
+      if(entity?.hidden!==undefined&&typeof entity.hidden!=='boolean')throw new Error('无效的记录隐藏状态');
       requireText(entity?.id, `${key} ID`);
       if (allIds.has(entity.id)) throw new Error(`重复 ID：${entity.id}`);
       allIds.add(entity.id); sets[key].add(entity.id);

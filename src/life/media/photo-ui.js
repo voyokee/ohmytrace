@@ -5,7 +5,7 @@ import {editCandidate,editVisitName,mergeCandidates,splitCandidate} from './reco
 import {MEDIA_LIMITS} from './config.js';
 import {androidPhotoCapability} from '../../platform/android-photo-capability.js';
 import {AndroidLibraryImporter,scanRange} from '../../platform/android-library-importer.js';
-import {AndroidAutoImport} from '../../platform/android-auto-import.js';
+import {AndroidAutoImport,androidPointer} from '../../platform/android-auto-import.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const reasonText={
   'daily-photos-within-residence':'已知居住时段内的日常照片','possible-away-visit':'可能的离家到访',
@@ -201,5 +201,6 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       if(button.dataset.photoResume){dialog.dataset.resumeBatch=button.dataset.photoResume;dialog.querySelector('[data-photo-files]').click();}
     });
   });
-  render();return {open,needsRegroup:()=>!!autoImporter&&!autoImporter.running&&autoImporter.outdated()};
+  render();return {open,needsRegroup:()=>!!autoImporter&&!autoImporter.running&&autoImporter.outdated(),
+    async thumbnail(memory,options={}){const pointer=androidPointer(memory.uri);if(pointer&&native)return native.preview(pointer,options);if(memory.uri?.startsWith('media:'))return service.thumbnails?.read(memory.uri.slice(6));return null;}};
 }

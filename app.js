@@ -3,6 +3,7 @@
 const publicViewer=document.body.hasAttribute('data-story-viewer');
 const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
+const {mountRecordCard,recordCardModel}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
@@ -204,7 +205,7 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI, photoUI;
+let life, lifeSnapshot, lifeUI, photoUI, recordCard;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
@@ -235,6 +236,12 @@ async function load() {
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
     photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
       onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+    recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,
+      onClose:()=>deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>syncRecordSelection(target),
+      onReplay:scope=>{if(!storyExperience)throw new Error('回放正在准备，请稍后重试');return storyExperience.replay(scope);},
+      onShare:scope=>{if(!storyExperience)throw new Error('分享正在准备，请稍后重试');return storyExperience.composer.open({source:scope});},
+      onExplore:id=>{const name=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===id);if(name)focusCardPlace(name);},
+      thumbnail:(memory,options)=>photoUI.thumbnail(memory,options)});
   } catch(error){storageError(error);$('#btn-life').disabled=true;}
 }
 async function importCsvText(text,mode) {
@@ -1114,6 +1121,7 @@ function onMarkerClick(name,info) {
 let lastTap={x:innerWidth/2,y:innerHeight/2,element:null},lastCluster={key:'',at:0};
 document.addEventListener('pointerup',e=>{lastTap={x:e.clientX,y:e.clientY,element:e.target.closest?.('.mk,.mk-cluster')||null};},true);
 function showCity(name,info,anchor,element) {
+  if(recordCard&&!storyBaseLife&&!publicViewer){openRecord({kind:'place',id:lifeSnapshot.placeIds[name]});return;}
   pauseOverviewMotion();
   state.sel=null;state.city=name;expandedCardId=null;
   life?.adapter.focusPlace(lifeSnapshot.placeIds[name]);renderCard();updateSelectionUI();
@@ -1390,7 +1398,29 @@ function focusCardPlace(name) {
 }
 
 let expandedCardId=null;
+function syncRecordSelection(target){
+  state.sel=null;state.city=null;mapChooser?.close();
+  if(target?.kind==='place')state.city=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===target.id)||null;
+  else if(target?.kind==='trip'||target?.kind==='residence')state.sel=target.id;
+  else if(target?.kind==='chapter'){state.year=null;life.adapter.setScope({type:'chapter',id:target.id});lifeUI?.renderStrip();}
+  refresh();updateSelectionUI();
+}
+function openRecord(target,{fly=true}={}){
+  if(!recordCard||publicViewer||storyBaseLife)return;
+  storyExperience?.pauseForInteraction();pauseOverviewMotion();mapChooser?.close();
+  recordCard.open(target);syncRecordSelection(target);
+  if(isMobile())body.classList.remove('list-open');
+  if(!fly)return;
+  const item=byId(target.id);
+  if(item)flyToItem(item);
+  else if(target.kind==='chapter')homeView(1.8);
+  else{
+    const name=Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===target.id);
+    if(name&&posOf(name))flyToPoints([posOf(name)],{placeName:name});
+  }
+}
 function renderCard() {
+  if(recordCard&&!publicViewer&&!storyBaseLife){recordCard.render();return;}
   const el = $('#card');
   const x = byId(state.sel);
   const show=!!x&&(!storyScene||storyExploreCard);
@@ -1445,6 +1475,7 @@ function select(id, { fly = true } = {}) {
   if(storyScene)storyExploreCard=true;
   const x = byId(id);
   if (!x) return;
+  if(recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:x.anchor?'place':x.kind==='trip'?'trip':'residence',id:x.anchor?x.placeId:id},{fly});return;}
   if(state.sel!==id)expandedCardId=null;
   state.city=null;mapChooser?.close();
   state.sel = id;
@@ -1456,6 +1487,7 @@ function select(id, { fly = true } = {}) {
 }
 
 function deselect({ home = true } = {}) {
+  if(recordCard&&!publicViewer&&!storyBaseLife)recordCard.close();
   expandedCardId=null;
   state.city=null;
   state.sel = null;
@@ -1474,6 +1506,7 @@ function step(dir) {
 function setYear(y) {
   const next=y==null?null:Number(y);if(next===state.year&&life?.adapter.scope.type!=='chapter'&&!state.sel&&!state.city&&!flying&&!orbit&&!scenery.name)return;
   if(next!=null&&!yearOptions(trips).includes(next))return;
+  recordCard?.close();
   stopPlay();mapChooser?.close();state.city=null;state.year=next;
   life?.adapter.setScope({type:'all'});lifeUI?.renderStrip();
   state.sel=null;refresh();
@@ -1483,6 +1516,8 @@ function setYear(y) {
 }
 
 function setChapter(id) {
+  if(id&&recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:'chapter',id});return;}
+  recordCard?.close();
   stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;
   life.adapter.setScope(id?{type:'chapter',id}:{type:'all'});refresh();
   if(id)body.classList.add('list-open');
@@ -1746,7 +1781,7 @@ function bindEvents() {
     if (draft && i != null && k) draft[+i][k] = e.target.value;
   });
   document.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea')) {
+    if (e.target.matches('input, textarea, select')) {
       if (e.key === 'Enter' && e.target.closest('.search-box')) e.target.closest('.search-row').querySelector('[data-act=do-search]').click();
       return;
     }
@@ -1762,12 +1797,14 @@ function bindEvents() {
       e.preventDefault();return;
     }
     if (e.key === 'Escape') {
+      if(document.querySelector('dialog[open]'))return;
       if(menu&&!menu.hidden){closeMenu(true);e.preventDefault();return;}
       if (mapChooser?.close(true)) return;
+      if(!storyBaseLife&&recordCard?.escape()){e.preventDefault();return;}
       if (pickName) endPick();
       else if (body.classList.contains('modal-open')) closeModal();
       else if (state.playing) stopPlay();
-      else if (state.sel) deselect();
+      else if (state.sel||recordCard?.selection) deselect();
       else homeView();
     } else if (e.key.toLowerCase() === 'n') toggleTone();
     else if (state.sel && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) step(e.key === 'ArrowRight' ? 1 : -1);
@@ -1818,12 +1855,12 @@ async function boot() {
   await initGlobe();
   refresh();
   geocodeMissing();
-  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:{type:'all'};},
+  storyExperience=await mountStoryExperience({privateData:publicViewer?null:()=>(storyBaseLife||life).repository.getDataset(),getScope:()=>{const owner=storyBaseLife||life,selected=storyBaseSelection&&storyBaseLife?storyBaseSelection.card:recordCard?.selection;if(selected){const model=recordCardModel(owner.repository.getDataset(),selected,{year:storyBaseLife?storyBaseSelection.year:state.year});if(model)return model.scope;}const sel=byId(state.sel);return sel?.kind==='trip'?{type:'trip',id:sel.id}:state.year?{type:'year',year:state.year}:owner.adapter.scope.type==='chapter'?owner.adapter.scope:{type:'all'};},
     reducedMotion,cancel:()=>pauseOverviewMotion(),
-    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places};}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
+    applyBridge:bridge=>{if(!publicViewer&&!storyBaseLife){storyBaseLife=life;storyBaseSelection={year:state.year,sel:state.sel,day:cinematicDay,renderPlaces:state.places,card:recordCard?.selection};recordCard?.close();}life=bridge;mapChooser?.close();state.city=null;state.year=null;state.sel=null;body.classList.add('story-readonly');
       if(!storyFallbackLayer)storyFallbackLayer=viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({url:'assets/earth/day-mobile.jpg',tileWidth:2048,tileHeight:1024}),0);
       refresh();},
-    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
+    restore:()=>{storyScene=null;pauseOverviewMotion();if(storyBaseLife){life=storyBaseLife;storyBaseLife=null;state.year=storyBaseSelection.year;state.sel=storyBaseSelection.sel;state.places=storyBaseSelection.renderPlaces;if(cinematicDay!==storyBaseSelection.day)toggleTone();if(storyFallbackLayer){viewer.imageryLayers.remove(storyFallbackLayer);storyFallbackLayer=null;}body.classList.remove('story-readonly');if(storyBaseSelection.card)recordCard?.open(storyBaseSelection.card);lifeUI?.renderStrip();refresh();}homeView(reducedMotion?0:1.2);},
     onError:error=>toast('回放失败：'+error.message,5000),
     onTheme:theme=>{if((theme==='night')!==!cinematicDay)toggleTone();},
     enter:async(item,{signal,instant,speed})=>{

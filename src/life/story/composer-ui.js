@@ -1,16 +1,17 @@
+import {tripCountsAsTravel} from '../travel-policy.js';
 import {composeStory,setStoryMemories,storyYears} from './compose.js';
 import {projectShare} from './share.js';
-import {esc,periodText} from './schema.js';
+import {esc,periodText,memoryInStory} from './schema.js';
 import {storyThumbnail} from './thumbnail.js';
 import {createPublishingPanel} from './publishing/panel.js';
 
 const sceneNames={globe:'开场',chapter:'人生阶段',trip:'旅行概览',place:'地点飞入',memory:'记忆时刻',closing:'结束'};
 export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPreview,onExportPackage,saveBlob,publisher=null}){
   const dialog=document.createElement('dialog');dialog.id='story-composer';dialog.className='dialog glass';dialog.setAttribute('aria-label','编辑与分享回放');document.body.append(dialog);
-  let story=null,images={},review=null,approved=false,source='all',busy=false,simple=true,origin=null,shared=null,custom=null;
+  let story=null,images={},review=null,approved=false,source='all',busy=false,simple=true,origin=null,shared=null,custom=null,sourceScope=null,originScope=null;
   const publishing=createPublishingPanel({publisher,getArtifact:()=>review,isApproved:()=>approved&&!!review});
   const data=()=>getDataset();
-  const availableMemories=()=>{const d=data();return d.memories.filter(m=>m.tripIds.some(id=>story.selectedTripIds.includes(id))||d.chapters.some(c=>story.selectedChapterIds.includes(c.id)&&c.memoryIds.includes(m.id)));};
+  const availableMemories=()=>{const d=data();return d.memories.filter(m=>memoryInStory(story,d,m));};
   function dirty(){review=null;approved=false;publishing.refresh();}
   function editText(el){
     if(el.hasAttribute('data-story-field'))story[el.dataset.storyField]=el.value;
@@ -31,9 +32,10 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
     dialog.innerHTML=`<div class="dlg-head"><h3>编辑与分享</h3><button class="x" data-story-composer-close aria-label="关闭故事编辑">×</button></div><div class="dlg-body scroll">
       <p class="hint">回放只使用你已记录的足迹，不会编造经历。分享前请在下方确认隐私范围。</p>
       <div class="story-source"><label class="life-field">回放范围<select data-story-source><option value="all">全部足迹</option>
-        ${d.chapters.map(c=>`<option value="chapter:${esc(c.id)}">人生阶段 · ${esc(c.title)}</option>`).join('')}
+        ${d.chapters.filter(c=>!c.hidden).map(c=>`<option value="chapter:${esc(c.id)}">人生阶段 · ${esc(c.title)}</option>`).join('')}
+        ${['place','residence'].includes(scope().type)?`<option value="${esc(source)}">当前记录</option>`:''}
         ${years.map(y=>`<option value="year:${y}">${y} 年</option>`).join('')}
-        ${d.trips.map(t=>`<option value="trip:${esc(t.id)}">旅行 · ${esc(t.title)}</option>`).join('')}</select></label><button class="btn" data-story-generate>按此范围重新生成</button></div>
+        ${d.trips.filter(t=>tripCountsAsTravel(d,t)).map(t=>`<option value="trip:${esc(t.id)}">旅行 · ${esc(t.title)}</option>`).join('')}</select></label><button class="btn" data-story-generate>按此范围重新生成</button></div>
       ${story?`<label class="life-field">标题<input data-story-field="title" value="${esc(story.title)}" maxlength="200"></label>
       <label class="life-field">说明<textarea data-story-field="description" maxlength="4000" rows="2">${esc(story.description)}</textarea></label>
       <label class="life-field">视觉主题<select data-story-field="visualTheme">${Object.entries({atlas:'金色足迹',night:'夜景灯火',paper:'素笺叙事'}).map(([v,t])=>`<option value="${v}" ${story.visualTheme===v?'selected':''}>${t}</option>`).join('')}</select></label>
@@ -59,6 +61,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   // defaults (blurred places, no notes or photos); everything else is under 更多设置.
   function ranges(){
     const d=data(),years=new Set(storyYears(d)),now=new Date().getFullYear(),out=[];
+    for(const [kind,key,label]of [['place','places','这座城市'],['residence','residences','这段居住'],['chapter','chapters','这个阶段']])if(origin?.startsWith(kind+':')&&d[key].some(e=>kind+':'+e.id===origin&&!e.hidden))out.push([origin,label+(sourceScope?.year?' · '+sourceScope.year+' 年':'')]);
     if(origin?.startsWith('trip:')){const t=d.trips.find(t=>'trip:'+t.id===origin);if(t)out.push([origin,'这次旅行']);}
     if(years.has(now))out.push([`year:${now}`,'今年']);if(years.has(now-1))out.push([`year:${now-1}`,'去年']);
     if(origin?.startsWith('year:')&&!out.some(([value])=>value===origin))out.push([origin,`${origin.slice(5)} 年`]);
@@ -89,15 +92,15 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       saveBlob(file.name,file);shared={file:true};
     }finally{busy=false;render();if(shared?.file){const el=dialog.querySelector('[data-story-progress]');if(el)el.textContent='分享文件已生成，可以发给朋友用足迹分享页打开。';}}
   }
-  function scope(){const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='range'?{type,start:rest[0],end:rest[1]}:type==='all'?{type}:{type,id:rest.join(':')};}
-  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?entity.title:s.type==='year'?`${s.year} 年`:s.type==='range'?`${s.start} 至 ${s.end}`:'OnceHere 足迹回顾'});images={};dirty();render();}
+  function scope(){if(sourceScope)return structuredClone(sourceScope);const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='range'?{type,start:rest[0],end:rest[1]}:type==='all'?{type}:{type,id:rest.join(':')};}
+  function generate(){const s=scope(),entity=s.type==='chapter'?data().chapters.find(c=>c.id===s.id):s.type==='trip'?data().trips.find(t=>t.id===s.id):s.type==='place'?data().places.find(p=>p.id===s.id):s.type==='residence'?data().residences.find(r=>r.id===s.id):null;story=composeStory(data(),{scope:s,title:entity?(entity.title||entity.name):s.type==='year'?`${s.year} 年`:s.type==='range'?`${s.start} 至 ${s.end}`:'OnceHere 足迹回顾'});images={};dirty();render();}
   dialog.addEventListener('input',e=>editText(e.target));
   dialog.addEventListener('change',e=>{const el=e.target;if(!el.matches('[data-share-from],[data-share-to]'))return;
     custom[el.hasAttribute('data-share-from')?'from':'to']=el.value;
-    try{if(custom.from&&custom.to){source=`range:${custom.from}:${custom.to}`;shared=null;generate();}}catch(err){error(err);}},true);
+    try{if(custom.from&&custom.to){sourceScope=null;source=`range:${custom.from}:${custom.to}`;shared=null;generate();}}catch(err){error(err);}},true);
   dialog.addEventListener('change',async e=>{
     const el=e.target;if(publishing.element.contains(el))return;try{
-      if(el.hasAttribute('data-story-source')){source=el.value;return;}
+      if(el.hasAttribute('data-story-source')){sourceScope=null;source=el.value;return;}
       if(editText(el))return;
       if(el.hasAttribute('data-story-policy'))story.privacySettings[el.dataset.storyPolicy]=el.type==='checkbox'?el.checked:el.value;
       if(el.hasAttribute('data-story-trip')){const id=el.dataset.storyTrip;story.privacySettings.excludedTripIds=el.checked?story.privacySettings.excludedTripIds.filter(x=>x!==id):[...story.privacySettings.excludedTripIds,id];}
@@ -111,7 +114,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   dialog.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b)return;try{
       if(b.hasAttribute('data-story-composer-close')){dialog.close();return;}
-      if(b.hasAttribute('data-share-range')){const value=b.dataset.shareRange;shared=null;
+      if(b.hasAttribute('data-share-range')){const value=b.dataset.shareRange;shared=null;sourceScope=value===origin?structuredClone(originScope):null;
         if(value==='custom'){const month=new Date().toISOString().slice(0,7);custom=custom||{from:`${new Date().getFullYear()}-01`,to:month};source=`range:${custom.from}:${custom.to}`;}else{custom=null;source=value;}
         generate();return;}
       if(b.hasAttribute('data-share-go')){await shareNow();return;}
@@ -129,6 +132,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
   });
   return {
     // Quick replay composes with the same defaults so "编辑与分享" resumes exactly what was played.
-    prepare(value){source=value;origin=value;custom=null;generate();return structuredClone(story);},
-    open({resume=false}={}){document.querySelector('#life-dialog')?.close();simple=true;shared=null;custom=null;if(!resume){const s=getScope();source=s.type==='chapter'?`chapter:${s.id}`:s.type==='year'?`year:${s.year}`:s.type==='trip'?`trip:${s.id}`:'all';origin=source;generate();}else render();dialog.showModal();}};
+    prepare(value){choose(value);custom=null;generate();return structuredClone(story);},
+    open({resume=false,source:requested}={}){document.querySelector('#life-dialog')?.close();simple=true;shared=null;custom=null;if(!resume){choose(requested||getScope());generate();}else render();dialog.showModal();}};
+  function choose(value){sourceScope=typeof value==='object'?structuredClone(value):null;source=typeof value==='string'?value:value.type==='year'?`year:${value.year}`:value.type==='range'?`range:${value.start}:${value.end}`:value.type==='all'?'all':`${value.type}:${value.id}`;origin=source;originScope=structuredClone(sourceScope);}
 }

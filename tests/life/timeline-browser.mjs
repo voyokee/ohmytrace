@@ -52,7 +52,7 @@ try {
   await viewport.hover();await page.mouse.wheel(-600,0);
   await page.waitForFunction(()=>{const e=document.querySelector('.tl-main');return e.scrollLeft<e.scrollWidth-e.clientWidth-100;});
   await viewport.focus();await page.keyboard.press('End');await atLatest();
-  await page.locator('#card [data-act=close]').click();
+  await page.locator('#card [data-record-action=close]').click();
   await page.setViewportSize({width:390,height:844});await atLatest();
   await page.waitForTimeout(1600);
   await page.screenshot({path:resolve(output,'timeline-mobile-latest.png')});

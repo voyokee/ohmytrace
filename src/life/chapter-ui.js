@@ -6,7 +6,7 @@ const period=c=>`${dateText(c.start)||'开始未知'} – ${dateText(c.end)||'�
 export function mountChapterUI({repository,adapter,onScope,onError,onBackup,onRestore,status}) {
   const dialog=document.querySelector('#life-dialog'),strip=document.querySelector('#chapter-filter');
   let editing=null,busy=false;
-  const data=()=>repository.getDataset();
+  const data=()=>{const d=repository.getDataset();return {...d,chapters:d.chapters.filter(c=>!c.hidden),places:d.places.filter(p=>!p.hidden),trips:d.trips.filter(t=>!t.hidden)};};
   const current=()=>adapter.scope.type==='chapter'?adapter.scope.id:null;
   function renderStrip() {
     const d=data();strip.replaceChildren();

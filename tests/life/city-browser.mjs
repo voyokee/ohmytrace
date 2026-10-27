@@ -35,24 +35,18 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/?perf`);
   await page.waitForSelector('#globe canvas');
   await page.waitForFunction(()=>document.querySelector('#list-count')?.textContent==='3'&&document.querySelector('#loader')?.classList.contains('out'),null,{timeout:60000});
-  // Even a single-visit city must open its history, not the trip and Singapore departure.
-  await city('丽江');
-  assert.equal(await page.locator('#map-chooser[data-kind=city]').isVisible(),true,'A city opens its own overview before selecting any journey');
-  assert.equal(await page.locator('body.card-open').count(),0,'Opening a city must clear journey selection');
-  assert.match(await page.locator('#map-chooser').innerText(),/旅行到访/);
-  await city('昆明');
-  assert.match(await page.locator('#map-chooser').innerText(),/2 次旅程/);
-  assert.deepEqual(await page.locator('#map-chooser .chooser-item span').allTextContents(),['云南重访','云南初访']);
-  await page.locator('#map-chooser .chooser-item').first().click();
-  await page.waitForSelector('body.card-open #card h2');assert.equal(await page.locator('#card h2').innerText(),'云南重访');
-  await city('昆明');assert.equal(await page.locator('body.card-open').count(),0,'City click also leaves the currently selected journey');
-  assert.equal(await page.locator('#map-chooser .chooser-item').count(),2);
-  await city('新加坡');assert.match(await page.locator('#map-chooser').innerText(),/现住/);assert.match(await page.locator('#map-chooser').innerText(),/0 次旅程/);
-  await city('成都');assert.match(await page.locator('#map-chooser').innerText(),/曾住[\s\S]*旅行到访/);
-  await page.setViewportSize({width:390,height:844});await city('昆明');
-  const bounds=await page.locator('#map-chooser').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=390);
+  // A single-visit city opens the common city card before selecting a journey.
+  await city('丽江');assert.equal(await page.locator('#card[data-record-kind=place].show').isVisible(),true);assert.equal(await page.locator('#card h2').innerText(),'丽江');
+  assert.match(await page.locator('#card').innerText(),/相关旅程 · 1/);
+  await city('昆明');assert.match(await page.locator('#card').innerText(),/相关旅程 · 2/);
+  assert.deepEqual(await page.locator('#card .record-links [data-record-kind=trip] strong').allTextContents(),['云南重访','云南初访']);
+  await page.locator('#card .record-links [data-record-kind=trip]').first().click();assert.equal(await page.locator('#card h2').innerText(),'云南重访');assert.equal(await page.locator('#card').getAttribute('data-record-kind'),'trip');
+  await city('昆明');assert.equal(await page.locator('#card').getAttribute('data-record-kind'),'place');assert.equal(await page.locator('#card .record-links [data-record-kind=trip]').count(),2);
+  await city('新加坡');assert.match(await page.locator('#card').innerText(),/居住城市/);assert.equal(await page.locator('#card .record-links [data-record-kind=trip]').count(),0);
+  await city('成都');assert.match(await page.locator('#card').innerText(),/曾住城市/);assert.match(await page.locator('#card').innerText(),/相关旅程 · 1/);
+  await page.setViewportSize({width:390,height:844});await city('昆明');const bounds=await page.locator('#card').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=390);
   await page.screenshot({path:resolve(output,'city-mobile.png')});
-  await page.reload();await page.waitForSelector('#markers .mk',{state:'attached'});await city('昆明');assert.equal(await page.locator('#map-chooser .chooser-item').count(),2);
+  await page.reload();await page.waitForSelector('#markers .mk',{state:'attached'});await city('昆明');assert.equal(await page.locator('#card .record-links [data-record-kind=trip]').count(),2);
   assert.deepEqual(errors,[]);console.log('PASS: single/repeated visits, current/former residence, revisit after residence, explicit journey selection, mobile and reload');
   console.log('Screenshot: '+resolve(output,'city-mobile.png'));
 } finally {await context.close();await browser.close();await new Promise(r=>server.close(r));}

@@ -1,6 +1,6 @@
 import {clone,validateDataset,validatePeriod} from '../schema.js';
-import {tripCountsAsTravel,visitCountsAsTravel} from '../travel-policy.js';
-import {validateStory,validateScene,keys,list,ids,text} from './schema.js';
+import {validateStory,validateScene,keys,list,ids,text,memoryInStory} from './schema.js';
+import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
 
 const date=d=>({precision:d.precision,value:d.value});
 const period=e=>({start:date(e.start),end:date(e.end)});
@@ -9,15 +9,19 @@ export const COORDINATE_RULE='0.1-degree-grid (~11 km latitude); not an administ
 export function projectShare(data,story,{images={}}={}){
   validateDataset(data);validateStory(story);
   const policy=story.privacySettings;
-  const chapters=data.chapters.filter(c=>story.selectedChapterIds.includes(c.id));
-  const trips=data.trips.filter(t=>story.selectedTripIds.includes(t.id)&&tripCountsAsTravel(data,t)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>visitCountsAsTravel(data,data.visits.find(v=>v.id===id),t))}));
-  if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id&&tripCountsAsTravel(data,t))))throw new Error('原始人生记录已改变，请重新生成故事');
-  const selectedMemories=data.memories.filter(m=>story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&
-    (m.tripIds.some(id=>trips.some(t=>t.id===id))||chapters.some(c=>c.memoryIds.includes(m.id)))&&
+  const sceneStops=new Set(story.orderedScenes.filter(s=>s.kind==='place'&&s.tripId).map(s=>s.tripId+'|'+s.placeId));
+  const chapters=data.chapters.filter(c=>!c.hidden&&story.selectedChapterIds.includes(c.id)).map(c=>({...c,homeAnchors:c.homeAnchors.filter(id=>visiblePlace(data,id))}));
+  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>{const v=data.visits.find(v=>v.id===id);return visitCountsAsTravel(data,v,t)&&sceneStops.has(t.id+'|'+v.placeId);})}));
+  if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id)))throw new Error('原始人生记录已改变，请重新生成故事');
+  if(story.selectedChapterIds.some(id=>data.chapters.find(c=>c.id===id)?.hidden)||story.selectedTripIds.some(id=>!tripCountsAsTravel(data,data.trips.find(t=>t.id===id))))throw new Error('原始人生记录已改变，请重新生成故事');
+  const selectedMemories=data.memories.filter(m=>!m.hidden&&story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&
+    memoryInStory({...story,selectedTripIds:trips.map(t=>t.id),selectedChapterIds:chapters.map(c=>c.id)},data,m)&&
     (m.kind==='photo'?policy.includePhotos:policy.includeNotes));
   const visitIds=new Set(trips.flatMap(t=>t.visitIds)),visits=data.visits.filter(v=>visitIds.has(v.id));
-  const placeIds=new Set([...visits.map(v=>v.placeId),...chapters.flatMap(c=>c.homeAnchors),...selectedMemories.flatMap(m=>m.placeIds)]);
-  const places=data.places.filter(p=>placeIds.has(p.id));
+  if(story.orderedScenes.some(s=>s.placeId&&!visiblePlace(data,s.placeId)))throw new Error('原始人生记录已改变，请重新生成故事');
+  const standalonePlaces=story.orderedScenes.filter(s=>s.kind==='place'&&!s.tripId&&!s.chapterId).map(s=>s.placeId);
+  const placeIds=new Set([...visits.map(v=>v.placeId),...chapters.flatMap(c=>c.homeAnchors),...selectedMemories.flatMap(m=>m.placeIds),...standalonePlaces]);
+  const places=data.places.filter(p=>!p.hidden&&placeIds.has(p.id));
   const map=(items,prefix)=>new Map(items.map((e,i)=>[e.id,`${prefix}${i+1}`]));
   const pm=map(places,'p'),tm=map(trips,'t'),cm=map(chapters,'c'),mm=map(selectedMemories,'m');
   const homes=new Set(data.residences.map(r=>r.placeId));chapters.forEach(c=>c.homeAnchors.forEach(id=>homes.add(id)));
@@ -29,7 +33,7 @@ export function projectShare(data,story,{images={}}={}){
   const exportedMemories=selectedMemories.map(m=>({id:mm.get(m.id),kind:['photo','note','video'].includes(m.kind)?m.kind:'other',title:m.title||'记忆时刻',...period(m),
     placeIds:m.placeIds.map(id=>pm.get(id)).filter(Boolean),tripIds:m.tripIds.map(id=>tm.get(id)).filter(Boolean),
     text:policy.includeNotes&&typeof m.text==='string'?m.text:'',image:m.kind==='photo'&&images[m.id]?images[m.id]:null}));
-  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:t.title,type:t.type,...period(t),routeKind:t.visitIds.some(id=>!exportedPlaces.find(p=>p.id===pm.get(visits.find(v=>v.id===id).placeId)).coordinates)?'unknown':'inferred',
+  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:t.title,type:t.type,...period(t),routeKind:!t.visitIds.length||t.visitIds.some(id=>!exportedPlaces.find(p=>p.id===pm.get(visits.find(v=>v.id===id).placeId)).coordinates)?'unknown':'inferred',
     stops:t.visitIds.map(id=>{const v=visits.find(v=>v.id===id);return {placeId:pm.get(v.placeId),...period(v),note:policy.includeNotes?v.legacy.note:''};})}));
   const exportedChapters=chapters.map(c=>({id:cm.get(c.id),title:c.title,type:c.type,...period(c),homeAnchors:c.homeAnchors.map(id=>pm.get(id)),relatedTripIds:c.relatedTripIds.map(id=>tm.get(id)).filter(Boolean)}));
   const scenes=story.orderedScenes.filter(s=>(!s.chapterId||cm.has(s.chapterId))&&(!s.tripId||tm.has(s.tripId))&&(!s.memoryId||mm.has(s.memoryId))&&(!s.placeId||pm.has(s.placeId)))

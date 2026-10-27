@@ -22,5 +22,5 @@ export async function mountStoryExperience({privateData,getScope,enter,cancel,ap
   // sharing still starts from the composer's privacy defaults.
   async function quickPlay(source){const story=composer.prepare(source),data=privateData();
     await preview(projectShare(data,{...story,privacySettings:{...story.privacySettings,locationMode:'precise',includeNotes:true}},{images:{}}));}
-  return {pauseForInteraction(){if(player.playback.status==='playing')player.playback.pause();},composer,player};
+  return {pauseForInteraction(){if(player.playback.status==='playing')player.playback.pause();},composer,player,replay:privateData?quickPlay:null};
 }

@@ -22,8 +22,12 @@ export function createStoryBridge(input){
       const homes=selected.flatMap(c=>c.homeAnchors.map(id=>({id:`anchor:${c.id}:${id}`,anchor:true,kind:'home',title:names.get(id),place:names.get(id),placeId:id,type:'阶段地点',note:'分享的阶段地点',date:renderDate(c)})));
       const places=Object.create(null),placeIds=Object.create(null);
       for(const p of artifact.places){const name=names.get(p.id);placeIds[name]=p.id;places[name]={status:p.coordinates?'confirmed':'unknown',lifePlaceId:p.id,sourceName:p.name,granularity:p.granularity,...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{})};}
-      const rows=[...trips.flatMap(t=>t.stops.map(s=>({place:s.place}))),...homes.map(h=>({place:h.place}))];
-      return {rows,places,placeIds,trips,homes,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter):null,scope:clone(scope),focus:clone(focus)};
+      const rows=[...trips.flatMap(t=>t.stops.map(s=>({place:s.place}))),...homes.map(h=>({place:h.place}))],represented=new Set(rows.map(r=>r.place));
+      // A standalone city/residence story needs a visible map point even without
+      // a journey, chapter or photo. Do not fabricate a visit or photo count.
+      const photoPlaces=artifact.places.filter(p=>!represented.has(names.get(p.id))).map(p=>({place:names.get(p.id),placeId:p.id,count:0,years:[],source:'story-scene'}));
+      photoPlaces.forEach(p=>rows.push({place:p.place}));
+      return {rows,places,placeIds,trips,homes,photoPlaces,chapter:clone(chapter),chapterPeriod:chapter?renderDate(chapter):null,scope:clone(scope),focus:clone(focus)};
     }};
   return {adapter,status:()=>`只读分享 · ${artifact.title}`,artifact:clone(artifact)};
 }

@@ -60,7 +60,7 @@ try {
   await page.locator('[data-act=all-years]').click();assert.equal(await page.locator('#list-count').innerText(),'2');
   await page.locator(`[data-life-scope="${d.chapters[1].id}"]`).click();
   await page.locator('#list-body .item').filter({hasText:'北京实习'}).click();await page.waitForSelector('#card.show');assert.match(await page.locator('#card h2').innerText(),/北京实习/);
-  await page.locator('#card [data-place]').first().click();
+  await page.locator('#card [data-record-kind=place]').first().click();
   await page.waitForTimeout(2500);await page.screenshot({path:resolve(output,'03-chapter-trip-place.png')});
   await page.locator('#btn-tone').click();assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'true');
   await page.locator('#btn-tone').click();assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'false');
