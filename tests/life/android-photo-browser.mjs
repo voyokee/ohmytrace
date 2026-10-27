@@ -35,7 +35,7 @@ const shot=name=>page.screenshot({path:resolve(output,name)});
 try{
   await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));
   await page.locator('#empty-photos').click();await page.waitForSelector('[data-photo-auto-start]');
-  assert.equal(await page.locator('#photo-dialog input, #photo-dialog [data-photo-zip], #photo-dialog [data-photo-manage]').count(),0,'the app import is a single button: no inputs, ZIP or backup tools');
+  assert.equal(await page.locator('#photo-dialog input, #photo-dialog [data-photo-zip]').count(),0,'the app import is a single main action without file or date inputs');
   await shot('android-1-start.png');
   await page.evaluate(()=>localStorage.setItem('fake-gps-deny','yes'));await page.locator('[data-photo-auto-start]').click();
   await page.waitForSelector('.auto-error');assert.match(await page.locator('.auto-error').innerText(),/照片位置/);assert.ok(!(await page.evaluate(()=>window.nativeCalls)).includes('locate'),'nothing is read without photo GPS consent');
@@ -51,11 +51,11 @@ try{
   assert.ok(saved.places.every(p=>!/[A-Za-z]/.test(p.name)),`no English place names: ${saved.places.map(p=>p.name)}`);
   assert.equal(saved.trips.length,2);assert.deepEqual(saved.trips.map(t=>t.title),['登巴萨','京都'],'Chinese city titles replace province/country journeys');
   assert.match(await page.locator('.auto-result').innerText(),/新增 2 次旅行/);
-  await page.locator('[data-photo-auto-done]').click();await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
+  await page.locator('[data-photo-auto-done]').click();if(await page.locator('#first-use-dialog[open]').count()){await page.locator('[data-first-action=finish]').click();await page.waitForSelector('#first-use-dialog:not([open])',{state:'attached'});}await page.waitForFunction(()=>!document.querySelector('#photo-dialog').open);await page.waitForTimeout(1500);await shot('android-4-map.png');
   await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-start]');assert.match(await page.locator('.auto-intro').innerText(),/只会补充新拍的照片/);
   await page.locator('[data-photo-auto-start]').click();await page.waitForSelector('[data-photo-auto-done]');assert.match(await page.locator('.auto-result').innerText(),/没有发现新的足迹/);
   assert.equal((await data()).memories.length,located,'re-importing never duplicates');
-  await page.locator('[data-photo-auto-done]').click();assert.equal(await page.locator('#chips [data-act=regroup]').count(),0,'Regroup belongs inside Photos');
+  await page.locator('[data-photo-auto-done]').click();if(await page.locator('#first-use-dialog[open]').count()){await page.locator('[data-first-action=finish]').click();await page.waitForSelector('#first-use-dialog:not([open])',{state:'attached'});}assert.equal(await page.locator('#chips [data-act=regroup]').count(),0,'Regroup belongs inside Photos');
   await page.locator('#btn-photos').click();await page.waitForSelector('[data-photo-auto-regroup]');
   const calls=await page.evaluate(()=>window.nativeCalls.length),photoIds=(await data()).memories.map(m=>m.id);
   await page.locator('[data-photo-auto-regroup]').click();await page.waitForSelector('[data-photo-auto-done]',{timeout:120000});

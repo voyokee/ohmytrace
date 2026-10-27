@@ -4,8 +4,9 @@ import {projectShare} from './share.js';
 
 export function saveStoryBlob(name,blob){const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 export async function mountStoryExperience({privateData,getScope,enter,cancel,applyBridge,restore,onTheme,onError,reducedMotion}){
-  let composer;
-  const close=()=>{restore();};
+  let composer,introDone=null,introOff=null,introTimer=null,introRemaining=20000,introStarted=null;
+  function finishIntro(){if(!introDone)return;const done=introDone;introDone=null;clearTimeout(introTimer);introOff?.();introOff=null;player.playback.stop();player.hide();document.body.classList.remove('first-intro');restore();done();}
+  const close=()=>{if(introDone)finishIntro();else restore();};
   const player=mountStoryPlayer({enter,cancel,reducedMotion,onClose:close,onEdit:privateData?()=>{restore();composer.open({resume:true});}:null});
   async function preview(artifact){applyBridge(createStoryBridge(artifact));onTheme(artifact.visualTheme);await player.load(artifact);}
   if(privateData){
@@ -22,5 +23,19 @@ export async function mountStoryExperience({privateData,getScope,enter,cancel,ap
   // sharing still starts from the composer's privacy defaults.
   async function quickPlay(source){const story=composer.prepare(source),data=privateData();
     await preview(projectShare(data,{...story,privacySettings:{...story.privacySettings,locationMode:'precise',includeNotes:true}},{images:{}}));}
-  return {pauseForInteraction(){if(player.playback.status==='playing')player.playback.pause();},composer,player,replay:privateData?quickPlay:null};
+  async function intro(done){
+    const {composeStory}=await import('./compose.js');const data=privateData(),story=composeStory(data),seen=new Set();
+    const places=story.orderedScenes.filter(s=>s.kind==='place'&&!seen.has(s.placeId)&&seen.add(s.placeId)).slice(0,4);
+    if(!places.length){done();return;}story.selectedTripIds=[];story.selectedChapterIds=[];story.orderedScenes=[story.orderedScenes[0],...places,story.orderedScenes.at(-1)].map(s=>({...s,tripId:null,chapterId:null,duration:2}));
+    story.title='照片里的这些地方';story.privacySettings.locationMode='precise';introDone=done;document.body.classList.add('first-intro');
+    introRemaining=20000;introStarted=null;introOff=player.playback.subscribe(s=>{
+      if(introStarted!==null){introRemaining-=performance.now()-introStarted;introStarted=null;}clearTimeout(introTimer);
+      if(s.status==='ended'||s.status==='error'){finishIntro();return;}
+      if(s.status==='playing'){introStarted=performance.now();introTimer=setTimeout(finishIntro,Math.max(0,introRemaining));}
+    });
+    // The introductory tour has a wall-clock cap including camera flights. Background pauses follow the player.
+    try{await preview(projectShare(data,story));}catch(error){finishIntro();throw error;}
+  }
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)player.playback.pause();});
+  return {intro:privateData?intro:null,pauseForInteraction(){if(player.playback.status==='playing')player.playback.pause();},composer,player,replay:privateData?quickPlay:null};
 }

@@ -145,9 +145,9 @@ export class PhotoHistoryService {
     if(thumbnailWarnings.length)warning=[warning,`照片记忆已保存；${thumbnailWarnings.length} 张未能生成或保留缩略图，请查看照片诊断。`].filter(Boolean).join(' ');
     return {thumbnailWarnings,createdMemories:plan.summary.createMemories,summary:plan.summary,links:plan.links,warning,tripId:plan.summary.createdTripIds[0]||batch.review.candidates.find(c=>!c.excluded&&c.action==='link')?.relatedTripId||null};
   }
-  async retainThumbnails(ids,{onProgress=()=>{}}={}){
+  async retainThumbnails(ids,{onProgress=()=>{},signal}={}){
     const warnings=[];let capacity=false,done=0;
-    for(const id of ids){const asset=await this.manifest.getAsset(id);if(!asset)continue;
+    for(const id of ids){if(signal?.aborted)break;const asset=await this.manifest.getAsset(id);if(!asset)continue;
       try{let retained=null;try{retained=await this.thumbnails.read(id);}catch{/* Reselecting an original can replace a broken retained resource. */}if(retained){onProgress({processed:++done,total:ids.length});continue;}if(capacity)throw new Error('THUMBNAIL_CAPACITY_LIMIT');const file=this.scanner.fileFor(id);if(!file)throw new Error('THUMBNAIL_RESELECT_REQUIRED');
         const blob=await this.thumbnailGenerator.create(file,{dimensions:asset.dimensions,orientation:asset.orientation});const reference=await this.thumbnails.put(id,blob);await this.manifest.updateAsset(id,{thumbnailReference:reference,thumbnailStatus:'saved'});
       }catch(error){const code=/CAPACITY_LIMIT/.test(error.message)?'THUMBNAIL_CAPACITY_LIMIT':error.message==='THUMBNAIL_RESELECT_REQUIRED'?error.message:'THUMBNAIL_UNAVAILABLE';if(code==='THUMBNAIL_CAPACITY_LIMIT')capacity=true;warnings.push({assetId:id,code});await this.manifest.updateAsset(id,{thumbnailStatus:code,diagnostics:[...new Set([...asset.diagnostics,code])]});}
@@ -161,7 +161,7 @@ export class PhotoHistoryService {
       if(batch.status==='scanning')await this.manifest.putBatch({...batch,status:'interrupted',error:'页面关闭中断；重新选择原文件可续扫'});
       if(batch.commitState==='prepared'){
         const ids=batch.assetIds.filter(id=>links[id]);
-        const committed=data.evidence.some(e=>e.source?.kind==='photo-review'&&e.source.batchId===batch.id);
+        const committed=data.evidence.some(e=>['photo-review','photo-auto-import'].includes(e.source?.kind)&&e.source.batchId===batch.id);
         if(committed||ids.length===batch.assetIds.length)await this.manifest.acknowledge(batch.id,Object.fromEntries(ids.map(id=>[id,links[id]])));
       }
     }

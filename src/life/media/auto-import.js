@@ -98,7 +98,7 @@ export function removeAutoImportData(data){return clearAutomaticPhotoGroups(data
 export function removeLegacyPhotoData(data){
   const own=photoOwnership(data),protectedTrips=new Set(data.trips.filter(t=>own.manual(t)||t.visitIds.some(id=>own.manual(data.visits.find(v=>v.id===id)))).map(t=>t.id));
   const kind=new Map(data.evidence.map(e=>[e.id,e.source?.kind])),from=(entity,kinds)=>entity.evidenceIds.some(id=>kinds.includes(kind.get(id)));
-  const memories=new Set(data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('media:')&&!m.tripIds.some(id=>protectedTrips.has(id))&&!own.manual(m)).map(m=>m.id));
+  const memories=new Set(data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('media:')&&!m.photoObservation&&!m.evidenceIds.some(id=>kind.get(id)==='photo-auto-import')&&!m.tripIds.some(id=>protectedTrips.has(id))&&!own.manual(m)).map(m=>m.id));
   if(!memories.size)return {memories:0,trips:0};
   const trips=new Set(data.trips.filter(t=>!protectedTrips.has(t.id)&&t.type==='照片旅行'&&from(t,['photo-reconstruction'])).map(t=>t.id));
   const visits=new Set(data.visits.filter(v=>!protectedTrips.has(v.tripId)&&(trips.has(v.tripId)||from(v,['photo-visit']))).map(v=>v.id));

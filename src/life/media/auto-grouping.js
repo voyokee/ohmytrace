@@ -22,7 +22,7 @@ export function photoOwnership(data){
 // the fallback without pretending the original capture time is still known.
 export function savedPhotoObservations(data){
   const places=new Map(data.places.map(p=>[p.id,p]));
-  return data.memories.filter(m=>m.kind==='photo'&&m.uri?.startsWith('android-media:')).flatMap(m=>{
+  return data.memories.filter(m=>m.kind==='photo'&&(m.uri?.startsWith('android-media:')||m.uri?.startsWith('media:')&&m.photoObservation)).flatMap(m=>{
     const p=places.get(m.placeIds[0]),saved=m.photoObservation,day=saved?.day||(m.start.precision==='day'?m.start.value:null);
     if(!day||!p?.coordinates)return [];
     return [{uri:m.uri,title:m.title,latitude:saved?.latitude??p.coordinates.latitude,longitude:saved?.longitude??p.coordinates.longitude,
@@ -35,7 +35,7 @@ export function clearAutomaticPhotoGroups(data,{removeMemories=false}={}){
   const homes=new Set(data.residences.filter(r=>own.automatic(r)&&!own.protectedHomes.has(r.id)).map(r=>r.id));
   const protectedVisits=new Set([...data.trips.filter(t=>!trips.has(t.id)).flatMap(t=>t.visitIds),...data.residences.filter(r=>!homes.has(r.id)).map(r=>r.visitId)]);
   const visits=new Set(data.visits.filter(v=>!protectedVisits.has(v.id)&&(trips.has(v.tripId)||own.automatic(v))).map(v=>v.id));
-  const memories=new Set(removeMemories?data.memories.filter(m=>m.uri?.startsWith('android-media:')&&!m.tripIds.some(id=>own.protectedTrips.has(id))&&!own.manual(m)).map(m=>m.id):[]);
+  const memories=new Set(removeMemories?data.memories.filter(m=>(m.uri?.startsWith('android-media:')||m.uri?.startsWith('media:')&&m.photoObservation)&&!m.tripIds.some(id=>own.protectedTrips.has(id))&&!own.manual(m)).map(m=>m.id):[]);
   data.trips=data.trips.filter(t=>!trips.has(t.id));data.residences=data.residences.filter(r=>!homes.has(r.id));data.visits=data.visits.filter(v=>!visits.has(v.id));
   data.memories=data.memories.filter(m=>!memories.has(m.id));for(const m of data.memories)m.tripIds=m.tripIds.filter(id=>!trips.has(id));
   if(removeMemories)delete data.meta.photoAutoGrouping;

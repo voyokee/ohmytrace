@@ -8,8 +8,9 @@
 - `beta/0.3-foundation` 已通过 [PR #3](https://github.com/voyokee/ohmytrace/pull/3) 合入主干 `afc902d`；Web / Android / 分享入口统一为 OnceHere，保留旧安装包、数据库和备份格式标识以兼容数据。
 - PR 三项检查和主干 CI 均通过：[主干 Web](https://github.com/voyokee/ohmytrace/actions/runs/40508957693)、[主干 Android 与 APK](https://github.com/voyokee/ohmytrace/actions/runs/40508957619)。已建立 `v0.2.0` 基线标签，指向 `afc902d`。
 - Web CI 覆盖 Node 20 / 24；Android CI 使用 JDK 17、SDK / Build Tools 35、校验 SHA-256 的 Gradle 8.11.1，运行 JVM 单测、Lint，构建 Debug、测试与未签名 Release APK，再禁用缓存重跑全部 Release 任务、逐字节比较 APK。
-- 可撤销编辑领域基础已通过 [PR #4](https://github.com/voyokee/ohmytrace/pull/4) 合入 `5521cfd`，见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。统一卡片在 `beta/0.3-record-cards` 接入，见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。
+- 可撤销编辑领域基础已通过 [PR #4](https://github.com/voyokee/ohmytrace/pull/4) 合入 `5521cfd`，见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。统一卡片已通过 [PR #6](https://github.com/voyokee/ohmytrace/pull/6) 合入 `b457826`，见 [TRUSTED_EDITS.md](TRUSTED_EDITS.md)。
 - 深港沿海归属、机场 / 路过推断、城市标题与升级重扫已通过 [PR #5](https://github.com/voyokee/ohmytrace/pull/5) 合入 `f75506f`；[Web](https://github.com/voyokee/ohmytrace/actions/runs/40543530986) 与 [Android](https://github.com/voyokee/ohmytrace/actions/runs/40543530999) 主干 CI 全绿，见 [BORDER_TRANSIT_FIX.md](BORDER_TRANSIT_FIX.md)。
+- 当前开发 `beta/0.3-first-confirmation`：Android / Web 自动导入后的最多三问、阶段草稿与首次短回放，见 [FIRST_USE.md](FIRST_USE.md)。
 - `v0.3.0` 尚未发布，完整退出标准继续逐项验证。
 
 ## 退出标准追踪
@@ -22,7 +23,7 @@
 | 中档机全球中位数 ≥ 30 FPS、P95 帧间隔 | 未测 | 测量场景、样本数量、原始帧间隔与汇总 |
 | 切后台 / 恢复、杀进程后续扫 | 未测 | 中断前后计数与稳定 ID、检查点和权限状态 |
 | 用户可见名称统一，无系统词进入主流程 | 进行中 | 已有入口名称检查；后续统一卡片与首次使用验收 |
-| 最多三问、生成阶段草稿、无需输入日期格式 | 待实现 | 领域与浏览器用例，首次使用计时 |
+| 最多三问、生成阶段草稿、无需输入日期格式 | 自动化与桌面浏览器已验证，真机待测 | 领域与浏览器用例，首次使用计时 |
 | 城市 / 常驻 / 旅程来源、统一卡片纠错、撤销与重新整理保留修改 | 统一卡片与自动化已验证，真机待测 | 各实体编辑命令、撤销、重新整理回归 |
 | 完整备份跨设备恢复实体和 ID 零差异 | 未测 | 两台设备恢复前后的规范数据与 ID 对比 |
 | GPX / GeoJSON 开放导出、持久存储与备份提醒 | 待实现 | 标准解析验证与浏览器用例 |
@@ -44,6 +45,7 @@
 
 ## 本轮验证记录
 
+- 首次使用：197 项 Life 领域测试通过。127 张 JPEG / EXIF 合成夹具在 Chrome 中覆盖自动导入、最多三问、刷新续答、改判 / 跳过 / 撤销、阶段起名与重整保护，以及首次短回放与暂停恢复。Android 模拟端口 12,000 行回归通过（7,918 个有效照片观测）；高级逐条审核 / 备份恢复路径回归通过。均不是真机或真实相册证据，见 [FIRST_USE.md](FIRST_USE.md)。
 - 统一卡片：184 项 Life 领域测试通过，新增四类卡片和城市 / 年份分享范围、隐藏删除等 11 项测试。Chrome 实际界面覆盖改名、改类型、合并 / 拆分、撤销 / 重做、删除、照片分页、回放返回、阶段 / 居住 / 城市分享及窄屏布局。原生缩略图端口为模拟，不是真机证据。
 - I0：渲染与性能逻辑检查通过，145 个 Life 领域测试通过。I1 新增 16 个编辑命令测试和 1 个桥接测试，Life 用例合计 162 个。5k 合成照片改名与撤销验证 ID 和关系保留，不是真机或真实相册证据。
 - `npm run test:publishing`：6 个发布协议测试通过。
