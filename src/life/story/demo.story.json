@@ -1,0 +1,502 @@
+{
+  "schemaVersion": 1,
+  "kind": "OhMyTraceStory",
+  "storyId": "story_dc295afe-e38a-4f7a-9678-7a5d559e9877",
+  "title": "求学与城市之间 · 虚构人生故事",
+  "description": "虚构示例：重叠的人生阶段、同城重访、未知地点与一张授权缩略图。",
+  "selectedChapterIds": [
+    "c1",
+    "c2"
+  ],
+  "selectedTripIds": [
+    "t1",
+    "t2"
+  ],
+  "orderedScenes": [
+    {
+      "id": "s1",
+      "kind": "globe",
+      "title": "求学与城市之间 · 虚构人生故事",
+      "description": "",
+      "start": {
+        "precision": "unknown",
+        "value": null
+      },
+      "end": {
+        "precision": "unknown",
+        "value": null
+      },
+      "chapterId": null,
+      "tripId": null,
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s2",
+      "kind": "chapter",
+      "title": "新加坡硕士",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2024"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": null,
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s3",
+      "kind": "place",
+      "title": "居住区域 1",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2024"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": null,
+      "placeId": "p1",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s4",
+      "kind": "trip",
+      "title": "北京实习",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c1",
+      "tripId": "t1",
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s5",
+      "kind": "place",
+      "title": "北京",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c1",
+      "tripId": "t1",
+      "placeId": "p2",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s6",
+      "kind": "place",
+      "title": "未知博物馆",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c1",
+      "tripId": "t1",
+      "placeId": "p3",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s7",
+      "kind": "trip",
+      "title": "再访北京",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": "t2",
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s8",
+      "kind": "place",
+      "title": "北京",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": "t2",
+      "placeId": "p2",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s9",
+      "kind": "place",
+      "title": "天津",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "chapterId": "c1",
+      "tripId": "t2",
+      "placeId": "p4",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s10",
+      "kind": "chapter",
+      "title": "北京实习阶段",
+      "description": "",
+      "start": {
+        "precision": "year",
+        "value": "2025"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2025"
+      },
+      "chapterId": "c2",
+      "tripId": null,
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s11",
+      "kind": "trip",
+      "title": "北京实习",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c2",
+      "tripId": "t1",
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    },
+    {
+      "id": "s12",
+      "kind": "place",
+      "title": "北京",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c2",
+      "tripId": "t1",
+      "placeId": "p2",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s13",
+      "kind": "memory",
+      "title": "获准分享的照片",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": null,
+      "tripId": "t1",
+      "placeId": "p2",
+      "memoryId": "m1",
+      "duration": 5
+    },
+    {
+      "id": "s14",
+      "kind": "place",
+      "title": "未知博物馆",
+      "description": "",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "chapterId": "c2",
+      "tripId": "t1",
+      "placeId": "p3",
+      "memoryId": null,
+      "duration": 4
+    },
+    {
+      "id": "s15",
+      "kind": "closing",
+      "title": "继续探索这段人生",
+      "description": "",
+      "start": {
+        "precision": "unknown",
+        "value": null
+      },
+      "end": {
+        "precision": "unknown",
+        "value": null
+      },
+      "chapterId": null,
+      "tripId": null,
+      "placeId": null,
+      "memoryId": null,
+      "duration": 3
+    }
+  ],
+  "visualTheme": "atlas",
+  "cameraPreferences": {
+    "motion": "system",
+    "speed": 1
+  },
+  "includedMemories": [
+    "m1"
+  ],
+  "privacySettings": {
+    "locationMode": "city",
+    "includeNotes": false,
+    "includePhotos": true,
+    "coordinateRule": "0.1-degree-grid (~11 km latitude); not an administrative city boundary"
+  },
+  "provenanceSummary": {
+    "observed": 10,
+    "inferred": 0,
+    "manual": 2,
+    "unknown": 2,
+    "routeExplanation": "Stops are recorded visits; lines between them are inferred connections, not recorded paths. Unknown coordinates have no line."
+  },
+  "places": [
+    {
+      "id": "p1",
+      "name": "居住区域 1",
+      "coordinates": {
+        "latitude": 1.3,
+        "longitude": 103.8
+      },
+      "granularity": "city"
+    },
+    {
+      "id": "p2",
+      "name": "北京",
+      "coordinates": {
+        "latitude": 39.9,
+        "longitude": 116.4
+      },
+      "granularity": "city"
+    },
+    {
+      "id": "p3",
+      "name": "未知博物馆",
+      "coordinates": null,
+      "granularity": "city"
+    },
+    {
+      "id": "p4",
+      "name": "天津",
+      "coordinates": {
+        "latitude": 39.1,
+        "longitude": 117.2
+      },
+      "granularity": "city"
+    }
+  ],
+  "trips": [
+    {
+      "id": "t1",
+      "title": "北京实习",
+      "type": "旅行",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "routeKind": "unknown",
+      "stops": [
+        {
+          "placeId": "p2",
+          "start": {
+            "precision": "month",
+            "value": "2025-05"
+          },
+          "end": {
+            "precision": "month",
+            "value": "2025-05"
+          },
+          "note": ""
+        },
+        {
+          "placeId": "p3",
+          "start": {
+            "precision": "month",
+            "value": "2025-05"
+          },
+          "end": {
+            "precision": "month",
+            "value": "2025-05"
+          },
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "title": "再访北京",
+      "type": "旅行",
+      "start": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "routeKind": "inferred",
+      "stops": [
+        {
+          "placeId": "p2",
+          "start": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "end": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "note": ""
+        },
+        {
+          "placeId": "p4",
+          "start": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "end": {
+            "precision": "year",
+            "value": "2026"
+          },
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "新加坡硕士",
+      "type": "study",
+      "start": {
+        "precision": "year",
+        "value": "2024"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2026"
+      },
+      "homeAnchors": [
+        "p1"
+      ],
+      "relatedTripIds": [
+        "t1",
+        "t2"
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "北京实习阶段",
+      "type": "work",
+      "start": {
+        "precision": "year",
+        "value": "2025"
+      },
+      "end": {
+        "precision": "year",
+        "value": "2025"
+      },
+      "homeAnchors": [],
+      "relatedTripIds": [
+        "t1"
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "id": "m1",
+      "kind": "photo",
+      "title": "获准分享的照片",
+      "start": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "end": {
+        "precision": "month",
+        "value": "2025-05"
+      },
+      "placeIds": [
+        "p2"
+      ],
+      "tripIds": [
+        "t1"
+      ],
+      "text": "",
+      "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAwAEADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCpRRRX0Z88FFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQB//9k="
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import {syncCameraSun} from './sunlight.js';
 import { createEarthMaterials, SUN_EC } from './earth-materials.js?v=20261026-continuity';
 import { presentationState } from './presentation-state.js';
-import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261025-ridges';
+import { earthTexturePlan, runtimeDeviceConfig } from './texture-policy.js?v=20261026-mobile-clear';
 import { makeWorldForest, WORLD_RELIEF, WORLD_RIDGE_RELIEF, WORLD_RIDGE_MAX, random } from '../scenery/world-data.js?v=20261026-relief-fit';
 import {makeWorldSurface,surfaceGround,installSurfaceSampling} from '../scenery/world-surface.js?v=20261025-ridges';
 import {makeCanopyContact} from '../scenery/canopy-contact.js';

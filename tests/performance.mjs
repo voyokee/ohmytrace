@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { sampleVegetation } from '../src/scenery/vegetation-sampling.js';
 import { prepareVegetation } from '../src/scenery/prepare-vegetation.js';
-import { createRenderPolicy } from '../src/performance/render-policy.js';
+import { createRenderPolicy,renderResolutionBudget } from '../src/performance/render-policy.js';
 
 const width = 128;
 const pixels = (r, g, b) => {
@@ -82,11 +82,16 @@ assert.equal(viewer.useDefaultRenderLoop, true);
 assert.ok(requests > 0);
 const phone = { scene: { globe: {}, requestRender() {} } };
 const phonePolicy = createRenderPolicy(phone, { mobile: true, reducedMotion: false });
-assert.equal(phonePolicy.details().pixelRatio, 1);
+assert.equal(phonePolicy.details().pixelRatio, 1.5);
 phonePolicy.still(true);
-assert.equal(phonePolicy.details().pixelRatio, 1.5, 'Settled phone views must use a bounded clear presentation');
+assert.equal(phonePolicy.details().pixelRatio, 2, 'Settled phones must use their screen density within a pixel budget');
 phonePolicy.home();
-assert.equal(phonePolicy.details().pixelRatio, 1, 'Phone flights must keep the smaller animation budget');
+assert.equal(phonePolicy.details().pixelRatio, 1.5, 'Phone flights must keep a bounded adaptive animation budget');
+const flagship=renderResolutionBudget({mobile:true,dpr:3,memoryGB:8,width:420,height:860});
+assert.equal(flagship.maxScale,2);assert.equal(flagship.stillScale,3);
+assert.equal(renderResolutionBudget({mobile:true,dpr:3,memoryGB:2,width:420,height:860}).stillScale,1.5);
+const tablet=renderResolutionBudget({mobile:true,dpr:3,memoryGB:8,width:1400,height:1000});
+assert.ok(tablet.stillScale**2*1400*1000<=4000001,'High-density tablets must retain the framebuffer pixel cap');
 console.log('PASS: bounded vegetation, terrain exclusions, deterministic placement, fallback/cancellation, adaptive resolution, still/motion quality, idle and visibility');
 const benchmarkViewer={scene:{globe:{},requestRender(){},postProcessStages:{fxaa:{enabled:true}}}};
 const benchmarkPolicy=createRenderPolicy(benchmarkViewer,{mobile:true,reducedMotion:false,benchmark:true});

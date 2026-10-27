@@ -1,6 +1,30 @@
 import {layoutFootprints} from './footprint-layout.js?v=20261026-places';
 import {contractedHeight} from '../rendering/terrain-handoff.js';
 
+// Capture one intent while a projected marker is moving beneath the finger.
+// Pointer-up owns activation; its compatibility click must not activate twice.
+export function bindMarkerActivation(el,{readValue,activate,onPress=()=>{},onRelease=()=>{},slop=12}) {
+  let press=null,blockClick=false;
+  const finish=()=>{const held=press;if(!held)return null;press=null;
+    try{if(el.hasPointerCapture?.(held.id))el.releasePointerCapture(held.id);}catch{}
+    onRelease();return held;};
+  const cancel=()=>{if(press){blockClick=true;finish();}};
+  const down=e=>{
+    if(e.isPrimary===false||e.button!==0||press)return;
+    blockClick=false;press={id:e.pointerId,x:e.clientX,y:e.clientY,value:readValue(),dragged:false};onPress();
+    try{if(press)el.setPointerCapture?.(e.pointerId);}catch{}
+  };
+  const move=e=>{if(press&&e.pointerId===press.id&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>slop)press.dragged=true;};
+  const up=e=>{
+    if(!press||e.pointerId!==press.id)return;move(e);blockClick=true;e.preventDefault();e.stopPropagation();
+    const held=finish();if(!held.dragged&&held.value!=null&&el.isConnected!==false)activate(held.value);
+  };
+  const click=e=>{e.stopPropagation();if(blockClick&&(e.detail>0||e.pointerType||e.sourceCapabilities?.firesTouchEvents))return;const value=readValue();if(value!=null)activate(value);};
+  const events={pointerdown:down,pointermove:move,pointerup:up,pointercancel:cancel,lostpointercapture:cancel,click};
+  for(const [type,listener]of Object.entries(events))el.addEventListener(type,listener);
+  return {cancel,dispose(){cancel();for(const [type,listener]of Object.entries(events))el.removeEventListener(type,listener);}};
+}
+
 function writeLabel(label,item) {
   label.replaceChildren();
   if(item.home){const prefix=document.createElement('em');prefix.textContent=item.home==='home'?'现居':'曾居';label.append(prefix);}
@@ -17,25 +41,29 @@ function show(node,visible) {
   if(node.visible===visible)return;node.visible=visible;node.el.style.visibility=visible?'visible':'hidden';
   node.el.tabIndex=visible?0:-1;node.el.setAttribute('aria-hidden',String(!visible));
 }
-function place(node,g) {
+function place(node,g,mobile=false) {
   const value=`translate3d(${g.x.toFixed(1)}px,${g.y.toFixed(1)}px,0)`;
   if(node.transform!==value){node.el.style.transform=value;node.transform=value;}
   node.el.classList.toggle('label-on',!!g.label);
-  if(g.label){const hitRadius=node.el.classList.contains('mk-cluster')?20:15;node.label.style.left=(g.label.dx+hitRadius)+'px';node.label.style.top=(g.label.dy+hitRadius)+'px';}
+  if(g.label){const hitRadius=mobile?22:node.el.classList.contains('mk-cluster')?20:15;node.label.style.left=(g.label.dx+hitRadius)+'px';node.label.style.top=(g.label.dy+hitRadius)+'px';}
 }
 
-export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=()=>[],onSelect,onCluster,onCameraChange}={}) {
+export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=()=>[],onSelect,onCluster,onCameraChange,onInteract}={}) {
   const C=Cesium,items=new Map(),clusters=new Map(),matrix=new C.Matrix4();
   const occluder=new C.EllipsoidalOccluder(C.Ellipsoid.WGS84,C.Cartesian3.ZERO);
   const scratch=new C.Cartesian3(),position=new C.Cartesian3(),windowPoint=new C.Cartesian2();
   let dirty=true,lastMix=-1,lastGroundBlend=-1,lastRatio=-1,lastRelief=false,lastWidth=0,lastHeight=0,lastUI='',previousSeeds=[],statistics={};
+  const pressed=new Set();
+  function wire(node,readValue,activate){node.activation=bindMarkerActivation(node.el,{readValue,activate,
+    onPress:()=>{pressed.add(node);onInteract?.();},onRelease:()=>{pressed.delete(node);dirty=true;viewer.scene.requestRender();}});}
   return {
     setItems(data) {
+      for(const node of pressed)node.activation.cancel();
       const wanted=new Set(data.map(d=>d.id));
-      for(const [id,m]of items)if(!wanted.has(id)){m.el.remove();items.delete(id);}
+      for(const [id,m]of items)if(!wanted.has(id)){m.activation?.dispose();m.el.remove();items.delete(id);}
       for(const item of data) {
         let m=items.get(item.id);
-        if(!m){m=makeMarker(container);items.set(item.id,m);m.el.onclick=e=>{e.stopPropagation();onSelect(item.id);};}
+        if(!m){m=makeMarker(container);items.set(item.id,m);wire(m,()=>m.item?.id,id=>onSelect?.(id));}
         if(m.item?.lon!==item.lon||m.item?.lat!==item.lat){m.globalPos=undefined;m.globalHeight=undefined;}
         m.item=item;
         const text=`${item.home||''}:${item.label}`;
@@ -49,6 +77,7 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
     },
     invalidate(){dirty=true;viewer.scene.requestRender();},
     update() {
+      if(pressed.size){dirty=true;return;}
       const camera=viewer.camera,width=viewer.canvas.clientWidth,height=viewer.canvas.clientHeight;
       const resized=width!==lastWidth||height!==lastHeight;
       const mix=+(viewer.canvas.dataset.earthMix||0),relief=viewer.canvas.dataset.worldRelief==='true',ui=document.body.className;
@@ -85,11 +114,12 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       const used=new Set();
       for(const g of groups) {
         const seed=items.get(g.key);
-        if(g.members.length===1){seed.nextVisible=true;place(seed,g);continue;}
+        if(g.members.length===1){seed.nextVisible=true;place(seed,g,mobile);continue;}
         used.add(g.key);let cluster=clusters.get(g.key);
         if(!cluster){
           cluster=makeMarker(container,true);clusters.set(g.key,cluster);
-          cluster.el.onclick=e=>{e.stopPropagation();const group=cluster.group;onCluster(group.members.map(p=>p.id),{x:group.x,y:group.y},cluster.el);};
+          wire(cluster,()=>cluster.group?{ids:cluster.group.members.map(p=>p.id),anchor:{x:cluster.group.x,y:cluster.group.y}}:null,
+            value=>onCluster?.(value.ids,value.anchor,cluster.el));
           cluster.el.setAttribute('aria-haspopup','dialog');cluster.el.setAttribute('aria-controls','map-chooser');
         }
         cluster.group=g;
@@ -104,9 +134,9 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
         cluster.el.classList.toggle('dim',g.members.every(p=>items.get(p.id).item.dim));
         const title=`${d.label}附近 · ${g.members.length} 个地点`;
         if(cluster.title!==title){cluster.el.title=title;cluster.title=title;}
-        cluster.nextVisible=true;place(cluster,g);
+        cluster.nextVisible=true;place(cluster,g,mobile);
       }
-      for(const [key,node]of clusters)if(!used.has(key)){node.el.remove();clusters.delete(key);}
+      for(const [key,node]of clusters)if(!used.has(key)){node.activation.dispose();node.el.remove();clusters.delete(key);}
       for(const node of items.values())show(node,!!node.nextVisible);
       for(const node of clusters.values())show(node,!!node.nextVisible);
       document.body.classList.toggle('near',near);
@@ -114,6 +144,6 @@ export function createFootprintOverlay(viewer,{container,groundHeight,obstacles=
       for(const [key,value]of Object.entries(statistics))container.dataset[key]=value;
     },
     details:()=>statistics,
-    dispose(){container.replaceChildren();items.clear();clusters.clear();}
+    dispose(){for(const node of [...items.values(),...clusters.values()])node.activation.dispose();container.replaceChildren();items.clear();clusters.clear();pressed.clear();}
   };
 }
