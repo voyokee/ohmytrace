@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Oh My Trace</string>
+    <string name="webview_update_required">请更新 Android System WebView 后重新打开 Oh My Trace</string>
+</resources>

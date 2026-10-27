@@ -94,6 +94,8 @@ export class PhotoScanner {
         }
         const hintKey=similarSignature(asset),hints=hintKey?(similar.get(hintKey)||[]).filter(id=>id!==asset.assetId).slice(0,this.limits.maxDuplicateHints):[];if(hints.length)asset.possibleDuplicateAssetIds=[...new Set([...(asset.possibleDuplicateAssetIds||[]),...hints])].slice(0,this.limits.maxDuplicateHints);
         if(hintKey)similar.set(hintKey,[...new Set([...(similar.get(hintKey)||[]),asset.assetId])].slice(0,this.limits.maxDuplicateHints));
+        // Preserve the file-to-asset relation even when names/sizes/times collide.
+        (batch.fileAssetIds??=[])[i]=asset.assetId;
         if(i<resumeCursor){if(asset.deduplicationKey&&!batchIds.has(asset.assetId))throw new Error('续扫文件内容与已保存批次不同，请新建导入而不是继续此批次');this.files.set(asset.assetId,file);continue;}
         if(firstResultMs===null)firstResultMs=performance.now()-started;
         if(known.has(asset.assetId))batch.duplicateCount++;known.add(asset.assetId);

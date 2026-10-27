@@ -3,6 +3,8 @@ import {geoNameProvider} from '../geocoding/provider.js';
 import {clone} from '../schema.js';
 import {editCandidate,editVisitName,mergeCandidates,splitCandidate} from './reconstruction.js';
 import {MEDIA_LIMITS} from './config.js';
+import {androidPhotoCapability} from '../../platform/android-photo-capability.js';
+import {AndroidLibraryImporter,scanRange} from '../../platform/android-library-importer.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const reasonText={
   'daily-photos-within-residence':'已知居住时段内的日常照片','possible-away-visit':'可能的离家到访',
@@ -11,7 +13,7 @@ const reasonText={
 const statusText={scanning:'正在扫描',review:'待审核',prepared:'待完成确认',committed:'已保存',cancelled:'已取消',interrupted:'已中断，可继续'};
 const diagnosticText={NO_GPS:'无 GPS',NO_CAPTURE_TIME:'无拍摄时间',UNSUPPORTED_FORMAT:'暂不支持此格式',FILE_SIZE_LIMIT:'超过单文件 1 GiB 限制',INVALID_GPS:'GPS 元数据无效',INVALID_CAPTURE_TIME:'拍摄时间无效',
   VIDEO_DEFERRED:'视频暂不导入',LIVE_PHOTO_COMPANION:'实况照片的视频部分，已用静态照片',RAW_METADATA_UNSUPPORTED:'此 RAW 格式暂不读取元数据',GPS_NULL_ISLAND:'GPS 为 0,0（无效定位）',
-  GPS_DATUM_NOT_WGS84:'GPS 坐标系不是 WGS84，未使用',GPS_SOURCE_CONFLICT:'EXIF 与 XMP 位置不一致，已用 EXIF',INVALID_XMP_TIME:'XMP 时间无效',THUMBNAIL_UNAVAILABLE:'未能生成缩略图，已保留元数据',THUMBNAIL_CAPACITY_LIMIT:'缩略图容量已满，未新增',THUMBNAIL_RESELECT_REQUIRED:'请重新选择原文件以补充缩略图'};
+  GPS_DATUM_NOT_WGS84:'GPS 坐标系不是 WGS84，未使用',GPS_SOURCE_CONFLICT:'EXIF 与 XMP 位置不一致，已用 EXIF',GPS_PERMISSION_REQUIRED:'照片位置未授权，GPS 可能被系统隐藏',INVALID_XMP_TIME:'XMP 时间无效',THUMBNAIL_UNAVAILABLE:'未能生成缩略图，已保留元数据',THUMBNAIL_CAPACITY_LIMIT:'缩略图容量已满，未新增',THUMBNAIL_RESELECT_REQUIRED:'请重新选择原文件以补充缩略图'};
 const MEDIA_NAME=/\.(jpe?g|heic|heif|png|webp|avif|dng|tiff?|cr2|cr3|nef|arw|orf|rw2|raf|mov|mp4|m4v)$/i,DIAGNOSTIC_LIST_LIMIT=200,CANDIDATE_PAGE=30;
 const problem=a=>a.processingStatus!=='analyzed'||!a.coordinates||String(a.thumbnailStatus||'').startsWith('THUMBNAIL_')||a.possibleDuplicateAssetIds?.length;
 // Folder picks include sidecars and OS metadata files; keep media in a stable order.
@@ -26,6 +28,9 @@ export function batchSummary(assets){
 }
 
 export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},download}) {
+  const native=androidPhotoCapability(),nativeImporter=native?new AndroidLibraryImporter(service,native):null;
+  const scanningNow=()=>service.scanner.running||!!nativeImporter?.running;
+  let nativePermission=null,nativeStart='',nativeEnd='',nativeIncremental=true,nativeResume=false,nativePreviews=0;
   const dialog=document.querySelector('#photo-dialog');let batch=null,review=null,assets=[],preview=null,busy=false,urls=[],focusedPreviewId=null,shown=CANDIDATE_PAGE,progressFrame=0,retain=false,gallery=false,galleryShown=12,restorePreview=null,storageStats=null,renderGeneration=0,inputController=null;
   const mobile=globalThis.matchMedia?.('(pointer:coarse)').matches||/Android|iPhone|iPad/i.test(globalThis.navigator?.userAgent||'');
   const folderSupported=!mobile&&'webkitdirectory' in HTMLInputElement.prototype;
@@ -33,12 +38,13 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   function message(error){const el=dialog.querySelector('[data-photo-error]');if(el)el.textContent=error.message;onError(error);}
   function run(action){work=work.then(async()=>{busy=true;try{await action();}catch(error){message(error);}finally{busy=false;}});return work;}
   const currentData=()=>service.repository.getDataset();
-  async function loadBatch(id){batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);if(review.retainThumbnails!==undefined)retain=review.retainThumbnails;preview=null;focusedPreviewId=null;shown=CANDIDATE_PAGE;selected.clear();render();}
+  async function loadBatch(id){await nativeImporter?.restoreFiles(id);batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id);if(review.retainThumbnails!==undefined)retain=review.retainThumbnails;preview=null;focusedPreviewId=null;shown=CANDIDATE_PAGE;selected.clear();render();}
   async function save(){preview=null;await service.saveReview(batch.id,review);render();}
   const count=c=>c.visits.reduce((n,v)=>n+v.assetIds.length,0);
   const saveBlob=(name,blob)=>{const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   async function hydrate(generation){if(!service.thumbnails)return;for(const el of dialog.querySelectorAll('[data-photo-stored-image]')){try{const blob=await service.thumbnails.read(el.dataset.photoStoredImage);if(generation!==renderGeneration)return;if(blob){const url=URL.createObjectURL(blob);urls.push(url);const image=Object.assign(document.createElement('img'),{src:url,alt:'已保存在本机的照片缩略图',className:'photo-thumb',loading:'lazy'});el.replaceChildren(image);}else el.textContent='未保留缩略图；可重新选择原图补充。';}catch{if(generation===renderGeneration)el.textContent='缩略图读取失败，请从备份恢复或重新选择原图。';}}}
   function imageFor(id){const asset=assets.find(a=>a.assetId===id),file=service.scanner.fileFor(id);
+    if(file?.nativeHandle){if(focusedPreviewId?focusedPreviewId!==id:nativePreviews++>=MEDIA_LIMITS.maxPreviewImages)return `<button class="btn sm" type="button" data-photo-preview-asset="${esc(id)}">预览这张照片</button>`;return `<span class="hint" data-photo-native-image="${esc(id)}">正在读取系统相册缩略图…</span>`;}
     if(!file)return `<span class="hint" data-photo-stored-image="${esc(id)}">正在读取已保存的缩略图…</span>`;
     if(!asset?.dimensions||asset.dimensions.width*asset.dimensions.height>MEDIA_LIMITS.previewMaxPixels)return '<span class="hint">尺寸未知或超出预览预算，仅展示元数据。</span>';
     if(urls.length>=MEDIA_LIMITS.maxPreviewImages||focusedPreviewId&&id!==focusedPreviewId)return `<button class="btn sm" type="button" data-photo-preview-asset="${esc(id)}">预览这张照片</button>`;
@@ -50,17 +56,18 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       ${warn?`<p class="photo-warning" data-photo-gps-warning>这批照片${s.gps?'大多':'都'}没有位置信息。${mobile?'手机浏览器的相册选择器可能会出于隐私去掉照片里的 GPS（安卓相册选择器、iPhone 照片图库都可能如此）。可以试试：在电脑上选择原图文件夹；iPhone 改用「文件」App 选原图；安卓改用「文件管理」选择原图。':'可能是相机未开启定位，或照片经过导出/压缩去掉了位置。尽量选择相机原图。'}</p>`:''}</div>`;
   }
   function render(){
-    release();const generation=++renderGeneration,data=currentData();
+    release();nativePreviews=0;const generation=++renderGeneration,data=currentData();
     dialog.innerHTML=`<div class="dlg-head"><h3>从相册恢复足迹</h3><button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
       <div class="dlg-body scroll"><p class="muted">支持 JPG、HEIC、PNG、WebP，一次最多 ${MEDIA_LIMITS.maxFiles.toLocaleString()} 张。在本机解析照片中实际存在的拍摄时间与 GPS；照片可能含拍摄位置。原图默认不上传、不保存。缺失的位置可能需要人工补充，系统相册选择器也可能移除 GPS。</p>
-      <p class="hint" data-photo-step>${service.scanner.running?'2 / 4 · 分析':review?'3 / 4 · 审核（确认前不会改动地图）':batch?.status==='committed'||gallery?'4 / 4 · 已保存记忆，可在地球上查看':'1 / 4 · 选择照片，无需 CSV 或账号'}</p>
-      <label class="btn primary">选择或追加照片<input type="file" data-photo-files multiple accept="image/*" hidden ${service.scanner.running?'disabled':''}></label>
-      ${folderSupported?`<label class="btn">选择文件夹<input type="file" data-photo-folder webkitdirectory multiple hidden ${service.scanner.running?'disabled':''}></label>`:''}
+      <p class="hint" data-photo-step>${scanningNow()?'2 / 4 · 分析':review?'3 / 4 · 审核（确认前不会改动地图）':batch?.status==='committed'||gallery?'4 / 4 · 已保存记忆，可在地球上查看':'1 / 4 · 选择照片，无需 CSV 或账号'}</p>
+      ${native?`<section data-photo-native><h4>Android 系统相册</h4><p class="hint">${nativePermission?.photos==='authorized'?'已授权全部可访问照片':nativePermission?.photos==='limited'?'仅扫描你授权的照片，可重新授权补充选择':'请先授权读取照片'} · ${nativePermission?.location==='authorized'?'可读取原始照片 GPS':'尚未授权照片位置，GPS 可能被系统隐藏'}。仅在本机处理。</p><div class="row-actions"><button class="btn" data-photo-native-permission>授权 / 调整可访问照片</button><button class="btn" data-photo-native-location>允许读取照片 GPS</button></div><label>开始（含）<input type="datetime-local" data-photo-native-start value="${esc(nativeStart)}"></label><label>结束（不含）<input type="datetime-local" data-photo-native-end value="${esc(nativeEnd)}"></label><label><input type="checkbox" data-photo-native-incremental ${nativeIncremental?'checked':''}>补充上次扫描后新增或修改的照片</label><p class="hint">留空扫描全部日期。系统拍摄日期缺失时仅用入库日期筛选，不把它当作拍摄证据。仅选中照片授权会重新检查授权范围并去重。</p><div class="row-actions"><button class="btn primary" data-photo-native-scan ${scanningNow()?'disabled':''}>按时间扫描系统相册</button>${nativeResume?'<button class="btn" data-photo-native-resume>恢复上次系统扫描</button>':''}</div></section>`:''}
+      <label class="btn primary">选择或追加照片<input type="file" data-photo-files multiple accept="image/*,.heic,.heif" hidden ${scanningNow()?'disabled':''}></label>
+      ${folderSupported?`<label class="btn">选择文件夹<input type="file" data-photo-folder webkitdirectory multiple hidden ${scanningNow()?'disabled':''}></label>`:''}
       <label class="btn">导入照片 ZIP<input type="file" data-photo-zip accept=".zip,application/zip" hidden></label>
-      <button class="btn" type="button" data-photo-cancel ${!service.scanner.running?'disabled':''}>取消扫描</button>
+      <button class="btn" type="button" data-photo-cancel ${!scanningNow()?'disabled':''}>取消扫描</button>
       <p role="status" data-photo-progress>${batch?`${batch.processed} / ${batch.total} · ${statusText[batch.status]||'待检查'} · 重复 ${batch.duplicateCount} · 解析失败/不支持 ${batch.failureCount}`:'读取拍摄时间、GPS、海拔与方向；不支持的文件只记录原因，不猜测信息。'}</p>
       ${batch?`<details><summary>本次已选择 ${batch.total} 个文件</summary><ul>${batch.filePlan.slice(0,50).map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>${batch.total>50?'<p class="hint">仅列出前 50 个；完整清单保存在本地批次中。</p>':''}</details>`:''}
-      <label><input type="checkbox" data-photo-retain ${retain?'checked':''} ${service.scanner.running?'disabled':''}>确认时保留小尺寸照片缩略图（最长边 512 px，每张 ≤100 KB）</label>
+      <label><input type="checkbox" data-photo-retain ${retain?'checked':''} ${scanningNow()?'disabled':''}>确认时保留小尺寸照片缩略图（最长边 512 px，每张 ≤100 KB）</label>
       <p class="hint">缩略图会去除 EXIF/XMP。浏览器无法解码时仅保留元数据。浏览器网站存储可能被清理；请下载统一备份。${storageStats?`已用 ${(storageStats.bytes/1048576).toFixed(1)} / ${(storageStats.budgetBytes/1048576).toFixed(0)} MiB · ${storageStats.count} 张`:''}</p>
       ${review?summaryHTML():''}
       <div class="row-actions"><button class="btn" type="button" data-photo-gallery>查看已保存照片</button><button class="btn" type="button" data-photo-library-backup>下载统一备份 ZIP</button><label class="btn">检查并恢复统一备份<input type="file" data-photo-library-restore accept=".zip,application/zip" hidden></label><button class="btn" type="button" data-photo-gc>清理未引用缩略图</button></div>
@@ -88,19 +95,23 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       <section data-photo-dry-run>${preview?`<h4>确认前预览</h4><p>将新增 <b>${preview.summary.createPlaces}</b> 个地点、<b>${preview.summary.createVisits}</b> 条到访、<b>${preview.summary.createTrips}</b> 次旅行、<b>${preview.summary.createMemories}</b> 条照片记忆。</p><p>其中 ${preview.summary.unlocatedMemories} 条记忆没有位置；关联 ${preview.summary.chapterAssociations.length} 项人生阶段关系。已有旅行的手动字段与地点坐标保持原值。</p><details><summary>查看完整变更明细</summary><pre>${esc(JSON.stringify(preview.summary,null,2))}</pre></details><button class="btn primary" type="button" data-photo-commit>确认写入人生数据</button><p class="hint">本次确认会原子保存人生记录；照片位置间的连线为推测连接。</p>`:''}</section>`:''}
       <p role="alert" data-photo-error></p></div>`;
     void hydrate(generation);
+    if(native)void (async()=>{for(const el of dialog.querySelectorAll('[data-photo-native-image]')){try{const file=service.scanner.fileFor(el.dataset.photoNativeImage),blob=await native.requestThumbnail(file.nativeHandle);if(generation!==renderGeneration)return;const url=URL.createObjectURL(blob);urls.push(url);el.replaceChildren(Object.assign(document.createElement('img'),{src:url,alt:'系统相册脱敏预览',className:'photo-thumb'}));}catch{if(generation===renderGeneration)el.textContent='照片已变更、授权已撤回或暂无法预览；可重新扫描。';}}})();
   }
-  async function open(){if(!initialized){await service.recover();initialized=true;}if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
+  async function open(){if(!initialized){await service.recover();initialized=true;}if(native){nativePermission=await native.permissionDetails();const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';}if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
   document.querySelector('#btn-photos').addEventListener('click',()=>run(open));
   // Chrome/Firefox cannot decode HEIC; keep the parsed GPS/time and say why there is no picture.
   dialog.addEventListener('error',event=>{if(event.target.matches?.('img.photo-thumb'))event.target.replaceWith(Object.assign(document.createElement('span'),{className:'hint',textContent:'此浏览器无法显示这种格式的预览，时间和位置已读取。'}));},true);
-  dialog.addEventListener('close',()=>{renderGeneration++;inputController?.abort();release();if(service.scanner.running)service.scanner.cancel();});
-  dialog.addEventListener('cancel',()=>{if(service.scanner.running)service.scanner.cancel();});
+  dialog.addEventListener('close',()=>{renderGeneration++;inputController?.abort();nativeImporter?.cancel();release();if(scanningNow())service.scanner.cancel();});
+  dialog.addEventListener('cancel',()=>{if(scanningNow())service.scanner.cancel();});
   dialog.addEventListener('change',event=>{
     const target=event.target;
+    if(target.hasAttribute('data-photo-native-start')){nativeStart=target.value;return;}
+    if(target.hasAttribute('data-photo-native-end')){nativeEnd=target.value;return;}
+    if(target.hasAttribute('data-photo-native-incremental')){nativeIncremental=target.checked;return;}
     if(target.hasAttribute('data-photo-files')||target.hasAttribute('data-photo-folder')||target.hasAttribute('data-photo-zip')){let files=target.hasAttribute('data-photo-folder')?mediaFilesFrom(target.files):Array.from(target.files);run(async()=>{
       inputController=new AbortController();const progress=dialog.querySelector('[data-photo-progress]');progress.textContent='正在本机检查照片 / 安全解包 ZIP…';dialog.querySelector('[data-photo-cancel]').disabled=false;files=await preparePhotoInput(files,{signal:inputController.signal,onProgress:n=>{progress.textContent=`已安全解包 ${n} 张照片`;}});inputController=null;if(!files.length)throw new Error('没有找到可导入的照片文件');
       preview=null;review=null;batch=null;render();
-      let latest=null;const paint=()=>{progressFrame=0;if(!service.scanner.running)return;const el=dialog.querySelector('[data-photo-progress]');if(el&&latest)el.textContent=`正在读取 ${latest.processed} / ${latest.total} · 重复 ${latest.duplicateCount} · 失败 ${latest.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;};
+      let latest=null;const paint=()=>{progressFrame=0;if(!scanningNow())return;const el=dialog.querySelector('[data-photo-progress]');if(el&&latest)el.textContent=`正在读取 ${latest.processed} / ${latest.total} · 重复 ${latest.duplicateCount} · 失败 ${latest.failureCount}`;const cancel=dialog.querySelector('[data-photo-cancel]');if(cancel)cancel.disabled=false;};
       // Progress is painted at most once per frame; thousands of files must not mean thousands of layouts.
       onScanning(true);let scanning;
       try{scanning=service.scanner.scan(files,{resumeBatchId:dialog.dataset.resumeBatch||null,onProgress:p=>{latest=p;if(!progressFrame)progressFrame=requestAnimationFrame(paint);}});render();
@@ -122,8 +133,15 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   dialog.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button)return;
     if(button.hasAttribute('data-photo-close')){dialog.close();return;}
-    if(button.hasAttribute('data-photo-cancel')){inputController?.abort();service.scanner.cancel();return;}
+    if(button.hasAttribute('data-photo-cancel')){inputController?.abort();nativeImporter?.cancel();service.scanner.cancel();return;}
     run(async()=>{
+      if(button.hasAttribute('data-photo-native-permission')||button.hasAttribute('data-photo-native-location')){nativePermission=await native.requestPermission({location:button.hasAttribute('data-photo-native-location')});render();return;}
+      if(button.hasAttribute('data-photo-native-scan')||button.hasAttribute('data-photo-native-resume')){
+        preview=null;review=null;onScanning(true);let scanning;
+        try{scanning=nativeImporter.scan({range:scanRange(nativeStart,nativeEnd),incremental:nativeIncremental,resume:button.hasAttribute('data-photo-native-resume'),onProgress:p=>{const el=dialog.querySelector('[data-photo-progress]');if(el)el.textContent=`系统相册已读取 ${p.processed} 张 · ${p.phase==='complete'?'等待统一审核':'正在扫描，可取消后续扫'}`;}});render();batch=await scanning;nativeResume=false;await loadBatch(batch.id);}
+        finally{onScanning(false);const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';render();}
+        return;
+      }
       const row=button.closest('[data-candidate]'),id=row?.dataset.candidate;
       if(button.hasAttribute('data-photo-globe')){dialog.close();return;}
       if(button.hasAttribute('data-photo-gallery')){gallery=!gallery;galleryShown=12;render();}

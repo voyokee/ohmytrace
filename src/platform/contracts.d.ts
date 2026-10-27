@@ -1,4 +1,4 @@
-/** Phase 5.2 boundary only. No native shell or device acceptance is implied. */
+/** Web scoped acquisition and Android MediaStore shell; iOS/device acceptance pending. */
 export type PhotoPermission='unknown'|'authorized'|'limited'|'denied'|'restricted';
 export type Platform='web'|'android'|'ios';
 export interface MediaHandle {source:Platform; localId:string; scopeId:string; expiresAt?:string;}
@@ -21,6 +21,11 @@ export interface PhotoCapability {
 }
 /** Mapping is device-local. A native URI/local identifier is never a portable ID. */
 export interface MediaIdentityMapping {deviceId:string;handle:MediaHandle;assetId:string;contentHash?:string;}
+
+/** Android acquisition extensions. Device-local JSON cursors never enter backups. */
+export interface AndroidMediaHandle extends MediaHandle {source:'android';volume:string;stamp:string;libraryVersion:string;}
+export interface AndroidLibraryOptions {startMs:number|null;endMs:number|null;pageSize?:number;cursor?:Record<string,unknown>|null;since?:Record<string,unknown>|null;signal?:AbortSignal;}
+export interface AndroidLibraryPage {entries:Array<{handle:AndroidMediaHandle;name:string;mimeType:string;size:number;lastModified:number;locationAuthorized:boolean}>;cursor:Record<string,unknown>|null;scopeId:string;checkpoint:Record<string,unknown>;}
 
 /** Unified observation view. Canonical schema and media manifest retain their versions. */
 export interface PhotoObservation {

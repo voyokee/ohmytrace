@@ -141,6 +141,14 @@ npm test
 
 源码预览可打开 [story-viewer.html](story-viewer.html)，点击「体验虚构示例」。完整的数据结构、隐私规则、部署步骤与兼容限制见 [Life Story 文档](docs/LIFE_STORY.md)；验证记录见 [验收审计](docs/LIFE_STORY_VERIFICATION.json)。
 
+## 相册导入与 Android
+
+支持 JPEG、HEIC/HEIF、PNG、WebP 的时间与 GPS 读取，可分批追加、去重及中断续扫。
+照片 GPS 会在本机匹配行政区与附近城市，名称可在确认前修改。勾选保留脱敏小缩略图后，刷新仍可查看；浏览器不能解码的 HEIC 仍保留时间和位置。
+
+`android/` 提供 Android 10+ 应用：授权后按时间范围扫描可访问的 MediaStore 照片，并支持后续增量补充、断点恢复和原生 HEIC 缩略图。
+运行 `node scripts/build-android.mjs` 构建调试 APK，详细步骤与真机验收边界见 [Android 相册导入](docs/ANDROID_PHOTO_IMPORT.md)。网页版本继续使用主动选择文件的方式。
+
 ## 数据与隐私
 
 - 人生记录与本地照片索引保存在当前浏览器的 IndexedDB；旧版 localStorage 作为兼容迁移来源保留。应用不自动上传个人数据库或原始照片。

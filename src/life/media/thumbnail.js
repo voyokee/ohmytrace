@@ -23,6 +23,7 @@ export async function createThumbnail(file,{dimensions,orientation=null,limits=T
 export class ThumbnailGenerator {
  constructor(){this.worker=null;this.counter=0;this.pending=new Map();this.queue=Promise.resolve();}
  create(file,options){const run=this.queue.then(async()=>{
+  if(file.nativeHandle)return file.capability.requestThumbnail(file.nativeHandle,{maxEdge:THUMBNAIL_LIMITS.maxEdge,signal:options?.signal});
   if(globalThis.Worker&&globalThis.OffscreenCanvas){
    try{if(!this.worker){this.worker=new Worker(new URL('./thumbnail-worker.js',import.meta.url),{type:'module'});this.worker.onmessage=({data})=>{const p=this.pending.get(data.id);if(!p)return;this.pending.delete(data.id);clearTimeout(p.timer);data.error?p.reject(new Error(data.error)):p.resolve(data.blob);};this.worker.onerror=()=>this.close();}
     return await new Promise((resolve,reject)=>{const id=++this.counter,timer=setTimeout(()=>{this.close();reject(new Error('THUMBNAIL_TIMEOUT'));},30000);this.pending.set(id,{resolve,reject,timer});this.worker.postMessage({id,file,options});});
