@@ -29,6 +29,8 @@ ISO3、在线 ISO2 和存量中文名称。`countsAsCountryKey` 返回统计归�
 重复地点的显示后缀、卡片关联列表也使用同一名称函数。旧的自动旅程标题在
 卡片、地图投影与故事编排时按保存的照片观测重新解释；人工旅程标题不改。
 分享产物采用故事中的可见旅程标题，避免在元数据中残留旧自动标题。
+生产 Viewer 的 `config/web-runtime.json` 与静态 ZIP 的
+`story/runtime-files.json` / `story/package.js` 精确白名单均包含这个无存储副作用的口径模块。
 
 ## 升级（`offline-admin-resolver.js`、`media/auto-import.js`）
 
