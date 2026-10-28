@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import {createCameraMotionTracker} from '../src/performance/camera-motion.js';
+import {CameraDirector} from '../src/rendering/camera-director.js';
+const phaseViewer={canvas:{dataset:{}}},phaseDirector=new CameraDirector(phaseViewer),oldTicket=phaseDirector.begin('entering'),newTicket=phaseDirector.begin('leaving');
+assert.equal(phaseDirector.finish(oldTicket,'place'),false,'A stale arrival must not finish the replacement flight');
+assert.equal(phaseViewer.canvas.dataset.cameraPhase,'leaving');assert.equal(phaseDirector.finish(newTicket,'global'),true);
 const camera=height=>({positionWC:{x:6378137+height,y:0,z:0},directionWC:{x:-1,y:0,z:0},upWC:{x:0,y:0,z:1},
  positionCartographic:{height},nativeMoving:true});
 const cam=camera(10000000),original=structuredClone(cam),tracker=createCameraMotionTracker();

@@ -4,7 +4,7 @@ import {openTool} from './browser-tools.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
-import {readFile,mkdir} from 'node:fs/promises';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve,extname,sep} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -70,6 +70,20 @@ try {
   await page.locator('#year-filter [data-year="2025"]').click();
   await page.waitForFunction(()=>document.querySelector('#list-count').textContent==='1');
   assert.deepEqual(await page.locator('#tl-track .tl-month').allTextContents(),['6月']);
+  await page.locator('#tl-track [data-id]').last().click();await page.waitForSelector('#card.show');
+  assert.equal(await page.locator('#tl-track [data-id].on').count(),1,'The timeline and record card share one selected Trip');
+  const selected=await page.locator('#tl-track [data-id].on').getAttribute('data-id');
+  await viewport.focus();await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.locator('#tl-track [data-id].on').getAttribute('data-id'),selected,'Timeline arrow keys scroll, they do not step the selected Trip');
+  await page.locator('#card [data-record-action=close]').click();assert.equal(await page.locator('#tl-track [data-id].on').count(),0);
+  // Timeline clicks still bubble to document listeners and apply a year exactly once.
+  await page.evaluate(()=>{window.__timelineClicks=0;document.addEventListener('click',()=>window.__timelineClicks++);});
+  await page.locator('#year-filter [data-act=all-years]').click();await page.waitForFunction(()=>document.querySelector('#list-count').textContent==='10');
+  await page.locator('#year-filter [data-year="2025"]').click();await page.waitForFunction(()=>document.querySelector('#list-count').textContent==='1');
+  assert.equal(await page.evaluate(()=>window.__timelineClicks),2);
+  assert.equal(await page.locator('#year-filter [data-year="2025"]').getAttribute('aria-pressed'),'true');
+  await page.locator('#timeline').screenshot({path:resolve(output,'timeline-contract.png'),animations:'disabled'});
+  await writeFile(resolve(output,'timeline-contract.json'),JSON.stringify(await page.locator('#timeline').evaluate(el=>({html:el.innerHTML.replace(/trip_[a-f0-9-]+/g,'TRIP').replace(/residence_[a-f0-9-]+/g,'HOME'),width:el.clientWidth,height:el.clientHeight})),null,2));
   assert.equal(errors.length,0,errors.join('\n'));
   console.log('PASS: record-driven timeline domain, accessible entries, sparse years, horizontal scrolling, latest default, resize, selection, refresh and month range');
 } finally {await context.close();await browser.close();await new Promise(r=>server.close(r));}

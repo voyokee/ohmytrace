@@ -8,7 +8,7 @@ const {mountFirstUse}=publicViewer?{}:await import('./src/life/first-use-ui.js')
 const {mountRecordCard,recordCardModel}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
-const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
+const {mountTimeline}=await import('./src/ui/timeline.js');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
 const {geoNameProvider}=publicViewer?{}:await import('./src/life/geocoding/provider.js');
 const {LocalSettings}=publicViewer?{}:await import('./src/life/local-settings.js');
@@ -199,8 +199,7 @@ const state = { rows: [], places: {}, sel: null, city: null, year: null, playing
 let trips = [], homes = [], typeColors = {};
 let viewer, scene, terrainReady = false;
 let flying = false, flightGeneration = 0, orbit = null, lastInput = 0, pickName = null, playToken = 0;
-let footprintOverlay, mapChooser, markerInfo=new Map(), timelineGroups=new Map();
-let timelineLayoutKey, timelineFrame, timelineViewportWidth=0, timelineAtLatest=true;
+let footprintOverlay, mapChooser, markerInfo=new Map();
 let arcSource = null, arcEntities = [], originEntity = null, arcSignature="";
 let geo = { busy: false, done: 0, total: 0, failed: false };
 // name -> { pos, cur, wake }; cur fades toward the target brightness once performance.now() >= wake
@@ -1262,18 +1261,9 @@ function renderStats() {
   if(current)parts.push(`<span class="home-stat">${current.anchor?'阶段地点':state.year==null?'现居':'当时居住'} <b>${esc(coreName(current.place))}</b></span>`);
   $('#stats').innerHTML=parts.map(part=>`<span class="stat-item">${part}</span>`).join('<i>·</i>');
 }
-let yearSignature='';
-function renderYears() {
-  const counted=travelTrips(),options=yearOptions(counted),signature=counted.length+'|'+options.map(y=>`${y}:${counted.filter(t=>matchesYear(t,y)).length}`).join('|');
-  const el=$('#year-filter');
-  if(signature!==yearSignature||!el.children.length) {
-    const scroll=el.scrollLeft;yearSignature=signature;
-    el.innerHTML=`<button class="year-option" data-act="all-years" aria-label="全部年份，${counted.length} 次旅行" aria-pressed="false">全部<span>${counted.length}</span></button>`+
-      options.map(y=>{const count=counted.filter(t=>matchesYear(t,y)).length;return `<button class="year-option" data-year="${y}" aria-label="按 ${y} 年显示，${count} 次旅行" aria-pressed="false">${y}<span>${count}</span></button>`;}).join('');
-    el.scrollLeft=scroll;
-  }
-  for(const button of el.children){const on=button.dataset.year?+button.dataset.year===state.year:state.year==null;button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));}
-}
+
+const timelineUI=mountTimeline({element:$('#timeline'),yearsElement:$('#year-filter'),getModel:()=>({state:{year:state.year,sel:state.sel},lifeSnapshot,typeColors,visibleTrips,visibleHomes,travelTrips}),onSelect:id=>select(id),onScope:scope=>setYear(scope.type==='year'?scope.year:null),onInteraction:()=>pauseOverviewMotion(),onGroup:options=>mapChooser.open(options),coreName,esc});
+const renderTimeline=()=>timelineUI.render(),renderYears=()=>timelineUI.renderYears();
 
 function statusOf(p) {
   if((publicViewer||storyBaseLife)&&p&&p.lat==null)return {cls:'auto',text:p.granularity==='hidden'?'坐标未公开':'位置未知',pending:true};
@@ -1347,55 +1337,6 @@ function renderList() {
   $('#list-body').innerHTML = html;
 }
 
-function renderTimeline() {
-  const dated=visibleTrips().filter(t=>t.date),track=$('#tl-track'),viewport=track.parentElement;timelineGroups=new Map();
-  const context=[...visibleHomes().filter(h=>h.date),...(lifeSnapshot?.chapterPeriod?[{date:lifeSnapshot.chapterPeriod}]:[])];
-  const periods=[...dated,...context];
-  $('#timeline').classList.toggle('empty',!periods.length&&$('#chapter-filter').hidden);
-  const layout=timelineLayout(dated,{year:state.year,context,viewportWidth:viewport.clientWidth}),P=layout.position;
-  const key=JSON.stringify([lifeSnapshot?.chapter?.id,layout.key]);
-  const previousScroll=viewport.scrollLeft,latest=key!==timelineLayoutKey||timelineAtLatest;
-  timelineLayoutKey=key;timelineViewportWidth=viewport.clientWidth;
-  track.style.width=`${layout.width}px`;
-  cancelAnimationFrame(timelineFrame);
-  timelineFrame=requestAnimationFrame(()=>{
-    viewport.scrollLeft=latest?viewport.scrollWidth:previousScroll;
-    if(latest)$('#year-filter').scrollLeft=$('#year-filter').scrollWidth;
-  });
-  if(!periods.length){track.innerHTML='<span class="tl-month" style="left:50%">日期未知</span>';return;}
-  const dense=state.year!=null||dated.length>16;track.classList.toggle('dense',dense);
-  let html='<div class="tl-rail"></div>';
-  if(layout.overlaps(lifeSnapshot?.chapterPeriod)){const d=lifeSnapshot.chapterPeriod,l=P(d.start),r=P(d.end);html+=`<span class="tl-band life-band" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${esc(lifeSnapshot.chapter.title)} · ${esc(d.label)}"></span>`;}
-  for(const h of visibleHomes()) {
-    if(!layout.overlaps(h.date))continue;
-    const l=P(h.date.start),r=P(h.date.end);
-    html+=`<button class="tl-band ${h.kind}${state.sel===h.id?' on':''}" data-id="${esc(h.id)}" style="left:${l}%;width:${Math.max(r-l,.6)}%" title="${h.anchor?'阶段地点':h.kind==='home'?'现居':'曾居'} · ${esc(coreName(h.place))} · ${esc(h.date.label)}"></button>`;
-  }
-  if(!dense) {
-    for(const y of layout.years)html+=`<button class="tl-year has" data-year="${y}" style="left:${layout.yearPosition(y)}%">${y}</button>`;
-    for(const t of dated){const x=P(t.date.start);html+=`<button class="tl-dot${x<15?' at-start':x>85?' at-end':''}${state.sel===t.id?' on':''}" data-id="${esc(t.id)}" style="left:${x}%;--c:${typeColors[t.type]}" aria-label="${esc(t.title)}"><span class="tl-tip">${esc(t.title)} · ${esc(t.date.short)}</span></button>`;}
-  } else if(state.year==null) {
-    for(const {key,items}of timelineBuckets(dated)) {
-      const x=layout.yearPosition(key);
-      html+=`<button class="tl-bucket" data-year="${key}" style="left:${x}%" aria-label="${key} 年，${items.length} 次旅行，按年查看"><span>${items.length}</span></button><button class="tl-year has" data-year="${key}" style="left:${x}%">${key}</button>`;
-    }
-  } else {
-    for(const month of layout.months)html+=`<span class="tl-month" style="left:${layout.monthPosition(month)}%">${month}月</span>`;
-    for(const {key,items}of timelineBuckets(dated,state.year)) {
-      const id=String(key),on=items.some(t=>t.id===state.sel);timelineGroups.set(id,items);
-      const action=items.length===1?`data-id="${esc(items[0].id)}"`:`data-act="timeline-group" data-group="${id}"`;
-      html+=`<button class="tl-bucket${on?' on':''}" ${action} style="left:${layout.monthPosition(key)}%" aria-label="${state.year} 年 ${key} 月，${items.length} 次旅行"><span>${items.length}</span></button>`;
-    }
-  }
-  track.innerHTML=html;
-}
-function showTimelineGroup(button) {
-  pauseOverviewMotion();
-  const list=timelineGroups.get(button.dataset.group);if(!list?.length)return;
-  const r=button.getBoundingClientRect();
-  mapChooser.open({title:`${state.year} 年 ${button.dataset.group} 月`,subtitle:`${list.length} 次旅行`,anchor:{x:r.left+r.width/2,y:r.top},element:button,type:'trips',
-    items:list.map(t=>({title:t.title,meta:`${t.date.short} · ${t.stops.length} 个地点`,select:()=>select(t.id)}))});
-}
 
 function stopHTML(place, note, color) {
   const st = statusOf(state.places[place]);
@@ -1751,7 +1692,7 @@ async function onPlaceAction(act, card, btn) {
 function bindEvents() {
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-act],[data-id],[data-year],[data-place],[data-tab]');
-    if (!t) return;
+    if (!t || t.closest('#timeline')) return; // src/ui/timeline.js owns these
     if (t.dataset.tab && t.closest('.tabs')) { switchTab(t.dataset.tab); return; }
     const act = t.dataset.act;
     const plCard = t.closest('.pl');
@@ -1770,7 +1711,6 @@ function bindEvents() {
       case 'fix': openModal('places'); return;
       case 'retry': geo.failed = false; geocodeMissing(); return;
       case 'clear-year': case 'all-years': setYear(null); return;
-      case 'timeline-group': showTimelineGroup(t); return;
       case 'cancel-pick': endPick(); return;
       case 'import': doImport(); return;
       case 'template': download('足迹模板.csv', TEMPLATE_CSV); return;
@@ -1802,17 +1742,7 @@ function bindEvents() {
       if (e.key === 'Enter' && e.target.closest('.search-box')) e.target.closest('.search-row').querySelector('[data-act=do-search]').click();
       return;
     }
-    if(e.target.closest('#year-filter')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
-      const buttons=[...$('#year-filter').children],i=buttons.indexOf(e.target);
-      const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:Math.max(0,Math.min(buttons.length-1,i+(e.key==='ArrowRight'?1:-1)));
-      buttons[next]?.focus();e.preventDefault();return;
-    }
-    if(e.target.closest('.tl-main')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
-      const viewport=$('.tl-main');
-      viewport.scrollLeft=e.key==='Home'?0:e.key==='End'?viewport.scrollWidth:viewport.scrollLeft+(e.key==='ArrowRight'?160:-160);
-      timelineAtLatest=viewport.scrollWidth-viewport.clientWidth-viewport.scrollLeft<2;
-      e.preventDefault();return;
-    }
+    if(e.target.closest('#year-filter,.tl-main')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return; // timeline navigation
     if (e.key === 'Escape') {
       if(document.querySelector('dialog[open]'))return;
       if (mapChooser?.close(true)) return;
@@ -1842,8 +1772,6 @@ function bindEvents() {
   $('#empty-photos')?.addEventListener('click', () => $('#btn-photos').click());
   $('#empty-demo')?.addEventListener('click', () => { if(life?.previewDemo?.()){ stopPlay(); state.sel=null; state.year=null; refresh(); sampleHeights(); homeView(); } });
   $('#btn-play').addEventListener('click', play);
-  $('.tl-main').addEventListener('scroll',()=>{const e=$('.tl-main');if(Math.abs(e.clientWidth-timelineViewportWidth)<=1)timelineAtLatest=e.scrollWidth-e.clientWidth-e.scrollLeft<2;},{passive:true});
-  new ResizeObserver(()=>{if(Math.abs($('.tl-main').clientWidth-timelineViewportWidth)>1)renderTimeline();}).observe($('.tl-main'));
 }
 
 /* ================= boot ================= */

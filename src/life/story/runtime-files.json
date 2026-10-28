@@ -74,6 +74,7 @@
   "src/ui/footprint-layout.js",
   "src/ui/footprint-overlay.js",
   "src/ui/map-chooser.js",
+  "src/ui/timeline.js",
   "src/ui/year-scope.js",
   "story-viewer.html",
   "styles.css",
