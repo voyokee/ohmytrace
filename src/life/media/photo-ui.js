@@ -29,11 +29,11 @@ export function batchSummary(assets){
     failed:assets.filter(a=>['error','unsupported','oversize'].includes(a.processingStatus)).length,possibleDuplicates:assets.filter(a=>a.possibleDuplicateAssetIds?.length).length,noTime:images.filter(a=>!a.extractedTime).length};
 }
 
-export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},onImportFinished=()=>{},download}) {
+export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},onImportFinished=()=>{},onBackupSaved=()=>{},download}) {
   const native=androidPhotoCapability(),nativeImporter=native?new AndroidLibraryImporter(service,native):null;
   // In the Android app the whole flow is one button: read the album, drop what has no
   // usable location, group by city and save. The reviewable file flow stays for the Web.
-  const autoImporter=native?new AndroidAutoImport(service.repository,native):new WebAutoImport(service);let autoState=null,advanced=false,webResume=null;
+  const autoImporter=native?new AndroidAutoImport(service.repository,native,{foreignNative:()=>service.thumbnails.getForeignNative()}):new WebAutoImport(service);let autoState=null,advanced=false,webResume=null;
   // Places saved with older (English) offline names are renamed quietly after start-up.
   if(autoImporter)setTimeout(()=>{autoImporter.localize().catch(()=>{});},3000);
   const scanningNow=()=>service.scanner.running||!!nativeImporter?.running;
@@ -49,7 +49,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   async function loadBatch(id){reviewProgress({phase:'grouping',total:batch?.total||0});await nativeImporter?.restoreFiles(id);batch=await service.manifest.getBatch(id);assets=await service.assetsFor(batch);review=batch.review||await service.createReview(id,{onProgress:reviewProgress});if(review.retainThumbnails!==undefined)retain=review.retainThumbnails;preview=null;focusedPreviewId=null;shown=CANDIDATE_PAGE;selected.clear();render();}
   async function save(){preview=null;await service.saveReview(batch.id,review);render();}
   const count=c=>c.visits.reduce((n,v)=>n+v.assetIds.length,0);
-  const saveBlob=(name,blob)=>{const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+    async function backup(){if(service.readOnly||currentData().meta.origin==='demo')throw new Error('请先导入自己的记录');if(!service.backups)throw new Error('完整备份存储不可用');const data=currentData(),blob=await service.backups.create(),result=await download('OnceHere-完整备份.zip',blob,blob.type);if(result?.saved)await onBackupSaved(data,blob.size);return result;}
   async function hydrate(generation){if(!service.thumbnails)return;for(const el of dialog.querySelectorAll('[data-photo-stored-image]')){try{const blob=await service.thumbnails.read(el.dataset.photoStoredImage);if(generation!==renderGeneration)return;if(blob){const url=URL.createObjectURL(blob);urls.push(url);const image=Object.assign(document.createElement('img'),{src:url,alt:'已保存在本机的照片缩略图',className:'photo-thumb',loading:'lazy'});el.replaceChildren(image);}else el.textContent='未保留缩略图；可重新选择原图补充。';}catch{if(generation===renderGeneration)el.textContent='缩略图读取失败，请从备份恢复或重新选择原图。';}}}
   function imageFor(id){const asset=assets.find(a=>a.assetId===id),file=service.scanner.fileFor(id);
     if(file?.nativeHandle){if(focusedPreviewId?focusedPreviewId!==id:nativePreviews++>=MEDIA_LIMITS.maxPreviewImages)return `<button class="btn sm" type="button" data-photo-preview-asset="${esc(id)}">预览这张照片</button>`;return `<span class="hint" data-photo-native-image="${esc(id)}">正在读取系统相册缩略图…</span>`;}
@@ -64,7 +64,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       ${warn?`<p class="photo-warning" data-photo-gps-warning>这批照片${s.gps?'大多':'都'}没有位置信息。${mobile?'手机浏览器的相册选择器可能会出于隐私去掉照片里的 GPS（安卓相册选择器、iPhone 照片图库都可能如此）。可以试试：在电脑上选择原图文件夹；iPhone 改用「文件」App 选原图；安卓改用「文件管理」选择原图。':'可能是相机未开启定位，或照片经过导出/压缩去掉了位置。尽量选择相机原图。'}</p>`:''}</div>`;
   }
   function render(){
-    if(!manage&&!advanced){release();renderAuto();return;}
+    if(!manage&&!advanced&&!gallery){release();renderAuto();return;}
     release();nativePreviews=0;const generation=++renderGeneration,data=currentData();
     dialog.innerHTML=`<div class="dlg-head">${manage?'<button class="photo-back" type="button" data-photo-manage aria-label="返回选择照片">‹</button><h3>备份与存储</h3>':'<h3>从相册恢复足迹</h3>'}<button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
       <div class="dlg-body scroll">${manage?`
@@ -130,7 +130,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     catch(error){autoState=error?.name==='AbortError'?null:{phase:'error',message:plain(error)};}
     finally{onScanning(false);if(dialog.open)renderAuto();}
   }
-  async function open({storage=false}={}){manage=storage;advanced=false;if(!initialized){await service.recover();initialized=true;}if(native){nativePermission=await native.permissionDetails();const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';}if(!native)webResume=(await service.manifest.listBatches()).find(b=>b.automatic&&b.status!=='committed');if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
+  async function open({storage=false}={}){manage=storage;advanced=false;gallery=false;if(!initialized){await service.recover();initialized=true;}if(native){nativePermission=await native.permissionDetails();const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';}if(!native)webResume=(await service.manifest.listBatches()).find(b=>b.automatic&&b.status!=='committed');if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
   document.querySelector('#btn-photos').addEventListener('click',()=>run(()=>open()));
   // Chrome/Firefox cannot decode HEIC; keep the parsed GPS/time and say why there is no picture.
   dialog.addEventListener('error',event=>{if(event.target.matches?.('img.photo-thumb'))event.target.replaceWith(Object.assign(document.createElement('span'),{className:'hint',textContent:'此浏览器无法显示这种格式的预览，时间和位置已读取。'}));},true);
@@ -187,7 +187,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       if(button.hasAttribute('data-photo-gallery')){gallery=!gallery;galleryShown=12;render();}
       if(button.hasAttribute('data-photo-gallery-previous')){galleryShown=Math.max(12,galleryShown-12);render();}
       if(button.hasAttribute('data-photo-gallery-more')){galleryShown+=12;render();}
-      if(button.hasAttribute('data-photo-library-backup')){if(!service.backups)throw new Error('统一备份存储不可用');saveBlob('OnceHere-Backup.zip',await service.backups.create());}
+      if(button.hasAttribute('data-photo-library-backup'))await backup();
       if(button.hasAttribute('data-photo-library-restore-confirm')){if(service.readOnly)throw new Error('演示模式不能恢复数据');await service.backups.restore(restorePreview);restorePreview=null;manage=false;batch=null;review=null;preview=null;gallery=true;storageStats=await service.thumbnails.stats();await onCommitted({tripId:null});render();dialog.querySelector('[data-photo-progress]').textContent='统一备份已校验并恢复，照片记忆可刷新查看。';}
       if(button.hasAttribute('data-photo-gc')){const referenced=[...new Set([...currentData().memories.filter(m=>m.uri?.startsWith('media:')).map(m=>m.uri.slice(6)),...(await service.manifest.listBatches()).filter(b=>b.status!=='committed').flatMap(b=>b.assetIds)])];storageStats=await service.thumbnails.gc(referenced);render();}
       if(button.dataset.photoOnlineName){const visit=review.candidates.find(c=>c.id===id)?.visits.find(v=>v.id===button.dataset.photoOnlineName);if(!visit||!confirm('将这一个地点的 GPS 发送给 Nominatim / OpenStreetMap 查询名称？不发送照片；导入其他照片不会触发在线查询。'))return;const name=await geoNameProvider.reverse(visit.coordinates,{online:true,consent:true});if(name){editVisitName(review,id,visit.id,name.displayName);visit.geoName=name;await save();}}
@@ -204,6 +204,6 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       if(button.dataset.photoResume){dialog.dataset.resumeBatch=button.dataset.photoResume;dialog.querySelector('[data-photo-files]').click();}
     });
   });
-  render();return {open,needsRegroup:()=>!!autoImporter&&!autoImporter.running&&autoImporter.outdated(),
-    async thumbnail(memory,options={}){const pointer=androidPointer(memory.uri);if(pointer&&native)return native.preview(pointer,options);if(memory.uri?.startsWith('media:'))return service.thumbnails?.read(memory.uri.slice(6));return null;}};
+  render();return {open,backup,needsRegroup:()=>!!autoImporter&&!autoImporter.running&&autoImporter.outdated(),
+    async thumbnail(memory,options={}){const pointer=androidPointer(memory.uri);if(pointer&&native){if(!pointer.deviceId&&(await service.thumbnails.getForeignNative()).includes(memory.uri))return null;return native.preview(pointer,options);}if(memory.uri?.startsWith('media:'))return service.thumbnails?.read(memory.uri.slice(6));return null;}};
 }

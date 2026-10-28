@@ -89,7 +89,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       if(publisher){shared=await publisher.publish(review,{visibility:'unlisted',idempotencyKey:crypto.randomUUID()});return;}
       const file=new File([JSON.stringify(review)],`${story.title||'足迹'}.story.json`,{type:'application/json'});
       if(navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:story.title});shared={file:true};return;}
-      saveBlob(file.name,file);shared={file:true};
+      const saved=await saveBlob(file.name,file);if(saved?.saved!==false)shared={file:true};
     }finally{busy=false;render();if(shared?.file){const el=dialog.querySelector('[data-story-progress]');if(el)el.textContent='分享文件已生成，可以发给朋友用足迹分享页打开。';}}
   }
   function scope(){if(sourceScope)return structuredClone(sourceScope);const [type,...rest]=source.split(':');return type==='year'?{type,year:Number(rest.join(':'))}:type==='range'?{type,start:rest[0],end:rest[1]}:type==='all'?{type}:{type,id:rest.join(':')};}
@@ -126,7 +126,7 @@ export function mountStoryComposer({getDataset,getScope=()=>({type:'all'}),onPre
       if(b.hasAttribute('data-story-remove')){story.orderedScenes.splice(index,1);dirty();render();return;}
       if(b.hasAttribute('data-story-review')){review=projectShare(data(),story,{images});approved=false;render();return;}
       if(b.hasAttribute('data-story-preview')){const a=projectShare(data(),story,{images});if(!a.orderedScenes.length)throw new Error('至少保留一个镜头');dialog.close();await onPreview(a);return;}
-      if(b.hasAttribute('data-story-json')&&approved&&review)saveBlob('OnceHere-story.json',new Blob([JSON.stringify(review,null,2)],{type:'application/json'}));
+      if(b.hasAttribute('data-story-json')&&approved&&review)await saveBlob('OnceHere-story.json',new Blob([JSON.stringify(review,null,2)],{type:'application/json'}));
       if(b.hasAttribute('data-story-package')&&approved&&review){busy=true;await onExportPackage(review,message=>{dialog.querySelector('[data-story-progress]').textContent=message;});busy=false;}
     }catch(e){busy=false;error(e);}
   });

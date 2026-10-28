@@ -2,6 +2,7 @@ package com.ohmytrace.app;
 
 /** Platform-independent paging rules, also exercised by JVM tests. */
 final class ScanWindow {
+    static void requireDevice(String expected,String actual){if(expected!=null&&!expected.isEmpty()&&!expected.equals(actual))throw new SecurityException("原图不在本机");}
     static void requireLocation(boolean authorized) {
         if (!authorized) throw new SecurityException("GPS_PERMISSION_REQUIRED：照片位置未授权，已停止扫描。请允许读取照片 GPS 后重新扫描。");
     }

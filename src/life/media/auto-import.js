@@ -70,7 +70,7 @@ export async function nameCells(observations,geonames,{rules=AUTO_RULES,concurre
 function cityOf(o,names,rules){
   const g=names.get(cellKey(o,rules));if(!g||!g.country)return null;
   const label=g.city||g.admin1||g.country;
-  return {key:`${g.countryCode||g.country}|${label}`,label,hasCity:!!g.city,country:g.country,countryCode:g.countryCode,sovereignCode:g.sovereignCode,region:g.admin1||g.country};
+  return {key:`${g.countryCode||g.country}|${label}`,label,hasCity:!!g.city,country:g.country,countryCode:g.countryCode,...(g.sovereignCode!==undefined?{sovereignCode:g.sovereignCode}:{}),region:g.admin1||g.country};
 }
 /** Mutates `data` (a working copy) with the photos; returns a summary. Pure apart from IDs. */
 export function applyAutoImport(data,input,names,{rules=AUTO_RULES,now=new Date(),force=false}={}){

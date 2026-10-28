@@ -1,8 +1,9 @@
 import {mountStoryPlayer} from './player-ui.js';
 import {createStoryBridge} from './viewer-bridge.js';
 import {projectShare} from './share.js';
+import {saveDocument} from '../../platform/document-save.js';
 
-export function saveStoryBlob(name,blob){const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+export function saveStoryBlob(name,blob){return saveDocument(name,blob);}
 export async function mountStoryExperience({privateData,getScope,enter,cancel,applyBridge,restore,onTheme,onError,reducedMotion}){
   let composer,introDone=null,introOff=null,introTimer=null,introRemaining=20000,introStarted=null;
   function finishIntro(){if(!introDone)return;const done=introDone;introDone=null;clearTimeout(introTimer);introOff?.();introOff=null;player.playback.stop();player.hide();document.body.classList.remove('first-intro');restore();done();}
@@ -14,7 +15,7 @@ export async function mountStoryExperience({privateData,getScope,enter,cancel,ap
     let publisher=null;
     try{const config=await fetch('./runtime-config.json',{cache:'no-store',signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null);if(config?.publisher&&config?.viewerOrigin){const {PopupStoryPublisher}=await import('./publishing/popup-publisher.js');publisher=new PopupStoryPublisher({origin:config.viewerOrigin});}}catch{}
     composer=mountStoryComposer({publisher,getDataset:privateData,getScope,onPreview:preview,saveBlob:saveStoryBlob,
-      onExportPackage:async(artifact,progress)=>{const {createSharePackage}=await import('./package.js');const blob=await createSharePackage(artifact,{onProgress:progress});saveStoryBlob('LifeStory-static.zip',blob);}});
+      onExportPackage:async(artifact,progress)=>{const {createSharePackage}=await import('./package.js');const blob=await createSharePackage(artifact,{onProgress:progress});await saveStoryBlob('LifeStory-static.zip',blob);}});
     document.addEventListener('click',e=>{if(e.target.closest('[data-story-compose]'))composer.open();const quick=e.target.closest('[data-story-quick]');if(quick)quickPlay(quick.dataset.storyQuick).catch(error=>onError?.(error));});
   }else{
     const {mountStandaloneViewer}=await import('./viewer.js');mountStandaloneViewer({onLoad:preview,onStop:()=>{player.playback.stop();player.hide();restore();}});

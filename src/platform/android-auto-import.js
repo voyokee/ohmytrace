@@ -2,11 +2,12 @@ import {AUTO_VERSION,applyAutoImport,nameCells,normalizeObservation,removeLegacy
 import {geoNameProvider} from '../life/geocoding/provider.js';
 import {NativeScanStore} from './native-scan-store.js';
 
-export const androidPointer=uri=>{const m=/^android-media:([^/]+)\/([1-9][0-9]{0,18})$/.exec(uri||'');return m?{volume:m[1],id:m[2]}:null;};
+export const androidPointer=uri=>{const m=/^android-media:(?:([a-f0-9-]{36})@)?([^/@]+)\/([1-9][0-9]{0,18})$/.exec(uri||'');return m?{...(m[1]?{deviceId:m[1]}:{}),volume:m[2],id:m[3]}:null;};
+const deviceOf=scope=>{const id=String(scope||'').split(':')[0];return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)?id:null;};
 
 /** Reads the whole album natively, then saves straight to the map: no review, no copies. */
 export class AndroidAutoImport {
-  constructor(repository,capability,{geonames=geoNameProvider,store=new NativeScanStore(),pageSize=400}={}){this.repository=repository;this.capability=capability;this.geonames=geonames;this.store=store;this.pageSize=pageSize;this.running=false;this.controller=null;}
+  constructor(repository,capability,{geonames=geoNameProvider,store=new NativeScanStore(),pageSize=400,foreignNative=async()=>[]}={}){this.repository=repository;this.capability=capability;this.geonames=geonames;this.store=store;this.pageSize=pageSize;this.foreignNative=foreignNative;this.running=false;this.controller=null;}
   cancel(){this.controller?.abort();}
   /** Results of the earlier review-based import are regrouped on the next run. */
   hasLegacy(){const d=this.repository.getDataset(),legacy=new Set(d.evidence.filter(e=>e.source?.kind==='photo-review').map(e=>e.id));return d.memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:')&&m.evidenceIds.some(id=>legacy.has(id))); }
@@ -43,11 +44,13 @@ export class AndroidAutoImport {
       // Old versions discarded unnamed coastal photos. Re-read their pointers on
       // the first scan after an upgrade, even if saved observations were regrouped.
       const since=savedCheckpoint?.version===AUTO_VERSION?savedCheckpoint.checkpoint:null,rows=[];
+      const knownUris=new Set(this.repository.getDataset().memories.map(m=>m.uri)),foreign=new Set(await this.foreignNative()),priorDevice=deviceOf(savedCheckpoint?.checkpoint?.scopeId);
       let cursor=null,total=null,scanned=0,checkpoint=null;
       do{
         const page=await this.capability.locate({cursor,since,pageSize:this.pageSize},{signal});
         if(Number.isInteger(page.total))total=page.total;scanned+=page.scanned;checkpoint=page.checkpoint;cursor=page.cursor;
-        for(const [volume,id,latitude,longitude,local,offsetMinutes,takenMs] of page.located)rows.push({uri:`android-media:${volume}/${id}`,latitude,longitude,local,offsetMinutes,takenMs});
+        const device=deviceOf(page.scopeId||page.checkpoint?.scopeId);
+        for(const [volume,id,latitude,longitude,local,offsetMinutes,takenMs] of page.located){const raw=`android-media:${volume}/${id}`,ownedLegacy=knownUris.has(raw)&&!foreign.has(raw)&&device&&device===priorDevice;rows.push({uri:device&&!ownedLegacy?`android-media:${device}@${volume}/${id}`:raw,latitude,longitude,local,offsetMinutes,takenMs});}
         onProgress({phase:'reading',scanned,total});
       }while(cursor);
       const known=new Set(this.repository.getDataset().memories.map(m=>m.uri)),fresh=rows.filter(r=>!known.has(r.uri));

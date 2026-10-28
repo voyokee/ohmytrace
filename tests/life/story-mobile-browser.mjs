@@ -1,3 +1,4 @@
+import {openTool} from './browser-tools.mjs';
 import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import {resolve,extname,sep} from 'node:path';import {tmpdir} from 'node:os';
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright');
@@ -18,7 +19,7 @@ try{
   await page.waitForTimeout(250);
   assert.equal(await page.locator('#card').evaluate(el=>el.classList.contains('show')),false,'Automatic Story scenes must keep the globe visible instead of opening a second blocking Trip card');
   const inferredTrip=artifact.trips.find(t=>t.routeKind==='inferred'),tripScene=artifact.orderedScenes.findIndex(s=>s.kind==='trip'&&s.tripId===inferredTrip.id);
-  await page.locator(`[data-story-dot="${String(tripScene)}"]`).click();await page.locator('#btn-list').tap();await page.waitForSelector('#list-body .item');
+  await page.locator(`[data-story-dot="${String(tripScene)}"]`).click();await openTool(page,'#btn-list');await page.waitForSelector('#list-body .item');
   await page.locator('#list-body .item').filter({hasText:inferredTrip.title}).tap();await page.waitForSelector('#card.show');assert.equal(await page.locator('#story-player').isVisible(),false,'A Trip card opened during playback replaces the player instead of stacking on it');
   assert.doesNotMatch(await page.locator('#card').innerText(),/0 张照片|照片只提供/,'A CSV-only Trip must not acquire photo provenance just because its route is inferred');
   await page.locator('#card [data-act=close]').tap();

@@ -11,6 +11,10 @@ const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
 const {geoNameProvider}=publicViewer?{}:await import('./src/life/geocoding/provider.js');
+const {LocalSettings}=publicViewer?{}:await import('./src/life/local-settings.js');
+const {BackupGuide}=publicViewer?{}:await import('./src/life/backup-guide.js');
+const {mountMyPanel}=publicViewer?{}:await import('./src/ui/my-panel.js');
+const {saveDocument}=await import('./src/platform/document-save.js');
 const {photoRegion}=publicViewer?{}:await import('./src/life/geocoding/region-policy.js');
 const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-mobile-clear');
@@ -208,7 +212,7 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI, photoUI, recordCard,firstUse,firstUseUI;
+let life, lifeSnapshot, lifeUI, photoUI, recordCard,firstUse,firstUseUI,myPanel,backupGuide;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
@@ -225,10 +229,11 @@ async function load() {
   if(publicViewer){body.classList.add('story-readonly');return;}
   try {
     life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
+    backupGuide=new BackupGuide({settings:new LocalSettings(),onReminder:message=>toast(message,6000)});
     lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
       status:()=>life.status(),onBackup:()=>download('OnceHere-records.json',life.repository.backup(),'application/json'),
       onRestore:async file=>{const text=await file.text();if(!confirm('用此记录备份替换当前人生记录？建议先下载当前备份。'))return;
-        stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
+        stopPlay();await life.restore(text);await backupGuide.importCommitted(life.repository.getDataset());life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     firstUse=new FirstUseService(life.repository,life.edits);
     firstUseUI=mountFirstUse({service:firstUse,reducedMotion,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
@@ -240,8 +245,10 @@ async function load() {
       if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
     photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
+      onBackupSaved:(data,bytes)=>{backupGuide.markBackup(data,bytes);myPanel?.render();},
       onImportFinished:()=>firstUseUI.open(),
-      onCommitted:async result=>{if(result.automatic)await firstUse.prepare();recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+      onCommitted:async result=>{if(result.automatic)await firstUse.prepare();await backupGuide.importCommitted(life.repository.getDataset());recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();myPanel?.render();if(result.tripId)select(result.tripId);else homeView();}});
+    myPanel=mountMyPanel({repository:life.repository,guide:backupGuide,backup:()=>photoUI.backup(),restore:()=>photoUI.open({storage:true}),onData:tab=>openModal(tab),onError:error=>toast(error.message,6000)});
     recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,
       onClose:()=>deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>syncRecordSelection(target),
       onReplay:scope=>{if(!storyExperience)throw new Error('回放正在准备，请稍后重试');return storyExperience.replay(scope);},
@@ -255,8 +262,8 @@ async function importCsvText(text,mode) {
   return life.importCSV(text,mode);
 }
 function download(name,text,type='text/csv;charset=utf-8') {
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([type==='application/json'?text:'\uFEFF'+text],{type}));
-  a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  const blob=text instanceof Blob?text:new Blob([type.startsWith('text/csv')?'\uFEFF'+text:text],{type});
+  return saveDocument(name,blob).catch(error=>{toast('保存失败：'+error.message,6000);return {saved:false};});
 }
 function exportCsv() { if(life)download('OnceHere.csv',life.exportCSV()); }
 function exitDemo() { if(!life?.exitDemo?.())return; stopPlay(); state.sel=null; state.year=null; refresh(); homeView(); }
@@ -1302,7 +1309,6 @@ function renderChips() {
   $('#chips').innerHTML = out.join('');
   $('#tab-badge').textContent = n || '';
   $('#data-dot').hidden = !n;
-  for(const id of ['#more-dot','#menu-data-dot'])if($(id))$(id).hidden=!n;
   const share=$('#btn-share');
   if(share){const data=(storyBaseLife||life)?.repository?.getDataset();share.disabled=!storyExperience?.composer||!data||data.meta.origin==='demo'||!['places','visits','memories','chapters'].some(key=>data[key].length);}
 }
@@ -1413,9 +1419,9 @@ function syncRecordSelection(target){
   else if(target?.kind==='chapter'){state.year=null;life.adapter.setScope({type:'chapter',id:target.id});lifeUI?.renderStrip();}
   refresh();updateSelectionUI();
 }
-function openRecord(target,{fly=true}={}){
+function openRecord(target,{fly=true,interaction=true}={}){
   if(!recordCard||publicViewer||storyBaseLife)return;
-  storyExperience?.pauseForInteraction();pauseOverviewMotion();mapChooser?.close();
+  if(interaction){storyExperience?.pauseForInteraction();pauseOverviewMotion();}mapChooser?.close();
   recordCard.open(target);syncRecordSelection(target);
   if(isMobile())body.classList.remove('list-open');
   if(!fly)return;
@@ -1478,12 +1484,12 @@ function updateSelectionUI() {
   updateArcs();
 }
 
-function select(id, { fly = true } = {}) {
-  storyExperience?.pauseForInteraction();
+function select(id, { fly = true, interaction = true } = {}) {
+  if(interaction)storyExperience?.pauseForInteraction();
   if(storyScene)storyExploreCard=true;
   const x = byId(id);
   if (!x) return;
-  if(recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:x.anchor?'place':x.kind==='trip'?'trip':'residence',id:x.anchor?x.placeId:id},{fly});return;}
+  if(recordCard&&!publicViewer&&!storyBaseLife){openRecord({kind:x.anchor?'place':x.kind==='trip'?'trip':'residence',id:x.anchor?x.placeId:id},{fly,interaction});return;}
   if(state.sel!==id)expandedCardId=null;
   state.city=null;mapChooser?.close();
   state.sel = id;
@@ -1562,7 +1568,7 @@ async function play() {
   replayLit = new Set(); // the world goes dark, then lights up stop by stop
   const first = list[0];
   if (first.origin && located(first.origin.place)) {
-    select(first.origin.id, { fly: false });
+    select(first.origin.id, { fly: false, interaction:false });
     $('#tl-status').textContent = '从这里出发';
     await flyToItem(first.origin, { duration: 3 });
     if (token !== playToken) return;
@@ -1572,7 +1578,7 @@ async function play() {
   for (let i = 0; i < list.length; i++) {
     if (token !== playToken) return;
     $('#tl-status').textContent = `回放 ${i + 1} / ${list.length}`;
-    select(list[i].id, { fly: false });
+    select(list[i].id, { fly: false, interaction:false });
     if (list[i].origin) replayLit.add(list[i].origin.place);
     await flyToItem(list[i], { duration: i === 0 && !first.origin ? 3.4 : 4.2 });
     if (token !== playToken) return;
@@ -1700,6 +1706,7 @@ async function doImport() {
   const mode = (document.querySelector('input[name=mode]:checked') || {}).value || 'append';
   try {
     const result = await importCsvText(text, mode);
+    await backupGuide?.importCommitted(life.repository.getDataset());
     life.adapter.setScope({type:'all'});
     state.sel = null; state.year = null;
     closeModal();
@@ -1808,7 +1815,6 @@ function bindEvents() {
     }
     if (e.key === 'Escape') {
       if(document.querySelector('dialog[open]'))return;
-      if(menu&&!menu.hidden){closeMenu(true);e.preventDefault();return;}
       if (mapChooser?.close(true)) return;
       if(!storyBaseLife&&recordCard?.escape()){e.preventDefault();return;}
       if (pickName) endPick();
@@ -1827,17 +1833,6 @@ function bindEvents() {
     storyExperience?.pauseForInteraction();
     storyExperience?.composer?.open({resume:!!storyBaseLife});
   });
-  // Phones keep the frequent actions in the bar; the rest live under "更多".
-  const menu=$('#toolbar-menu'),more=$('#btn-more'),closeMenu=(restore=false)=>{if(menu&&!menu.hidden){menu.hidden=true;more.setAttribute('aria-expanded','false');if(restore)more.focus({preventScroll:true});}};
-  const openMenu=()=>{menu.hidden=false;more.setAttribute('aria-expanded','true');menu.querySelector('[role=menuitem]')?.focus({preventScroll:true});};
-  more?.addEventListener('click',()=>{if(menu.hidden)openMenu();else closeMenu();});
-  more?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();e.stopPropagation();openMenu();}});
-  menu?.addEventListener('keydown',e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;e.preventDefault();e.stopPropagation();
-    const items=[...menu.querySelectorAll('[role=menuitem]')],i=items.indexOf(document.activeElement),next=e.key==='Home'?0:e.key==='End'?items.length-1:(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus();});
-  menu?.addEventListener('click',e=>{const b=e.target.closest('[data-proxy]');if(!b)return;closeMenu(true);$('#'+b.dataset.proxy).click();});
-  menu?.addEventListener('focusout',e=>{if(!menu.contains(e.relatedTarget)&&e.relatedTarget!==more)closeMenu();});
-  document.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target)&&!more.contains(e.target))closeMenu();});
-  window.addEventListener('resize',()=>{if(innerWidth>720)closeMenu();});
   $('#btn-list').addEventListener('click', () => {body.classList.toggle('list-open');footprintOverlay?.invalidate();});
   $('#list-close').addEventListener('click', () => {body.classList.remove('list-open');footprintOverlay?.invalidate();});
   $('#btn-data').addEventListener('click', () => openModal(pendingPlaces().length ? 'places' : 'import'));

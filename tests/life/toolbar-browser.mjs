@@ -1,3 +1,4 @@
+import {openTool} from './browser-tools.mjs';
 // Mobile toolbar and real sharing flow, with isolated storage and fictional data.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -24,10 +25,10 @@ const shareSource=()=>page.locator('[data-share-range].on').getAttribute('data-s
 const geometry=()=>page.locator('#toolbar>.tb:visible').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {id:n.id,width:r.width,height:r.height,x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));
 try{
   await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForSelector('#story-composer',{state:'attached'});
-  await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));
+  await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'));
   if(process.env.TOOLBAR_TEST_MODE!=='preview'){
   const buttons=await geometry();
-  assert.deepEqual(buttons.map(b=>b.id),['btn-share','btn-photos','btn-home','btn-list','btn-more'],'Phones show only the five frequent actions');
+  assert.deepEqual(buttons.map(b=>b.id),['btn-share','btn-photos','btn-my'],'Every width shows only the three main actions');
   assert.ok(buttons.every(b=>b.width===42&&b.height===42),'Each mobile action has a 42px target');
   assert.equal(await page.locator('#btn-share').isDisabled(),true,'Empty data cannot be shared');
   }
@@ -47,29 +48,24 @@ try{
   await openShare();assert.match(await shareSource(),/^trip:/,'Sharing stays available during preview');
   await page.locator('[data-share-range="all"]').click();assert.match(await page.locator('.share-summary').innerText(),/3 次旅行/,'Preview sharing reads the full private dataset, not the minimal playback artifact');await closeShare();
   await page.locator('[data-story-close]').click();
-  await page.locator('#btn-more').tap();await page.waitForSelector('#toolbar-menu:not([hidden])');
-  assert.deepEqual(await page.locator('#toolbar-menu [role=menuitem]').allTextContents(),['人生阶段','切换夜景','导入与编辑数据']);
-  assert.ok(await page.locator('#toolbar-menu [role=menuitem]').evaluateAll(nodes=>nodes.every(n=>n.getBoundingClientRect().height>=44)));
-  assert.equal(await page.locator('#toolbar-menu [role=menuitem]').first().evaluate(el=>document.activeElement===el),true);
-  await page.keyboard.press('End');assert.equal(await page.locator('#toolbar-menu [role=menuitem]').last().evaluate(el=>document.activeElement===el),true);
-  await page.keyboard.press('Escape');assert.equal(await page.locator('#toolbar-menu').isVisible(),false);assert.equal(await page.locator('#btn-more').getAttribute('aria-expanded'),'false');
-  assert.equal(await page.locator('#btn-more').evaluate(el=>document.activeElement===el),true);
-  await page.locator('#btn-more').tap();await page.locator('[data-proxy=btn-tone]').tap();assert.equal(await page.locator('#toolbar-menu').isVisible(),false);
-  await page.locator('#btn-more').tap();await page.locator('[data-proxy=btn-life]').tap();await page.waitForSelector('#life-dialog[open]');
+  await page.locator('#btn-my').tap();await page.locator('#my-dialog[open]').waitFor();
+  for(const section of ['备份与恢复','导出','人生阶段','显示','隐私说明','记录列表'])assert.ok((await page.locator('#my-dialog').innerText()).includes(section),section);
+  assert.equal(await page.locator('#my-advanced').evaluate(e=>e.open),false);
+  const night=await page.locator('body').evaluate(e=>e.classList.contains('night-mode'));await page.locator('#btn-tone').tap();assert.equal(await page.locator('#my-dialog').isVisible(),false);assert.notEqual(await page.locator('body').evaluate(e=>e.classList.contains('night-mode')),night);await page.keyboard.press('n');assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('night-mode')),night);
+  await openTool(page,'#btn-life');await page.waitForSelector('#life-dialog[open]');
   await page.locator('#chapter-form [name=title]').fill('云南阶段');await page.locator('#chapter-form [name=start]').fill('2023');await page.locator('#chapter-form [name=end]').fill('2025');
   await page.locator('#chapter-form details').first().locator('summary').click();await page.locator('#chapter-form [name=relatedTripIds]').first().check();
   await page.locator('#chapter-form button[type=submit]').click();await page.waitForSelector('[data-life-view]');await page.locator('[data-life-view]').first().click();
   await openShare();assert.match(await shareSource(),/^chapter:/,'A stage card shares that stage');await closeShare();
   for(const width of [320,375,390,430]){
-    await page.setViewportSize({width,height:844});const buttons=await geometry();assert.equal(buttons.length,5);assert.ok(buttons.every(b=>b.width===42&&b.height===42&&b.x>=0&&b.right<=width));
+    await page.setViewportSize({width,height:844});const buttons=await geometry();assert.equal(buttons.length,3);assert.ok(buttons.every(b=>b.width===42&&b.height===42&&b.x>=0&&b.right<=width));
     const layout=await page.evaluate(()=>{const box=s=>document.querySelector(s).getBoundingClientRect();return {titleRight:box('#brand h1').right,toolbarLeft:box('#toolbar').left,titleBottom:box('#brand h1').bottom,toolbarTop:box('#toolbar').top,statsTop:box('#stats').top,toolbarBottom:box('#toolbar').bottom};});
     assert.ok(layout.titleRight<=layout.toolbarLeft||layout.titleBottom<=layout.toolbarTop,'Title and buttons must not overlap');assert.ok(layout.statsTop>=layout.toolbarBottom,'Stats start below the touch targets');
   }
   const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:47,bottom:34,left:0,right:20}});
   await page.setViewportSize({width:390,height:844});
   const safe=await geometry();assert.ok(safe.every(b=>b.y>=57&&b.right<=370),'Buttons stay below a 47px top cutout and inside the right safe area');
-  await page.locator('#btn-more').tap();const menu=await page.locator('#toolbar-menu').boundingBox();assert.ok(menu.y>=Math.max(...safe.map(b=>b.bottom)),'Overflow menu also respects the safe area');
-  await page.screenshot({path:resolve(output,'mobile-toolbar-menu.png')});await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:0,bottom:0,left:0,right:0}});
-  await page.setViewportSize({width:1440,height:1000});assert.equal(await page.locator('#btn-more').isVisible(),false);assert.equal(await page.locator('#toolbar-menu').isVisible(),false);assert.equal(await page.locator('#btn-life').isVisible(),true);
-  assert.deepEqual(errors,[]);console.log('PASS: five 42px targets, overflow menu, empty/all/year/trip/Chapter/preview share scope, 320–430px layout and desktop');console.log('Screenshot: '+resolve(output,'mobile-toolbar-menu.png'));
+  await page.locator('#btn-my').tap();const drawer=await page.locator('#my-dialog').boundingBox();assert.ok(drawer.x>=0&&drawer.x+drawer.width<=390);await page.screenshot({path:resolve(output,'mobile-my-panel.png')});await page.keyboard.press('Escape');assert.equal(await page.locator('#my-dialog').isVisible(),false);assert.equal(await page.locator('#btn-my').evaluate(e=>document.activeElement===e),true);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:0,bottom:0,left:0,right:0}});await page.setViewportSize({width:1440,height:1000});assert.equal((await geometry()).length,3);await openTool(page,'#btn-data');await page.locator('[data-tab=places]').click();assert.equal(await page.locator('#places-body').count()||await page.locator('.pl').count()>0,true);await page.locator('#modal-close').click();await page.keyboard.press('Escape');
+  assert.deepEqual(errors,[]);console.log('PASS: three main targets, My sections, N/Esc, empty/all/year/trip/Chapter/preview share scope, 320–430px layout and desktop');console.log('Screenshot: '+resolve(output,'mobile-my-panel.png'));
 }finally{await context.close();await browser.close();await new Promise(r=>server.close(r));}

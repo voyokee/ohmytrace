@@ -36,6 +36,8 @@
   "src/performance/profile-gl.js",
   "src/performance/render-policy.js",
   "src/performance/visual-benchmark.js",
+  "src/platform/android-bridge.js",
+  "src/platform/document-save.js",
   "src/rendering/camera-director.js",
   "src/rendering/earth-materials.js",
   "src/rendering/hero-earth.js",

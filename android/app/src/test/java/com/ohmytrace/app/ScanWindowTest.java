@@ -2,6 +2,7 @@ package com.ohmytrace.app;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class ScanWindowTest {
+    @Test public void foreignDevicePointersCannotReadTheSameLocalMediaNumber(){ScanWindow.requireDevice("device-a","device-a");ScanWindow.requireDevice("","device-a");try{ScanWindow.requireDevice("device-a","device-b");fail();}catch(SecurityException expected){assertTrue(expected.getMessage().contains("原图不在本机"));}}
     @Test public void missingLocationAccessIsNotAnEmptyGpsLibrary() {
         ScanWindow.requireLocation(true);
         try { ScanWindow.requireLocation(false); fail("GPS-redacted reads must not proceed"); } catch (SecurityException expected) { assertTrue(expected.getMessage().contains("GPS_PERMISSION_REQUIRED")); }

@@ -1,5 +1,5 @@
 import {createRequire} from 'node:module';import {createServer} from 'node:http';import {readFile,writeFile} from 'node:fs/promises';import {resolve,extname,sep} from 'node:path';import {fileURLToPath} from 'node:url';import {execFileSync} from 'node:child_process';
-const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright'),root=fileURLToPath(new URL('../../',import.meta.url)),baseline='e52d73b';
+const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright'),root=fileURLToPath(new URL('../../',import.meta.url)),baseline=process.env.LIFE_PERF_BASELINE||'e52d73b';
 const changed=new Set(execFileSync('git',['diff','--name-only',baseline],{cwd:root,encoding:'utf8'}).trim().split('\n'));
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.glb':'model/gltf-binary'};
 const server=createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost'),before=url.pathname.startsWith('/before/'),relative=url.pathname.replace(/^\/(before|after)\//,'').replace(/^\//,'').replace(/^$/,'index.html'),path=resolve(root,relative);if(!path.startsWith(root.endsWith(sep)?root:root+sep))throw Error();const bytes=before&&changed.has(relative)?execFileSync('git',['show',baseline+':'+relative],{cwd:root}):await readFile(path);res.writeHead(200,{'Content-Type':mime[extname(path)]||'application/octet-stream','Cache-Control':'no-store'}).end(bytes);}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -17,5 +17,5 @@ try{
   runs[scene+'-'+variant]={medianFps:median(samples.map(s=>s.fps)),medianP95FrameMs:median(samples.map(s=>s.p95FrameMs)),samples,errors};console.log(scene+'-'+variant,JSON.stringify({fps:runs[scene+'-'+variant].medianFps,p95:runs[scene+'-'+variant].medianP95FrameMs}));await context.close();
  }
  const result={baseline,measuredAt:new Date().toISOString(),protocol:{browser:await browser.version(),viewport:'1280×720',renderer:'headless Chrome / SwiftShader',windows:'8 s warmup, six subsequent two-second postRender windows',caveats:['Desktop software renderer, not Android hardware','Fixed camera, not flight or import throughput','Online terrain/imagery timing can differ between sequential runs','Existing metrics exclude frame intervals at least 250 ms']},runs};
- await writeFile(resolve(root,'docs/cn-policy-performance.json'),JSON.stringify(result,null,2)+'\n');
+ await writeFile(resolve(root,process.env.LIFE_PERF_OUTPUT||'docs/cn-policy-performance.json'),JSON.stringify(result,null,2)+'\n');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

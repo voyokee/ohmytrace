@@ -101,7 +101,7 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
       try{const blob=await thumbnail(m,{signal:controller.signal});if(ticket!==generation)return;
         if(!blob||!blob.size)throw new Error('unavailable');const url=URL.createObjectURL(blob);urls.push(url);
         placeholder.replaceChildren(node('img',{src:url,alt:m.title||'照片缩略图',loading:'lazy'}));
-      }catch{if(ticket===generation)placeholder.textContent='照片暂不可用；原图可能不在本机或尚未授权。';}
+      }catch{if(ticket===generation)placeholder.textContent='原图不在本机，或尚未授权读取。';}
     }};
     void Promise.all([worker(),worker()]);return section;
   }
