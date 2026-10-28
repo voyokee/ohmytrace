@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {GEOCODER_VERSION,needsGeocoding,provinceSearchOptions,fitsProvince,provinceFallback,placeQueries} from '../src/geocoding/region-scope.js';
+import {readFile} from 'node:fs/promises';
+import {OfflineAdminResolver} from '../src/life/geocoding/offline-admin-resolver.js';
+import {GeoNameProvider} from '../src/life/geocoding/provider.js';
 const overseas={name:'云南园',display_name:'云南园，新加坡',lat:'1.33706',lon:'103.69327',category:'place',type:'neighbourhood',address:{country_code:'sg'}};
 const province={name:'云南省',display_name:'云南省，中国',lat:'25',lon:'102',category:'boundary',type:'administrative',address:{country_code:'cn'}};
 assert.equal(fitsProvince(overseas,'云南'),false,'A matching name abroad is not a province fallback');
@@ -18,3 +21,9 @@ assert.equal(needsGeocoding({status:'auto'}),false,'Accepted point matches are n
 assert.equal(needsGeocoding({status:'rough'}),true);assert.equal(needsGeocoding({status:'notfound'}),true);
 assert.equal(needsGeocoding({status:'rough',geocoderVersion:GEOCODER_VERSION}),false,'Retry legacy fallback once, not on every load');
 console.log('PASS: province country/feature restrictions, overseas homonym and POI rejection, border-name queries, international searches, confirmed-coordinate preservation and one-time legacy fallback retry');
+const offline=new OfflineAdminResolver({load:async p=>JSON.parse(await readFile(new URL('../src/life/geocoding/data/'+p,import.meta.url),'utf8'))});
+let onlineCalls=0;const provider=new GeoNameProvider({offline,online:{id:'online',search:async()=>{onlineCalls++;return [];}},cache:{get(){},set(){}}});
+const chengdu=await provider.search('成都',provinceSearchOptions('四川'));assert.ok(chengdu.some(r=>fitsProvince(r,'四川')));
+for(const q of ['北京','京都','清迈','九寨沟'])await provider.search(q);assert.equal(onlineCalls,0);
+await assert.rejects(provider.search('九寨沟',{online:true}),/确认/);assert.equal(onlineCalls,0);
+console.log('PASS: bundled Chinese city/province scope and default offline search never contact the online service');

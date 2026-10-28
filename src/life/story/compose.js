@@ -1,6 +1,8 @@
 import {validateDataset,newId,clone,dateBound,partialDate} from '../schema.js';
 import {validateStory,unknown,memoryInStory} from './schema.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
+import {readTripTitle} from '../media/journey-title.js';
+import {photoPlaceName} from '../geocoding/region-policy.js';
 
 function coverage(entity,data){
   const visits=(entity.visitIds||[]).map(id=>data.visits.find(v=>v.id===id));
@@ -32,16 +34,16 @@ export function composeStory(data,{scope={type:'all'},title='OnceHere 足迹回�
   const scenes=[];
   const add=(kind,title,entity={},refs={})=>scenes.push({id:newId('scene'),kind,title,description:'',start:clone(entity.start||unknown()),end:clone(entity.end||unknown()),chapterId:null,tripId:null,placeId:null,memoryId:null,...refs,duration:kind==='place'?4:3});
   add('globe',title);
-  if(place){const time=scope.year?{start:partialDate(String(scope.year)),end:partialDate(String(scope.year))}:{};add('place',place.name,time,{placeId:place.id});}
-  if(residence){const p=data.places.find(p=>p.id===residence.placeId);add('place',p.name,residence,{placeId:p.id});}
+  if(place){const time=scope.year?{start:partialDate(String(scope.year)),end:partialDate(String(scope.year))}:{};add('place',photoPlaceName(place,data),time,{placeId:place.id});}
+  if(residence){const p=data.places.find(p=>p.id===residence.placeId);add('place',photoPlaceName(p,data),residence,{placeId:p.id});}
   const seen=new Set();
   function tripScenes(t,chapterId=null){
-    seen.add(t.id);add('trip',t.title,t,{tripId:t.id,chapterId});
-    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(visitCountsAsTravel(data,v,t)&&(!place||v.placeId===place.id&&cityYear(v)))add('place',p.name,v,{tripId:t.id,chapterId,placeId:p.id});}
+    seen.add(t.id);add('trip',readTripTitle(data,t),t,{tripId:t.id,chapterId});
+    for(const id of t.visitIds){const v=data.visits.find(v=>v.id===id),p=data.places.find(p=>p.id===v.placeId);if(visitCountsAsTravel(data,v,t)&&(!place||v.placeId===place.id&&cityYear(v)))add('place',photoPlaceName(p,data),v,{tripId:t.id,chapterId,placeId:p.id});}
   }
   for(const c of chapters){
     add('chapter',c.title,c,{chapterId:c.id});
-    for(const id of c.homeAnchors){const p=data.places.find(p=>p.id===id);if(!p.hidden)add('place',p.name,c,{chapterId:c.id,placeId:id});}
+    for(const id of c.homeAnchors){const p=data.places.find(p=>p.id===id);if(!p.hidden)add('place',photoPlaceName(p,data),c,{chapterId:c.id,placeId:id});}
     for(const t of trips.filter(t=>c.relatedTripIds.includes(t.id)))tripScenes(t,c.id);
   }
   for(const t of trips.filter(t=>!seen.has(t.id)))tripScenes(t);

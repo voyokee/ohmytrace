@@ -1,5 +1,19 @@
 # Offline name data
 
+## 国内口径（`../region-policy.js`）
+
+显示与统计归属在 `region-policy.js` 中统一解释，不修改 Natural Earth 原始几何。
+CHN 显示中国；TWN 显示中国台湾（省级）、HKG 中国香港、MAC 中国澳门（特别行政区），
+以上均按 CHN 计数；KOR / PRK 为韩国 / 朝鲜；IOA 为澳属印度洋领地。
+IND 的阿鲁纳恰尔邦覆盖为中国 / 西藏自治区（藏南地区）；KAS 显示克什米尔地区且
+不计国家；KOS 科索沃地区归 SRB，CYN 塞浦路斯北部归 CYP，SOL 索马里兰地区归 SOM。
+上述争议项均**待法务复核**。精确边界与底图审图不在此机制范围；admin 覆盖只是近似。
+其他代码沿用包内中文名并归属自身。实现和升级说明见 `docs/CN_REGION_POLICY.md`。
+
+`admin-search-index.json` 仅由现有包派生，不引入新的来源或几何。
+`node scripts/prepare-admin-search.mjs` 可重建 4,580 个行政区代表点和 7,324 个城市的
+中文行政区关联。正向结果均为离线推断；行政区代表点不等于实测地点或精确中心。
+
 Natural Earth v5.1.2, public domain. Made with Natural Earth.
 https://www.naturalearthdata.com/about/terms-of-use/
 Pinned source GeoJSON (repository release v5.1.2):

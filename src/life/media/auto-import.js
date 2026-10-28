@@ -9,8 +9,8 @@ export {savedPhotoObservations} from './auto-grouping.js';
 // locations are dropped silently, places are merged per city, trips split on
 // time gaps and on returning home.
 // Bump when grouping rules change. Regroup from saved observations in Photos.
-// v4: city-first naming, fine name cells, airport/endpoint transit and city titles.
-export const AUTO_VERSION=4;
+// v5: domestic display/sovereign policy, without replacing manual decisions.
+export const AUTO_VERSION=5;
 export const AUTO_RULES=Object.freeze({nameCellDegrees:0.00001,tripGapHours:72,placeReuseKm:100});
 
 /**
@@ -70,7 +70,7 @@ export async function nameCells(observations,geonames,{rules=AUTO_RULES,concurre
 function cityOf(o,names,rules){
   const g=names.get(cellKey(o,rules));if(!g||!g.country)return null;
   const label=g.city||g.admin1||g.country;
-  return {key:`${g.countryCode||g.country}|${label}`,label,hasCity:!!g.city,country:g.country,countryCode:g.countryCode,region:g.admin1||g.country};
+  return {key:`${g.countryCode||g.country}|${label}`,label,hasCity:!!g.city,country:g.country,countryCode:g.countryCode,sovereignCode:g.sovereignCode,region:g.admin1||g.country};
 }
 /** Mutates `data` (a working copy) with the photos; returns a summary. Pure apart from IDs. */
 export function applyAutoImport(data,input,names,{rules=AUTO_RULES,now=new Date(),force=false}={}){

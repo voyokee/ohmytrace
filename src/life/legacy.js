@@ -67,7 +67,7 @@ export function parseLegacyCSV(text) {
 }
 const rowFields=r=>Object.fromEntries(['date','trip','place','type','note'].map(k=>[k,String(r[k]??'')]));
 const fingerprint=r=>JSON.stringify([rowFields(r),r._coordinates??null]);
-const locationMetadata=location=>Object.fromEntries(['status','label','countryCode','geocoderVersion'].filter(k=>location?.[k]!==undefined).map(k=>[k,clone(location[k])]));
+const locationMetadata=location=>Object.fromEntries(['status','label','countryCode','geocoderVersion','source','state'].filter(k=>location?.[k]!==undefined).map(k=>[k,clone(location[k])]));
 
 // Reconcile a legacy editing draft. Persisted visit IDs carry identity through edits;
 // title/date grouping is used only to interpret new CSV rows as legacy trips.
@@ -146,7 +146,7 @@ export function updatePlace(data,id,location,{manual=true}={}) {
   const place=data.places.find(p=>p.id===id);if(!place)throw new Error('地点不存在');
   const before={coordinates:clone(place.coordinates),location:clone(place.location)};
   place.coordinates=location.lat==null?null:{latitude:location.lat,longitude:location.lon};place.location=locationMetadata(location);
-  place.evidenceIds.push(...(manual?manualEvidence(data,{kind:'coordinate-correction'},before,{coordinates:place.coordinates,location:place.location}):addEvidence(data,'inferred',{kind:'geocoder',provider:'Nominatim',result:clone(location)})));
+  place.evidenceIds.push(...(manual?manualEvidence(data,{kind:'coordinate-correction'},before,{coordinates:place.coordinates,location:place.location}):addEvidence(data,'inferred',{kind:'geocoder',provider:location.source||'unknown',result:clone(location)})));
   validateDataset(data);
 }
 const csvCell=value=>{const s=String(value??'');return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};

@@ -15,6 +15,7 @@
   "assets/models/vegetation-low.glb",
   "assets/models/vegetation.glb",
   "src/geocoding/region-scope.js",
+  "src/life/geocoding/region-policy.js",
   "src/life/schema.js",
   "src/life/story/app-integration.js",
   "src/life/story/playback.js",

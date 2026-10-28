@@ -1,6 +1,8 @@
 import {clone,dateBound,validateDataset} from './schema.js';
 import {datasetRows} from './legacy.js';
 import {tripCountsAsTravel,visitCountsAsTravel,placeCountsAsVisited,visiblePlace,memoryVisibleOnMap} from './travel-policy.js';
+import {photoPlaceName,normalizeRegion} from './geocoding/region-policy.js';
+import {readTripTitle} from './media/journey-title.js';
 
 const format=d=>d.precision==='unknown'?'未知':d.precision==='ongoing'?'至今':d.value;
 // Bounds are display-only intervals; canonical precision remains untouched.
@@ -19,12 +21,12 @@ export function projectDataset(data,scope={type:'all'}) {
   validateDataset(data);
   const keys=new Map(),used=new Set();
   for(const p of data.places) {
-    let key=p.name;
-    if(used.has(key)){let i=2;while(used.has(`${p.name} · ${i}`))i++;key=`${p.name} · ${i}`;}
+    const name=photoPlaceName(p,data);let key=name;
+    if(used.has(key)){let i=2;while(used.has(`${name} · ${i}`))i++;key=`${name} · ${i}`;}
     used.add(key);keys.set(p.id,key);
   }
   const places=Object.create(null),placeIds=Object.create(null);
-  for(const p of data.places){const key=keys.get(p.id);placeIds[key]=p.id;places[key]={...clone(p.location),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
+  for(const p of data.places){const key=keys.get(p.id),city=p.location?.photoCity,region=city&&normalizeRegion({...city,admin1:city.region});placeIds[key]=p.id;places[key]={...clone(p.location),...(city?{photoCity:{...city,country:region.country,sovereignCode:region.sovereignCode,region:region.admin1}}:{}),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
   const visits=new Map(data.visits.map(v=>[v.id,v]));
   const photoTrips=new Set(data.memories.filter(m=>m.kind==='photo').flatMap(m=>m.tripIds));
   let trips=data.trips.filter(t=>!t.hidden&&t.visitIds.some(id=>{const v=visits.get(id);return !v.hidden&&visiblePlace(data,v.placeId);})).map(t=>{
@@ -35,7 +37,7 @@ export function projectDataset(data,scope={type:'all'}) {
       const stops=t.visitIds.map(id=>visits.get(id)),starts=stops.filter(v=>dateBound(v.start)!==null).sort((a,b)=>dateBound(a.start)-dateBound(b.start)),ends=stops.filter(v=>dateBound(v.end,true)!==null).sort((a,b)=>dateBound(a.end,true)-dateBound(b.end,true));
       if(starts.length&&ends.length){date=renderDate(t.start.precision==='unknown'?starts[0].start:t.start,t.end.precision==='unknown'?ends.at(-1).end:t.end);date={...date,days:null,label:`照片观测 ${date.label} · 旅行起止未完全确认`,short:`照片观测 ${date.short}`};}
     }
-    return {id:t.id,kind:'trip',title:t.title,type:t.type,date,inferredConnections,countsAsTravel:tripCountsAsTravel(data,t),originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
+    return {id:t.id,kind:'trip',title:readTripTitle(data,t),type:t.type,date,inferredConnections,countsAsTravel:tripCountsAsTravel(data,t),originUncertain:inferredConnections&&t.start.precision==='unknown',memoryCount:data.memories.filter(m=>m.kind==='photo'&&m.tripIds.includes(t.id)).length,
       stops:t.visitIds.filter(id=>!visits.get(id).hidden&&visiblePlace(data,visits.get(id).placeId)).map(id=>{const v=visits.get(id);return {place:keys.get(v.placeId),placeId:v.placeId,visitId:id,note:v.legacy.note,date:renderDate(v.start,v.end),countsAsTravel:visitCountsAsTravel(data,v,t)};})};
   });
   const evidence=new Map(data.evidence.map(e=>[e.id,e])),grouping=data.meta.photoAutoGrouping,currentYear=String(new Date().getFullYear());

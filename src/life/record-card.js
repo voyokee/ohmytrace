@@ -1,6 +1,8 @@
 import {clone,dateBound} from './schema.js';
 import {sourceSummary} from './edits.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from './travel-policy.js';
+import {photoPlaceName,photoRegion} from './geocoding/region-policy.js';
+import {readTripTitle} from './media/journey-title.js';
 
 const collections={place:'places',trip:'trips',residence:'residences',chapter:'chapters'};
 const dateText=d=>!d||d.precision==='unknown'?'日期待确认':d.precision==='ongoing'?'至今':d.value;
@@ -9,6 +11,7 @@ const overlaps=(a,b)=>(dateBound(a.start)??-Infinity)<=(dateBound(b.end,true)??I
 export function recordCardModel(data,target,{year=null}={}){
   const key=collections[target?.kind],entity=key&&data[key].find(e=>e.id===target.id&&!e.hidden);
   if(!entity)return null;
+  const placeName=id=>photoPlaceName(data.places.find(p=>p.id===id),data);
   const inYear=e=>year===null||overlaps(e,{start:{precision:'year',value:String(year)},end:{precision:'year',value:String(year)}});
   const placeId=target.kind==='place'?entity.id:target.kind==='residence'?entity.placeId:null;
   const visits=data.visits.filter(v=>!v.hidden&&visiblePlace(data,v.placeId));
@@ -22,15 +25,15 @@ export function recordCardModel(data,target,{year=null}={}){
   const visitType=entity.visitType||(target.kind==='residence'?entity.kind:target.kind==='trip'?({转机:'transit',路过:'pass-through'}[entity.type]||'travel'):residences.some(r=>r.kind==='home')?'home':residences.length?'past':relevant.length&&relevant.every(v=>v.legacy.type==='转机')?'transit':relevant.length&&relevant.every(v=>v.legacy.type==='路过')?'pass-through':'travel');
   const scope=target.kind==='trip'&&!tripCountsAsTravel(data,entity)?{type:'place',id:relevant[0]?.placeId}: {type:target.kind,id:entity.id};
   const provenance=sourceSummary(data,entity);if(target.kind==='trip')provenance.detail+=' 地点之间为推测连接，不代表实际轨迹。';
-  return {target:clone(target),entity,visitType,title:target.kind==='place'?entity.name:entity.title,
+  return {target:clone(target),entity,visitType,title:target.kind==='place'?photoPlaceName(entity,data):target.kind==='trip'?readTripTitle(data,entity):entity.title,region:placeId?photoRegion(data.places.find(p=>p.id===placeId)?.location?.photoCity).displayName:null,
     kindLabel:target.kind==='place'?({transit:'转机', 'pass-through':'路过',home:'居住城市',past:'曾住城市'}[visitType]||'城市'):target.kind==='residence'?(entity.kind==='home'?'现居':'曾居'):target.kind==='chapter'?'人生阶段':tripCountsAsTravel(data,entity)?'旅程':'路过 / 转机',
     period:target.kind==='place'?(year===null?'照片与到访记录':year+' 年 · 照片与到访记录'):period(entity),provenance,actions:['回放','照片','分享','不对？'],scope:year!==null&&target.kind==='place'?{...scope,year}:scope,
-    photos,photoIds:photos.map(m=>m.id),journeys:journeys.filter(traveled).map(t=>({kind:'trip',id:t.id,title:t.title,period:period(t)})),
+    photos,photoIds:photos.map(m=>m.id),journeys:journeys.filter(traveled).map(t=>({kind:'trip',id:t.id,title:readTripTitle(data,t),period:period(t)})),
     connections:journeys.filter(t=>!traveled(t)).map(t=>({kind:'trip',id:t.id,title:t.title,period:period(t)})),
     residences:residences.map(r=>({kind:'residence',id:r.id,title:r.title,period:period(r)})),
-    places:relevant.filter((v,i,all)=>all.findIndex(o=>o.placeId===v.placeId)===i).map(v=>({kind:'place',id:v.placeId,title:data.places.find(p=>p.id===v.placeId).name,period:period(v)})),
-    mergeKind,mergeId,mergeOptions:data[collections[mergeKind]].filter(e=>!e.hidden&&e.id!==mergeId).map(e=>({id:e.id,title:e.name||e.title})),
-    splitVisits:target.kind==='trip'?relevant.map(v=>({id:v.id,title:data.places.find(p=>p.id===v.placeId).name,period:period(v)})):[]};
+    places:relevant.filter((v,i,all)=>all.findIndex(o=>o.placeId===v.placeId)===i).map(v=>({kind:'place',id:v.placeId,title:placeName(v.placeId),period:period(v)})),
+    mergeKind,mergeId,mergeOptions:data[collections[mergeKind]].filter(e=>!e.hidden&&e.id!==mergeId).map(e=>({id:e.id,title:mergeKind==='place'?photoPlaceName(e,data):e.title})),
+    splitVisits:target.kind==='trip'?relevant.map(v=>({id:v.id,title:placeName(v.placeId),period:period(v)})):[]};
 }
 
 // DOM construction deliberately uses text nodes for all user-entered names.
@@ -114,12 +117,13 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     const source=node('details',{class:'record-source'},node('summary',{},'来源：'+model.provenance.label),node('p',{class:'hint'},model.provenance.detail));
     const actions=node('nav',{class:'record-actions','aria-label':'记录操作'},model.actions.map((label,i)=>node('button',{type:'button','data-record-action':['replay','photos','share','correct'][i],class:i===0?'card-replay':'',disabled:busy||(i===2||i===3)&&readonly()},label)));
     const content=node('div',{class:'record-body'});
+    if(model.region)content.append(node('p',{class:'hint record-region'},model.region));
     if(mode==='correct')content.append(correction(model));
     else if(mode==='photos')content.append(gallery(model,ticket));
     else {
       content.append(...[links('居住记录',model.residences),links('相关旅程 · '+model.journeys.length,model.journeys),links('路过 / 转机',model.connections)].filter(Boolean));
       if(selection.kind==='trip'){const places=links('途经城市',model.places);if(places)content.append(places);}
-      if(selection.kind==='chapter'){content.append(node('p',{class:'hint'},'阶段中的居住地点、旅程和照片共同组成这段回放。'));const anchors=links('阶段地点',model.entity.homeAnchors.filter(id=>visiblePlace(data(),id)).map(id=>({kind:'place',id,title:data().places.find(p=>p.id===id).name})));if(anchors)content.append(anchors);}
+      if(selection.kind==='chapter'){content.append(node('p',{class:'hint'},'阶段中的居住地点、旅程和照片共同组成这段回放。'));const anchors=links('阶段地点',model.entity.homeAnchors.filter(id=>visiblePlace(data(),id)).map(id=>({kind:'place',id,title:photoPlaceName(data().places.find(p=>p.id===id),data())})));if(anchors)content.append(anchors);}
       const placeId=selection.kind==='place'?selection.id:selection.kind==='residence'?model.entity.placeId:model.places[0]?.id;
       if(placeId)content.append(node('button',{type:'button',class:'record-more','data-record-action':'explore','data-record-id':placeId},'近看这里'));
     }
