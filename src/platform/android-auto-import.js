@@ -9,7 +9,7 @@ export class AndroidAutoImport {
   constructor(repository,capability,{geonames=geoNameProvider,store=new NativeScanStore(),pageSize=400}={}){this.repository=repository;this.capability=capability;this.geonames=geonames;this.store=store;this.pageSize=pageSize;this.running=false;this.controller=null;}
   cancel(){this.controller?.abort();}
   /** Results of the earlier review-based import are regrouped on the next run. */
-  hasLegacy(){return this.repository.getDataset().memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:'));}
+  hasLegacy(){const d=this.repository.getDataset(),legacy=new Set(d.evidence.filter(e=>e.source?.kind==='photo-review').map(e=>e.id));return d.memories.some(m=>m.kind==='photo'&&m.uri?.startsWith('media:')&&m.evidenceIds.some(id=>legacy.has(id))); }
   hasImported(){return this.repository.getDataset().memories.some(m=>m.uri?.startsWith('android-media:'));}
   /** Saved results were grouped by older rules and are rebuilt from a full read on the next run. */
   outdated(){return autoImportOutdated(this.repository.getDataset());}

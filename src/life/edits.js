@@ -1,3 +1,4 @@
+import {answerResidence} from './first-use.js';
 import {tripTitle} from './media/journey-title.js';
 import {visitCountsAsTravel} from './travel-policy.js';
 import {COLLECTIONS,clone,newId,dateBound,unknownDate,validateDataset} from './schema.js';
@@ -49,6 +50,7 @@ function classifyVisits(data,visits,value){
       if(!residence)data.residences.push(r);
       targets.push({kind:'residence',id:r.id});
     }else if(residence){
+      if(v.end.precision==='ongoing'){const observed=data.memories.filter(m=>m.kind==='photo'&&m.placeIds.includes(p.id)&&(dateBound(m.start)??-Infinity)>=(dateBound(v.start)??-Infinity)).sort((a,b)=>(dateBound(b.end,true)??-Infinity)-(dateBound(a.end,true)??-Infinity));v.end=observed[0]?clone(observed[0].end):unknownDate();v.legacy.note='照片观测时段；实际旅行起止待确认';}
       data.residences=data.residences.filter(r=>r.id!==residence.id);
       const trip={id:newId('trip'),title:residence.title||p.name,type:visitTypes[value],visitType:value,start:clone(v.start),end:clone(v.end),visitIds:[v.id],evidenceIds:[]};
       data.trips.push(trip);v.tripId=trip.id;v.legacy.trip=trip.title;
@@ -131,7 +133,7 @@ function refreshAutomaticTitles(data,changed){
  }
 }
 function hide(data,{target}){const e=entity(data,target?.kind,target?.id);e.hidden=true;return {kind:target.kind,id:e.id};}
-const operations={rename,classify,merge,split,delete:hide};
+const operations={rename,classify,merge,split,delete:hide,'confirm-residence':(data,command)=>answerResidence(data,command,input=>classify(data,input))};
 function changesBetween(before,after){
   return entityCollections.flatMap(collection=>{
     const previous=new Map(before[collection].map((value,index)=>[value.id,{value,index}])),next=new Map(after[collection].map((value,index)=>[value.id,{value,index}]));
@@ -217,7 +219,7 @@ export function sourceSummary(data,entity){
   if(sources.some(e=>e.state==='manual'))return {state:'manual',label:'人工',detail:'你已修改或确认这条记录；重新整理会保留人工决定。'};
   if(entity?.kind==='photo'&&entity.photoObservation)return {state:'observed',label:'照片观测',detail:'来自照片记录的拍摄地点与时间，原图仍在相册。'};
   if(sources.some(e=>e.state==='inferred')){
-    const photos=data.memories.filter(m=>m.kind==='photo'&&(m.tripIds.includes(entity.id)||m.placeIds.includes(entity.placeId||entity.id)));
+    const photos=data.memories.filter(m=>m.kind==='photo'&&(m.tripIds.includes(entity.id)||m.placeIds.includes(entity.placeId||entity.id)||entity.homeAnchors?.some(id=>m.placeIds.includes(id))&&(dateBound(m.start)??-Infinity)<=(dateBound(entity.end,true)??Infinity)&&(dateBound(m.end,true)??Infinity)>=(dateBound(entity.start)??-Infinity)));
     const days=new Set(photos.filter(m=>m.start.precision==='day').map(m=>m.start.value));
     return {state:'inferred',label:'推断',detail:photos.length?String(photos.length)+' 张照片 · '+String(days.size)+' 个拍照日；按已有观测推断，可在“不对？”里修改。':'根据已有记录推断，可在“不对？”里修改。'};
   }

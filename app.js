@@ -3,6 +3,8 @@
 const publicViewer=document.body.hasAttribute('data-story-viewer');
 const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
+const {FirstUseService}=publicViewer?{}:await import('./src/life/first-use.js');
+const {mountFirstUse}=publicViewer?{}:await import('./src/life/first-use-ui.js');
 const {mountRecordCard,recordCardModel}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
@@ -205,7 +207,7 @@ const frameTimings = { engineMs: 0, effectsMs: 0, drawMs: 0 };
 let drawCommands = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let life, lifeSnapshot, lifeUI, photoUI, recordCard;
+let life, lifeSnapshot, lifeUI, photoUI, recordCard,firstUse,firstUseUI;
 let storyExperience,storyScene=null,storyBaseLife=null,storyBaseSelection=null,storyExploreCard=false;
 let storyFallbackLayer=null;
 function storageError(error) {
@@ -227,6 +229,8 @@ async function load() {
       onRestore:async file=>{const text=await file.text();if(!confirm('用此记录备份替换当前人生记录？建议先下载当前备份。'))return;
         stopPlay();await life.restore(text);life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
+    firstUse=new FirstUseService(life.repository,life.edits);
+    firstUseUI=mountFirstUse({service:firstUse,reducedMotion,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
     // The dialog covers the globe while a scan runs; pausing its render loop keeps
     // worker replies and storage commits from queueing behind globe frames.
@@ -235,7 +239,8 @@ async function load() {
       if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
       else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
     photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
-      onCommitted:result=>{stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
+      onImportFinished:()=>firstUseUI.open(),
+      onCommitted:async result=>{if(result.automatic)await firstUse.prepare();recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();if(result.tripId)select(result.tripId);else homeView();}});
     recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,
       onClose:()=>deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>syncRecordSelection(target),
       onReplay:scope=>{if(!storyExperience)throw new Error('回放正在准备，请稍后重试');return storyExperience.replay(scope);},
@@ -1875,6 +1880,7 @@ async function boot() {
       else await flyToPoints(points,{duration});
     }});
   renderChips();
+  if(firstUse?.view()&&!firstUse.view().finished&&!document.querySelector('dialog[open]'))firstUseUI.open({resume:true});
 }
 
 await boot();

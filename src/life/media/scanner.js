@@ -60,7 +60,7 @@ export class PhotoScanner {
     for(const a of existing){const key=similarSignature(a);if(key)similar.set(key,[...(similar.get(key)||[]),a.assetId].slice(0,this.limits.maxDuplicateHints));}
     return {manifest:this.manifest,known:new Set(existing.map(a=>a.assetId)),legacy:new Map(existing.filter(a=>a.identity!=='sampled-sha256-v2'&&a.deduplicationKey).map(a=>[legacySignature(a),a]).filter(([k])=>k)),similar};
   }
-  async scan(input,{onProgress=()=>{},resumeBatchId=null,deduplicationIndex=null}={}) {
+  async scan(input,{onProgress=()=>{},resumeBatchId=null,deduplicationIndex=null,automatic=false}={}) {
     if(this.running)throw new Error('已有照片扫描正在运行');
     const files=Array.from(input);if(!files.length||files.length>this.limits.maxFiles)throw new Error(`每批请选择 1–${this.limits.maxFiles} 张照片`);
     this.running=true;this.cancelled=false;this.usedWorker=false;this.workerUnavailable=false;let batch,chunk=[];
@@ -70,7 +70,7 @@ export class PhotoScanner {
       batch=resumeBatchId?await this.manifest.getBatch(resumeBatchId):await this.manifest.createBatch(files);
       if(!batch||batch.total!==files.length||batch.filePlan.some((p,i)=>p.name!==files[i].name||p.size!==files[i].size||p.lastModified!==(files[i].lastModified??null)))throw new Error('恢复扫描需重新选择原批次的文件，顺序、名称、大小和修改时间须匹配');
       if(batch.status==='committed')throw new Error('这个批次已确认；可重新选择以补充或查看');
-      batch.status='scanning';await this.manifest.putBatch(batch);
+      batch.status='scanning';if(automatic)batch.automatic=true;await this.manifest.putBatch(batch);
       if(this.workerFactory){this.pool=new WorkerPool(this.workerFactory,this.concurrency);this.usedWorker=this.pool.start()>0;if(!this.usedWorker)this.workerUnavailable=true;}
       const index=deduplicationIndex||await this.createDeduplicationIndex();if(index.manifest!==this.manifest)throw new Error('去重索引不属于当前媒体库');
       const {known,legacy,similar}=index,batchIds=new Set(batch.assetIds);

@@ -176,6 +176,6 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
   element.addEventListener('keydown',keydown);
   element.addEventListener('click',click);element.addEventListener('submit',submit);feedback.addEventListener('click',click);
   const off=repository.subscribe(()=>render()),offHistory=edits.subscribe(()=>notice());
-  return {open(target){selection=clone(target);mode='overview';failure='';page=0;shown=20;render();},close,render,escape,get selection(){return clone(selection);},
+  return {open(target){selection=clone(target);mode='overview';failure='';page=0;shown=20;render();},close,render,escape,edit(){if(selection&&!readonly()){mode='correct';render();element.querySelector('[name=name]')?.focus();}},get selection(){return clone(selection);},
     dispose(){release();off();offHistory();element.removeEventListener('keydown',keydown);element.removeEventListener('click',click);element.removeEventListener('submit',submit);feedback.remove();}};
 }

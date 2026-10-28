@@ -23,7 +23,7 @@ export async function createLifeBridge({defaultCSV,sceneCSV,store}={}) {
     status(){const d=repository.getDataset();return sceneCSV?'景观演示 · 临时预览，请返回首页保存个人数据':d.meta.origin==='demo'?'虚构示例 · 尚未写入个人数据':d.meta.migration?.status==='complete'?'旧足迹已迁移 · 原始数据保留 · 保存在此浏览器':d.visits.length?'个人数据 · 保存在此浏览器':'个人数据为空 · 保存在此浏览器';},
     async importCSV(text,mode){requireWritable();return repository.update(d=>importCSVInto(d,text,mode));},
     async editRows(rows){requireWritable();return repository.update(d=>{reconcileRows(d,rows,{manual:true});d.meta.origin='user';});},
-    async clear(){requireWritable();return repository.update(d=>{for(const key of COLLECTIONS)d[key]=[];d.meta.origin='user';});},
+    async clear(){requireWritable();return repository.update(d=>{for(const key of COLLECTIONS)d[key]=[];delete d.meta.firstUse;delete d.meta.photoAutoGrouping;d.meta.origin='user';});},
     async restore(text){requireWritable();return repository.restore(text);},
     editDraft(){return datasetRows(repository.getDataset());},
     async setPlace(id,location,manual=true){

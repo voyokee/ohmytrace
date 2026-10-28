@@ -1,3 +1,4 @@
+import {WebAutoImport} from '../../platform/web-auto-import.js';
 import {preparePhotoInput} from '../../platform/web-photo-capability.js';
 import {geoNameProvider} from '../geocoding/provider.js';
 import {clone} from '../schema.js';
@@ -28,11 +29,11 @@ export function batchSummary(assets){
     failed:assets.filter(a=>['error','unsupported','oversize'].includes(a.processingStatus)).length,possibleDuplicates:assets.filter(a=>a.possibleDuplicateAssetIds?.length).length,noTime:images.filter(a=>!a.extractedTime).length};
 }
 
-export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},download}) {
+export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},onImportFinished=()=>{},download}) {
   const native=androidPhotoCapability(),nativeImporter=native?new AndroidLibraryImporter(service,native):null;
   // In the Android app the whole flow is one button: read the album, drop what has no
   // usable location, group by city and save. The reviewable file flow stays for the Web.
-  const autoImporter=native?new AndroidAutoImport(service.repository,native):null;let autoState=null;
+  const autoImporter=native?new AndroidAutoImport(service.repository,native):new WebAutoImport(service);let autoState=null,advanced=false,webResume=null;
   // Places saved with older (English) offline names are renamed quietly after start-up.
   if(autoImporter)setTimeout(()=>{autoImporter.localize().catch(()=>{});},3000);
   const scanningNow=()=>service.scanner.running||!!nativeImporter?.running;
@@ -63,7 +64,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
       ${warn?`<p class="photo-warning" data-photo-gps-warning>这批照片${s.gps?'大多':'都'}没有位置信息。${mobile?'手机浏览器的相册选择器可能会出于隐私去掉照片里的 GPS（安卓相册选择器、iPhone 照片图库都可能如此）。可以试试：在电脑上选择原图文件夹；iPhone 改用「文件」App 选原图；安卓改用「文件管理」选择原图。':'可能是相机未开启定位，或照片经过导出/压缩去掉了位置。尽量选择相机原图。'}</p>`:''}</div>`;
   }
   function render(){
-    if(autoImporter){release();renderAuto();return;}
+    if(!manage&&!advanced){release();renderAuto();return;}
     release();nativePreviews=0;const generation=++renderGeneration,data=currentData();
     dialog.innerHTML=`<div class="dlg-head">${manage?'<button class="photo-back" type="button" data-photo-manage aria-label="返回选择照片">‹</button><h3>备份与存储</h3>':'<h3>从相册恢复足迹</h3>'}<button class="x" type="button" data-photo-close aria-label="关闭照片导入">×</button></div>
       <div class="dlg-body scroll">${manage?`
@@ -110,26 +111,26 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   // Backup and storage tools live on their own page so the first screen is only about choosing photos.
   const plain=error=>String(error?.message||error).replace(/^[A-Z_]+：/,'');
   function renderAuto(){
-    const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),regroup=autoImporter.outdated(),reading=s?.phase==='reading'||s?.phase==='placing';
+    const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),regroup=autoImporter.outdated(),reading=['reading','placing','previews'].includes(s?.phase);
     const body=reading?`<div class="auto-progress"><div class="auto-bar"><span data-auto-bar></span></div><p data-auto-status></p></div><button class="auto-link" type="button" data-photo-auto-cancel>取消</button>`
       :s?.phase==='done'?`<p class="auto-result">${s.summary.regrouped?'已重新整理足迹，手动修改已保留':s.summary.newTrips||s.summary.newPlaces?`新增 <b>${s.summary.newTrips}</b> 次旅行 · <b>${s.summary.newPlaces}</b> 个地方`:s.summary.photos?'已补充到原有的旅行里':'没有发现新的足迹'}</p><button class="btn primary auto-main" type="button" data-photo-auto-done>去地球上看看</button>`
-      :`<p class="auto-intro">${regroup?'整理规则已更新：修正边境与沿海地名，识别机场和路过停留，并按城市命名旅程。可用已保存的照片记录重新整理，保留手动分类、标题和拆分。':legacy?'之前导入的照片足迹会按城市重新整理，保留手动修改。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。照片不会上传，也不会复制到 App 里。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>${again?'<button class="auto-link" type="button" data-photo-auto-regroup>重新整理足迹</button>':''}`;
-    dialog.innerHTML=`<div class="dlg-head"><h3>从相册开始</h3><button class="x" type="button" data-photo-close aria-label="关闭">×</button></div><div class="dlg-body photo-auto">${body}</div>`;
+      :`<p class="auto-intro">${regroup?'整理规则已更新：修正边境与沿海地名，识别机场和路过停留，并按城市命名旅程。可用已保存的照片记录重新整理，保留手动分类、标题和拆分。':legacy?'之前导入的照片足迹会按城市重新整理，保留手动修改。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。原图不会上传或复制，只在本机保存记录和小预览图。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}${native?`<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>`:`<label class="btn primary auto-main">选择照片<input type="file" data-photo-auto-files multiple accept="image/*,.heic,.heif,.zip" hidden></label>${folderSupported?'<label class="auto-link">选择照片文件夹<input type="file" data-photo-auto-folder webkitdirectory multiple hidden></label>':''}${webResume?'<label class="auto-link">继续上次导入（重新选择同一批原图）<input type="file" data-photo-auto-resume multiple accept="image/*,.heic,.heif" hidden></label>':''}`}${again?'<button class="auto-link" type="button" data-photo-auto-regroup>重新整理足迹</button>':''}`;
+    dialog.innerHTML=`<div class="dlg-head"><h3>从相册开始</h3><button class="x" type="button" data-photo-close aria-label="关闭">×</button></div><div class="dlg-body photo-auto">${body}${!reading?'<div class="photo-footer"><button data-photo-manage>备份与存储</button><button data-photo-auto-advanced>高级导入与记录</button></div>':''}</div>`;
     paintAuto();
   }
   function paintAuto(){
     const s=autoState,bar=dialog.querySelector('[data-auto-bar]'),status=dialog.querySelector('[data-auto-status]');if(!bar||!status)return;
-    const pct=s.phase==='placing'?100:s.total?Math.min(99,Math.round(s.scanned/s.total*100)):4;bar.style.width=pct+'%';
-    status.textContent=s.phase==='placing'?'正在整理去过的地方…':s.total?`正在读取照片 ${s.scanned.toLocaleString()} / ${s.total.toLocaleString()}`:'正在读取照片…';
+    const pct=['placing','previews'].includes(s.phase)?100:s.total?Math.min(99,Math.round(s.scanned/s.total*100)):4;bar.style.width=pct+'%';
+    status.textContent=s.phase==='previews'?`正在保留本机小预览图 ${s.scanned} / ${s.total}`:s.phase==='placing'?'正在整理去过的地方…':s.total?`正在读取照片 ${s.scanned.toLocaleString()} / ${s.total.toLocaleString()}`:'正在读取照片…';
   }
-  async function startAuto({regroup=false}={}){
+  async function startAuto({regroup=false,files,resumeBatchId=null}={}){
     if(autoImporter.running)return;autoState={phase:'reading',scanned:0,total:null};renderAuto();onScanning(true);
-    try{const summary=await autoImporter[regroup?'regroup':'run']({onProgress:p=>{autoState={...autoState,...p};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
-      autoState={phase:'done',summary};onCommitted({tripId:null});}
+    try{const summary=await autoImporter[regroup?'regroup':'run']({files,resumeBatchId,onProgress:p=>{autoState={...autoState,...p};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
+      autoState={phase:'done',summary};await onCommitted({tripId:null,automatic:true,summary});}
     catch(error){autoState=error?.name==='AbortError'?null:{phase:'error',message:plain(error)};}
     finally{onScanning(false);if(dialog.open)renderAuto();}
   }
-  async function open({storage=false}={}){manage=storage;if(!initialized){await service.recover();initialized=true;}if(native){nativePermission=await native.permissionDetails();const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';}if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
+  async function open({storage=false}={}){manage=storage;advanced=false;if(!initialized){await service.recover();initialized=true;}if(native){nativePermission=await native.permissionDetails();const session=await nativeImporter.latest();nativeResume=!!session&&session.status!=='complete';}if(!native)webResume=(await service.manifest.listBatches()).find(b=>b.automatic&&b.status!=='committed');if(service.thumbnails)storageStats=await service.thumbnails.stats();if(!dialog.open)dialog.showModal();render();}
   document.querySelector('#btn-photos').addEventListener('click',()=>run(()=>open()));
   // Chrome/Firefox cannot decode HEIC; keep the parsed GPS/time and say why there is no picture.
   dialog.addEventListener('error',event=>{if(event.target.matches?.('img.photo-thumb'))event.target.replaceWith(Object.assign(document.createElement('span'),{className:'hint',textContent:'此浏览器无法显示这种格式的预览，时间和位置已读取。'}));},true);
@@ -137,6 +138,7 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
   dialog.addEventListener('cancel',()=>{if(scanningNow())service.scanner.cancel();});
   dialog.addEventListener('change',event=>{
     const target=event.target;
+    if(target.matches('[data-photo-auto-files],[data-photo-auto-folder],[data-photo-auto-resume]')){const selectedFiles=target.hasAttribute('data-photo-auto-folder')?mediaFilesFrom(target.files):Array.from(target.files),resumeBatchId=target.hasAttribute('data-photo-auto-resume')?webResume?.id:null;void (async()=>{try{inputController=new AbortController();const files=await preparePhotoInput(selectedFiles,{signal:inputController.signal});inputController=null;if(files.length)await startAuto({files,resumeBatchId});}catch(error){autoState={phase:'error',message:plain(error)};renderAuto();}})();return;}
     if(target.hasAttribute('data-photo-native-start')){nativeStart=target.value;return;}
     if(target.hasAttribute('data-photo-native-end')){nativeEnd=target.value;return;}
     if(target.hasAttribute('data-photo-native-incremental')){nativeIncremental=target.checked;return;}
@@ -168,7 +170,8 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     if(button.hasAttribute('data-photo-auto-start')){void startAuto();return;}
     if(button.hasAttribute('data-photo-auto-regroup')){void startAuto({regroup:true});return;}
     if(button.hasAttribute('data-photo-auto-cancel')){autoImporter?.cancel();return;}
-    if(button.hasAttribute('data-photo-auto-done')){autoState=null;dialog.close();return;}
+    if(button.hasAttribute('data-photo-auto-done')){const summary=autoState?.summary;autoState=null;dialog.close();Promise.resolve(onImportFinished(summary)).catch(onError);return;}
+    if(button.hasAttribute('data-photo-auto-advanced')){advanced=true;render();return;}
     if(button.hasAttribute('data-photo-cancel')){inputController?.abort();nativeImporter?.cancel();service.scanner.cancel();return;}
     run(async()=>{
       if(button.hasAttribute('data-photo-native-permission')||button.hasAttribute('data-photo-native-location')){nativePermission=await native.requestPermission({location:button.hasAttribute('data-photo-native-location')});render();return;}
