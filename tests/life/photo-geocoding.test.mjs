@@ -20,7 +20,8 @@ test('offline is default, online consent applies even to cached labels, errors f
 });
 test('online requests serialize, cache search and preserve source without uploading photo data',async()=>{
  let active=0,max=0,calls=0;const adapter=new OnlineGeocoderAdapter({intervalMs:0,fetcher:async url=>{calls++;active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,5));active--;assert.equal(url.origin,'https://nominatim.openstreetmap.org');return {ok:true,json:async()=>[]};}});
- await Promise.all([adapter.search('one'),adapter.search('two')]);assert.equal(max,1);
- const provider=new GeoNameProvider({online:adapter,cache:new PlaceNameCache({storage:null})});await provider.search('same');await provider.search('same');assert.equal(calls,3);
+ await Promise.all([adapter.search('one',{consent:true}),adapter.search('two',{consent:true})]);assert.equal(max,1);
+ const provider=new GeoNameProvider({online:adapter,cache:new PlaceNameCache({storage:null})});await provider.search('same',{online:true,consent:true});await provider.search('same',{online:true,consent:true});assert.equal(calls,3);
+ await assert.rejects(provider.search('same',{online:true}),/确认/);
  await assert.rejects(adapter.reverse({latitude:1,longitude:2}),/同意/);
 });

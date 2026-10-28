@@ -10,6 +10,9 @@ const points={深圳:[22.541,114.0596],罗湖:[22.547,114.117],落马洲:[22.514
 let id=0;const photo=(day,hour,name)=>({uri:`android-media:external_primary/${++id}`,latitude:points[name][0],longitude:points[name][1],local:`${day}T${String(hour).padStart(2,'0')}:00:00`,offsetMinutes:480});
 const home=()=>Array.from({length:12},(_,i)=>photo(`2026-01-${String(i+1).padStart(2,'0')}`,12,'深圳'));
 const run=async(d,input,g=resolver(),force=false)=>applyAutoImport(d,input,await nameCells(input.map(normalizeObservation),g),{now:new Date('2026-10-28'),force});
+test('Diaoyu Islands have no bundled label and must never resolve as Japan',async()=>{
+ const result=await resolver().reverse({latitude:25.74,longitude:123.47});assert.equal(result,null);assert.notEqual(result?.countryCode,'JPN');
+});
 test('actual WGS84 border/coastal fixtures resolve Shenzhen, Hong Kong, Zhuhai and Macau without districts',async()=>{
  const r=resolver();for(const [name,coords] of Object.entries(points)){if(['京都','大阪','神户'].includes(name))continue;const result=await r.reverse({latitude:coords[0],longitude:coords[1]});
  const expected=['落马洲','香港机场','香港','元朗'].includes(name)?'香港':['澳门','澳门机场'].includes(name)?'澳门':name==='珠海'?'珠海':'深圳';assert.equal(result?.city,expected,name);assert.equal(result.state,'inferred');}

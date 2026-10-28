@@ -8,7 +8,7 @@ export function mountFirstUse({service,onOpenChapter,onShareYear,onIntro=null,re
  function render(){
   const v=service.view();if(!v)return;dialog.replaceChildren();const head=node('div','',{class:'dlg-head'});head.append(node('h3',mode==='reveal'?'这是你的地球':v.pending?'轻确认':'人生阶段草稿'),button('先看地球','finish'));dialog.append(head);const body=node('div','',{class:'dlg-body scroll'});
   if(mode==='reveal'){
-   body.append(node('p',`${v.counts.cities} 座城市 · ${v.counts.trips} 次旅行${v.counts.countries?' · '+v.counts.countries+' 个国家或地区':''}`,{class:'first-counts'}),node('p','根据照片地点和时间整理；这些推断都可以修改。',{class:'hint'}));
+   body.append(node('p',`${v.counts.cities} 座城市 · ${v.counts.trips} 次旅行${v.counts.countries?' · '+v.counts.countries+' 个国家 / 地区':''}`,{class:'first-counts'}),node('p','根据照片地点和时间整理；这些推断都可以修改。',{class:'hint'}));
    if(onIntro&&v.counts.cities)body.append(button('回放我的足迹','intro'));
    body.append(button(v.pending?'开始轻确认 · 最多 3 问':'看看阶段草稿','questions',true));
   }else if(v.pending){

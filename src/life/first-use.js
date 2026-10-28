@@ -1,5 +1,6 @@
 import {clone,newId,addEvidence,dateBound} from './schema.js';
 import {tripCountsAsTravel,placeCountsAsVisited} from './travel-policy.js';
+import {photoRegion} from './geocoding/region-policy.js';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const overlap=(a,b)=>(dateBound(a.start)??-Infinity)<=(dateBound(b.end,true)??Infinity)&&(dateBound(a.end,true)??Infinity)>=(dateBound(b.start)??-Infinity);
 const evidenceOf=(d,e)=>(e.evidenceIds||[]).map(id=>d.evidence.find(v=>v.id===id)).filter(Boolean);
@@ -38,7 +39,7 @@ export function firstUseView(data){
  const next=flow.questions.find(id=>!answered.has(id)&&data.residences.some(r=>r.id===id&&eligible(data,r)));
  const residence=data.residences.find(r=>r.id===next),photos=residence?residencePhotos(data,residence):[],place=residence?data.places.find(p=>p.id===residence.placeId):null;
  const chapters=flow.draftIds.map(id=>data.chapters.find(c=>c.id===id&&!c.hidden)).filter(Boolean);
- const places=data.places.filter(p=>placeCountsAsVisited(data,p.id)),countries=new Set(places.map(p=>p.location?.photoCity?.country).filter(Boolean));
+ const places=data.places.filter(p=>placeCountsAsVisited(data,p.id)),countries=new Set(places.map(p=>photoRegion(p.location?.photoCity).sovereignCode).filter(Boolean));
  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)),years=trips.flatMap(t=>t.start.value?[Number(t.start.value.slice(0,4))]:[]);
  return {finished:!!flow.finishedAt,pending:flow.status==='pending'&&!!residence,answered:flow.answers.length,total:flow.questions.length,question:residence?{id:residence.id,place:place.name,kind:residence.kind,start:clone(residence.start),end:clone(residence.end),photos:photos.length,days:new Set(photos.map(m=>m.start.value).filter(Boolean)).size}:null,
   chapters:chapters.map(c=>({id:c.id,title:c.title,start:clone(c.start),end:clone(c.end),confirmed:c.draft?c.draft.status==='confirmed':manual(data,c)})),counts:{cities:places.length,countries:countries.size,trips:trips.length,photos:data.memories.filter(m=>m.kind==='photo').length},year:years.length?Math.max(...years):null};

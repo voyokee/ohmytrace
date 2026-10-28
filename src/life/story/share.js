@@ -1,6 +1,7 @@
 import {clone,validateDataset,validatePeriod} from '../schema.js';
 import {validateStory,validateScene,keys,list,ids,text,memoryInStory} from './schema.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
+import {photoPlaceName} from '../geocoding/region-policy.js';
 
 const date=d=>({precision:d.precision,value:d.value});
 const period=e=>({start:date(e.start),end:date(e.end)});
@@ -28,12 +29,12 @@ export function projectShare(data,story,{images={}}={}){
   const exportedPlaces=places.map((p,i)=>{
     const hidden=policy.locationMode==='hidden'||policy.hiddenPlaceIds.includes(p.id),mode=hidden?'hidden':policy.locationMode;
     const coordinates=hidden||!p.coordinates?null:mode==='city'?{latitude:Math.round(p.coordinates.latitude*10)/10,longitude:Math.round(p.coordinates.longitude*10)/10}:{latitude:p.coordinates.latitude,longitude:p.coordinates.longitude};
-    return {id:pm.get(p.id),name:policy.placeLabels[p.id]??(hidden?'隐藏地点':homes.has(p.id)&&mode!=='precise'?`居住区域 ${i+1}`:p.name),coordinates,granularity:mode};
+    return {id:pm.get(p.id),name:policy.placeLabels[p.id]??(hidden?'隐藏地点':homes.has(p.id)&&mode!=='precise'?`居住区域 ${i+1}`:photoPlaceName(p,data)),coordinates,granularity:mode};
   });
   const exportedMemories=selectedMemories.map(m=>({id:mm.get(m.id),kind:['photo','note','video'].includes(m.kind)?m.kind:'other',title:m.title||'记忆时刻',...period(m),
     placeIds:m.placeIds.map(id=>pm.get(id)).filter(Boolean),tripIds:m.tripIds.map(id=>tm.get(id)).filter(Boolean),
     text:policy.includeNotes&&typeof m.text==='string'?m.text:'',image:m.kind==='photo'&&images[m.id]?images[m.id]:null}));
-  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:t.title,type:t.type,...period(t),routeKind:!t.visitIds.length||t.visitIds.some(id=>!exportedPlaces.find(p=>p.id===pm.get(visits.find(v=>v.id===id).placeId)).coordinates)?'unknown':'inferred',
+  const exportedTrips=trips.map(t=>({id:tm.get(t.id),title:story.orderedScenes.find(s=>s.kind==='trip'&&s.tripId===t.id)?.title||t.title,type:t.type,...period(t),routeKind:!t.visitIds.length||t.visitIds.some(id=>!exportedPlaces.find(p=>p.id===pm.get(visits.find(v=>v.id===id).placeId)).coordinates)?'unknown':'inferred',
     stops:t.visitIds.map(id=>{const v=visits.find(v=>v.id===id);return {placeId:pm.get(v.placeId),...period(v),note:policy.includeNotes?v.legacy.note:''};})}));
   const exportedChapters=chapters.map(c=>({id:cm.get(c.id),title:c.title,type:c.type,...period(c),homeAnchors:c.homeAnchors.map(id=>pm.get(id)),relatedTripIds:c.relatedTripIds.map(id=>tm.get(id)).filter(Boolean)}));
   const scenes=story.orderedScenes.filter(s=>(!s.chapterId||cm.has(s.chapterId))&&(!s.tripId||tm.has(s.tripId))&&(!s.memoryId||mm.has(s.memoryId))&&(!s.placeId||pm.has(s.placeId)))

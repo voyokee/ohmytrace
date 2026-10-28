@@ -11,6 +11,7 @@ const {visualContext}=await import('./src/life/story/schema.js');
 const {timelineLayout}=await import('./src/life/timeline-layout.js?v=20261026-mobile-clear');
 const {PhotoHistoryService}=publicViewer?{}:await import('./src/life/media/integration.js');
 const {geoNameProvider}=publicViewer?{}:await import('./src/life/geocoding/provider.js');
+const {photoRegion}=publicViewer?{}:await import('./src/life/geocoding/region-policy.js');
 const {mountPhotoUI}=publicViewer?{}:await import('./src/life/media/photo-ui.js');
 const { createRenderPolicy,footprintIntroDelay } = await import('./src/performance/render-policy.js?v=20261026-mobile-clear');
 const {createCameraMotionTracker}=await import('./src/performance/camera-motion.js?v=20261025-ridges');
@@ -361,7 +362,7 @@ const located = name => { const p = state.places[name]; return p && p.lat != nul
 
 /* ================= geocoding ================= */
 
-async function nominatim(q, limit = 6, scope = {}) {
+async function searchPlaces(q, limit = 6, scope = {}) {
   return geoNameProvider.search(q,{limit,...scope});
 }
 
@@ -391,14 +392,14 @@ async function autoLocate(name) {
   name=state.places[name]?.sourceName||name;
   const prov = detectProvince(name), core = coreName(name, prov);
   const queries = placeQueries(name,core,PROVINCES),scope=provinceSearchOptions(prov);
-  const result=(r,status)=>({lat:+r.lat,lon:+r.lon,status,label:r.display_name,countryCode:r.address?.country_code,geocoderVersion:GEOCODER_VERSION});
+  const result=(r,status)=>({lat:+r.lat,lon:+r.lon,status,label:r.display_name,countryCode:r.address?.country_code,source:r.source,state:r.state,geocoderVersion:GEOCODER_VERSION});
   try {
     for (const q of queries) {
-      const best = pickBest(await nominatim(q,6,scope), core, name.includes('交界')?null:prov);
+      const best = pickBest(await searchPlaces(q,6,scope), core, name.includes('交界')?null:prov);
       if (best) return result(best,'auto');
     }
-    if (prov) {
-      const best=provinceFallback(await nominatim(prov,6,provinceSearchOptions(prov,true)),prov);
+    if (prov&&(!core||core===prov)) {
+      const best=provinceFallback(await searchPlaces(prov,6,provinceSearchOptions(prov,true)),prov);
       if(best)return result(best,'rough');
     }
     return { status: 'notfound',geocoderVersion:GEOCODER_VERSION };
@@ -1246,6 +1247,8 @@ function renderStats() {
   const places=new Set([...list.flatMap(t=>t.stops.filter(s=>s.countsAsTravel!==false).map(s=>s.place)),...visibleHomes().map(h=>h.place),...(lifeSnapshot?.photoPlaces||[]).filter(p=>p.countsAsVisited!==false&&(state.year==null||(p.visitedYears||p.years).includes(state.year))).map(p=>p.place)]),years=yearOptions(list),parts=[];
   if(state.year!=null)parts.push(`<b>${state.year}</b> 年`);
   parts.push(`<b>${list.length}</b> 次旅行`,`<b>${places.size}</b> 个地点`);
+  const countries=new Set([...places].map(name=>photoRegion?.(state.places[name]?.photoCity)?.sovereignCode).filter(Boolean));
+  if(countries.size)parts.push(`<b>${countries.size}</b> 个国家 / 地区`);
   if(days)parts.push(`<b>${days}</b> 天在路上`);
   if(state.year==null&&years.length)parts.push(years.length===1?`<b>${years[0]}</b>`:`<b>${years[0]}</b>–<b>${years.at(-1)}</b>`);
   const current=state.year==null?homes.find(h=>h.kind==='home'):visibleHomes().find(h=>h.kind==='home')||visibleHomes()[0];
@@ -1680,7 +1683,7 @@ function renderTab() {
             <button class="btn sm" data-act="search">搜索其他位置</button>
             <button class="btn sm" data-act="pick">在地图上点选</button>
           </div>
-          <div class="search-box" hidden><div class="search-row"><input placeholder="换个说法，比如：景区全名、附近的村镇" value="${esc(coreName(n))}"><button class="btn sm" data-act="do-search">搜索</button></div><div class="results"></div></div>
+          <div class="search-box" hidden><div class="search-row"><input placeholder="换个说法，比如：景区全名、附近的村镇" value="${esc(coreName(n))}"><button class="btn sm" data-act="do-search">离线查找</button><button class="btn sm" data-act="do-online-search">在线查找</button></div><div class="results"></div></div>
         </div>`;
       }).join('') : '<p class="muted">还没有地点。</p>'}`;
   }
@@ -1716,13 +1719,15 @@ async function onPlaceAction(act, card, btn) {
   else if (act === 'ok') { if(await setPlace(name, { ...state.places[name], status: 'confirmed' }))toast('已确认'); }
   else if (act === 'pick') startPick(name);
   else if (act === 'search') { const box = card.querySelector('.search-box'); box.hidden = !box.hidden; if (!box.hidden) box.querySelector('input').focus(); }
-  else if (act === 'do-search') {
+  else if (act === 'do-search'||act === 'do-online-search') {
     const q = card.querySelector('.search-box input').value.trim();
     const out = card.querySelector('.results');
     if (!q) return;
+    const online=act==='do-online-search';
+    if(online&&!window.confirm(`将把『${q}』这个名称发送到 OpenStreetMap 的境外服务。是否继续？`))return;
     out.innerHTML = '<div class="faint" style="padding:6px 10px">搜索中…</div>';
     try {
-      const res = await nominatim(q, 6);
+      const res = await searchPlaces(q,6,online?{online:true,consent:true}:{});
       out.innerHTML = res.length ? res.map((r, i) =>
         `<button data-act="choose" data-i="${i}">${esc(r.name || r.display_name.split(',')[0])}<br><small>${esc(r.display_name)}</small></button>`).join('')
         : '<div class="faint" style="padding:6px 10px">没有找到，换个说法试试，或者直接在地图上点选</div>';

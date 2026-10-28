@@ -16,7 +16,7 @@ const city=name=>page.locator('#markers .mk').evaluateAll((nodes,name)=>{const n
 const action=name=>page.locator(`#card [data-record-action="${name}"]`);
 const form=name=>page.locator(`#card [data-record-form="${name}"]`);
 const undo=async()=>{await page.locator('#record-feedback [data-record-action=undo]').click();await page.waitForFunction(()=>document.querySelector('#record-feedback')?.textContent.includes('已撤销'));};
-async function ready(){await page.waitForSelector('#story-composer',{state:'attached'});await page.waitForFunction(()=>document.querySelector('#loader')?.classList.contains('out'));}
+async function ready(){await page.waitForSelector('#story-composer',{state:'attached'});await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'));}
 async function controls(kind){assert.equal(await page.locator('#card').getAttribute('data-record-kind'),kind);assert.deepEqual(await page.locator('#card .record-actions button').allTextContents(),['回放','照片','分享','不对？']);const buttons=await page.locator('#card .record-actions button').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height};}));const width=page.viewportSize().width;assert.ok(buttons.every(r=>r.x>=0&&r.x+r.w<=width&&r.w>=44&&r.h>=44),JSON.stringify(buttons));}
 try{
  await page.goto(`http://127.0.0.1:${server.address().port}/`);await ready();

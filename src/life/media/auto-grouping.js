@@ -120,7 +120,7 @@ export function applyPhotoGrouping(data,input,names,{rules,now,version,force=fal
     const prior=[...scores].sort((a,b)=>b[1]-a[1])[0]?.[0],old=oldTrips.find(t=>t.id===prior),id=old?.id||newId('trip');reused.add(id);
     const homeCity=homeByYear.get(group[0].day.slice(0,4))?.city,home=homeCity&&placeFor.get(homeCity.key)?.coordinates;
     const classifications=classifyStops(group,{home}),travel=group.filter(o=>classifications.get(o.place.id).type==='travel');
-    const title=tripTitle(travel.map(o=>({...o,city:{...o.city,key:o.place.id,label:o.place.name}})),{homeCountry:homeCity?.country});
+    const title=tripTitle(travel.map(o=>({...o,city:{...o.city,key:o.place.id,label:o.place.name}})),{homeCountry:homeCity});
     const short=travel.length&&group.every(o=>o.day===group[0].day)&&new Set(travel.map(o=>o.place.id)).size===1;
     const trip={id,title,autoTitle:title,type:travel.length?(short?'短途':'旅行'):'转机',start:partialDate(group[0].day),end:partialDate(group.at(-1).day),visitIds:[],evidenceIds:[evidence]};data.trips.push(trip);if(!old&&travel.length)summary.newTrips++;
     const stops=new Map();
