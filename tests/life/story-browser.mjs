@@ -1,3 +1,4 @@
+import {openTool} from './browser-tools.mjs';
 import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';import {fileURLToPath} from 'node:url';import {resolve,extname,sep} from 'node:path';import {tmpdir} from 'node:os';import * as zlib from 'node:zlib';
 import {storyFixture} from './story-fixtures.mjs';import {exportLegacyCSV} from '../../src/life/legacy.js';import {photoJPEG} from './photo-fixtures.mjs';import {parseArtifact,cleanJPEG} from '../../src/life/story/share.js';
@@ -20,7 +21,7 @@ function unpack(bytes){const entries=new Map();let offset=0;while(bytes.readUInt
 try{
   await page.goto(url);await page.waitForFunction(()=>!document.querySelector('#loader')||document.querySelector('#loader').classList.contains('out'));
   await page.locator('#empty-import').click();await page.locator('[data-tab=import]').click();await page.locator('#file').setInputFiles({name:'life.csv',mimeType:'text/csv',buffer:Buffer.from(exportLegacyCSV(f.data))});
-  await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));await page.locator('#btn-life').click();
+  await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));await openTool(page,'#btn-life');
   for(const [title,start,end,indices]of [['新加坡硕士','2024','2026',[0,1]],['北京实习阶段','2025','2025',[0]]]){
     await page.locator('#chapter-form [name=title]').fill(title);await page.locator('#chapter-form [name=start]').fill(start);await page.locator('#chapter-form [name=end]').fill(end);
     await page.locator('#chapter-form details').first().locator('summary').click();await page.locator('[name=homeAnchors]').first().check();for(const i of indices)await page.locator('[name=relatedTripIds]').nth(i).check();
@@ -94,12 +95,12 @@ try{
   await viewer.locator('[data-story-play]').click();await viewer.locator(`[data-story-dot="${'2'}"]`).click();await viewer.locator(`[data-story-dot="${'5'}"]`).click();await viewer.locator(`[data-story-dot="${'1'}"]`).click();
   assert.equal(await viewer.locator('#story-player').getAttribute('data-status'),'paused');
   const canvas=viewer.locator('#globe canvas').first(),box=await canvas.boundingBox();await canvas.click({position:{x:box.width/2,y:box.height/2}});
-  await viewer.locator('#btn-list').click();await viewer.waitForSelector('#list-body .item');
+  await openTool(viewer,'#btn-list');await viewer.waitForSelector('#list-body .item');
   await viewer.setViewportSize({width:390,height:844});await viewer.waitForTimeout(300);const rect=await viewer.locator('#story-player').boundingBox();assert.ok(rect.x>=0&&rect.x+rect.width<=390);
   await viewer.screenshot({path:resolve(output,'02-independent-mobile-viewer.png')});
   await viewer.locator('[data-story-close]').click();await viewer.locator('[data-story-file]').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...artifact,schemaVersion:99}))});await viewer.waitForFunction(()=>document.querySelector('[data-story-load-error]').textContent.includes('版本'));
   // Restore fictional photo/Memory data through the normal JSON Restore UI.
-  await page.locator('[data-story-composer-close]').click();await page.locator('#btn-life').click();page.once('dialog',d=>d.accept());await page.locator('[data-life-restore]').setInputFiles({name:'fictional-life.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(f.data))});
+  await page.locator('[data-story-composer-close]').click();await openTool(page,'#btn-life');page.once('dialog',d=>d.accept());await page.locator('[data-life-restore]').setInputFiles({name:'fictional-life.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(f.data))});
   await page.waitForSelector(`[data-life-edit="${f.chapter}"]`);await page.locator('[data-life-close]').click();
   await page.locator('[data-story-quick]').click();await page.waitForSelector('#story-player:not([hidden])');await page.locator('[data-story-edit]').click();await page.locator('[data-share-more]').click();await page.waitForSelector('#story-composer[open]');await page.locator('[data-story-source]').selectOption(`chapter:${f.chapter}`);await page.locator('[data-story-generate]').click();
   await page.locator('[data-story-policy=includePhotos]').check();await page.locator('summary').filter({hasText:'逐张选择记忆'}).click();await page.locator(`[data-story-memory="${f.photo}"]`).check();

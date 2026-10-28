@@ -1,3 +1,4 @@
+import {openTool} from './browser-tools.mjs';
 // Optional end-to-end acceptance: PLAYWRIGHT_MODULE points at a Playwright package
 // when it is supplied by the host rather than installed in this static project.
 import assert from 'node:assert/strict';
@@ -28,15 +29,15 @@ try {
   await page.locator('#empty-demo').click();await page.waitForFunction(()=>document.querySelectorAll('#tl-track .tl-dot').length===4);
   const first=await page.locator('#tl-track .tl-dot').first().evaluate(e=>parseFloat(e.style.left));
   assert.ok(first<25,`First recorded year must occupy the first timeline slot, not leave an empty residence-only span (${first}%)`);
-  assert.equal(await page.locator('#btn-life svg').count(),1);
+  assert.equal(await page.locator('#btn-my svg').count(),1);
   assert.equal(await page.locator('#btn-photos svg').count(),1);
   assert.equal(await page.locator('#btn-life').getAttribute('aria-label'),'人生阶段');
-  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'从相册恢复足迹');
+  assert.equal(await page.locator('#btn-photos').getAttribute('aria-label'),'添加照片');
   await page.setViewportSize({width:910,height:1220});
   await page.waitForTimeout(1500);await page.screenshot({path:resolve(output,'timeline-demo.png')});
   const fixture='日期,行程,地点,类型,备注,坐标\n2000~至今,,上海,现居地,,"31.23,121.47"\n'+
     [2008,2010,2012,2014,2016,2018,2020,2022,2024,2025].map(y=>`${y}-06,旅行 ${y},北京,旅行,,"39.9,116.4"`).join('\n');
-  await page.locator('#btn-data').click();await page.locator('[data-tab=import]').click();
+  await openTool(page,'#btn-data');await page.locator('[data-tab=import]').click();
   await page.locator('#file').setInputFiles({name:'timeline.csv',mimeType:'text/csv',buffer:Buffer.from(fixture)});
   await page.waitForFunction(()=>document.querySelector('#list-count').textContent==='10');
   const viewport=page.locator('.tl-main');
@@ -70,5 +71,5 @@ try {
   await page.waitForFunction(()=>document.querySelector('#list-count').textContent==='1');
   assert.deepEqual(await page.locator('#tl-track .tl-month').allTextContents(),['6月']);
   assert.equal(errors.length,0,errors.join('\n'));
-  console.log('PASS: record-driven timeline domain, SVG entries, sparse years, horizontal scrolling, latest default, resize, selection, refresh and month range');
+  console.log('PASS: record-driven timeline domain, accessible entries, sparse years, horizontal scrolling, latest default, resize, selection, refresh and month range');
 } finally {await context.close();await browser.close();await new Promise(r=>server.close(r));}

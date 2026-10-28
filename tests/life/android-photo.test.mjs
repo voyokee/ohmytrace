@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AndroidPhotoBridge,AndroidPhotoCapability} from '../../src/platform/android-photo-capability.js';
+import {AndroidPhotoBridge,AndroidPhotoCapability,androidPhotoCapability} from '../../src/platform/android-photo-capability.js';
 import {AndroidLibraryImporter,scanRange} from '../../src/platform/android-library-importer.js';
 import {MemoryManifest} from '../../src/life/media/manifest.js';
 import {PhotoScanner} from '../../src/life/media/scanner.js';
@@ -113,4 +113,8 @@ test('ordinary multi-megabyte native photos cross the bridge once each for metad
   const batch=await new AndroidLibraryImporter(s,lib.capability,{store}).scan();assert.deepEqual(batch.assetIds,expected.map(a=>a.assetId),'sample optimization preserves content identity');
   const reads=lib.calls.filter(c=>['readRange','readSamples'].includes(c.method));assert.equal(reads.length,3,'one original open/bridge transfer per normal photo');
   assert.ok(batch.assetIds.every(id=>!s.scanner.fileFor(id).sampleRanges?.length),'sample bytes must be released after analysis, never retained for the whole library');
+});
+test('independent native consumers share reply routing without stealing an in-flight request',async()=>{
+ const previous=globalThis.OhMyTraceMedia,messages=[],port={postMessage:text=>messages.push(JSON.parse(text))};globalThis.OhMyTraceMedia=port;
+ try{const a=androidPhotoCapability(),one=a.bridge.call('consumer-one',{}, {timeoutMs:40}),b=androidPhotoCapability(),two=b.bridge.call('consumer-two',{}, {timeoutMs:40});for(const m of messages)port.onmessage({data:JSON.stringify({id:m.id,result:m.method})});const result=await Promise.allSettled([one,two]);assert.deepEqual(result.map(r=>r.status),['fulfilled','fulfilled']);assert.deepEqual(result.map(r=>r.value),['consumer-one','consumer-two']);}finally{if(previous===undefined)delete globalThis.OhMyTraceMedia;else globalThis.OhMyTraceMedia=previous;}
 });

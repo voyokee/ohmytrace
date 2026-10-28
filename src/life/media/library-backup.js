@@ -49,12 +49,14 @@ export class LibraryBackup {
   const targetData=mergedGraph(beforeData,preview.data);if(targetData.conflicts?.length)throw new Error('备份与本地内容冲突；为保留较新的本地内容，本次未恢复');
   const targetIndex=mergedIndex(beforeIndex,preview.index);relationships(targetData,targetIndex);
   const existing=new Map((await this.thumbnails.list()).map(r=>[r.assetId,r])),operationId=crypto.randomUUID(),addedIds=[...preview.thumbnails.keys()].filter(id=>!existing.has(id));
+  const beforeForeignNative=await this.thumbnails.getForeignNative(),known=new Map(beforeData.memories.map(m=>[m.id,m.uri]));
+  const targetForeignNative=[...new Set([...beforeForeignNative,...preview.data.memories.filter(m=>/^android-media:[^/@]+\/[0-9]+$/.test(m.uri)&&known.get(m.id)!==m.uri).map(m=>m.uri)])];
   const newBytes=addedIds.reduce((n,id)=>n+preview.thumbnails.get(id).size,0),stats=await this.thumbnails.stats();if(stats.bytes+newBytes>stats.budgetBytes)throw new Error('恢复后的缩略图超过容量预算');
-  const journal={operationId,state:'prepared',beforeData,beforeIndex,targetData,targetIndex,addedIds};await this.thumbnails.setJournal(journal);
+  const journal={operationId,state:'prepared',beforeData,beforeIndex,targetData,targetIndex,addedIds,beforeForeignNative,targetForeignNative};await this.thumbnails.setJournal(journal);
   try{
    for(const id of addedIds)await this.thumbnails.put(id,preview.thumbnails.get(id),{operationId});
    // No destructive thumbnail replacement. Missing optional thumbnails stay metadata-only.
-   await this.manifest.restore(targetIndex);
+   await this.thumbnails.setForeignNative(targetForeignNative);await this.manifest.restore(targetIndex);
    await this.repository.update(d=>{if(graphKey(d)!==preview.baseKey)throw new Error('本地数据已变化');Object.assign(d,targetData);});
    await this.thumbnails.setJournal({...journal,state:'committed'});await this.thumbnails.setJournal(null);return preview.summary;
   }catch(error){if(!this.repository.uncertain)await this.recover().catch(()=>{});throw error;}
@@ -63,9 +65,10 @@ export class LibraryBackup {
   const j=await this.thumbnails.getJournal();if(!j)return null;
   const current=this.repository.getDataset(),currentKey=graphKey(current),targetKey=graphKey(j.targetData),beforeKey=graphKey(j.beforeData),index=await this.manifest.backup();
   const graphCommitted=currentKey===targetKey&&(targetKey!==beforeKey||current.revision>j.beforeData.revision||j.state==='committed');
-  if(graphCommitted){relationships(current,j.targetIndex);for(const id of j.addedIds)if(!await this.thumbnails.read(id))throw new Error('恢复待修复：缩略图未完整写入');if(indexKey(index)!==indexKey(j.targetIndex)){if(indexKey(index)!==indexKey(j.beforeIndex))throw new Error('恢复后媒体索引又有变化，未自动覆盖');await this.manifest.restore(j.targetIndex);}await this.thumbnails.setJournal(null);return 'committed';}
+  if(graphCommitted){relationships(current,j.targetIndex);for(const id of j.addedIds)if(!await this.thumbnails.read(id))throw new Error('恢复待修复：缩略图未完整写入');if(Array.isArray(j.targetForeignNative))await this.thumbnails.setForeignNative(j.targetForeignNative);if(indexKey(index)!==indexKey(j.targetIndex)){if(indexKey(index)!==indexKey(j.beforeIndex))throw new Error('恢复后媒体索引又有变化，未自动覆盖');await this.manifest.restore(j.targetIndex);}await this.thumbnails.setJournal(null);return 'committed';}
   if(currentKey!==beforeKey&&!(empty(current)&&empty(j.beforeData)))throw new Error('恢复中断后本地数据又有变化，未覆盖现有内容');
   if(indexKey(index)===indexKey(j.targetIndex))await this.manifest.restore(j.beforeIndex);else if(indexKey(index)!==indexKey(j.beforeIndex))throw new Error('媒体索引已变化，未自动回滚');
+  if(Array.isArray(j.beforeForeignNative))await this.thumbnails.setForeignNative(j.beforeForeignNative);
   for(const id of j.addedIds){const row=await this.thumbnails.record(id);if(row?.operationId===j.operationId)await this.thumbnails.delete(id);}await this.thumbnails.setJournal(null);return 'rolled-back';
  }
 }

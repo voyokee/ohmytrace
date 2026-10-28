@@ -22,6 +22,14 @@ export interface PhotoCapability {
 /** Mapping is device-local. A native URI/local identifier is never a portable ID. */
 export interface MediaIdentityMapping {deviceId:string;handle:MediaHandle;assetId:string;contentHash?:string;}
 
+/** Backups exceed a single bridge message, so SAF writes bounded chunks in order. */
+export interface DocumentSaveCapability {
+ saveDocument(options:{name:string;mimeType:string;size:number},control?:{signal?:AbortSignal}):Promise<{documentId:string}|{cancelled:true}>;
+ writeDocument(options:{documentId:string;offset:number;base64:string},control?:{signal?:AbortSignal}):Promise<{written:boolean}>;
+ finishDocument(options:{documentId:string},control?:{signal?:AbortSignal}):Promise<{bytes:number}>;
+ cancelDocument(options:{documentId:string}):Promise<{cancelled:true}>;
+}
+
 /** Android acquisition extensions. Device-local JSON cursors never enter backups. */
 export interface AndroidMediaHandle extends MediaHandle {source:'android';volume:string;stamp:string;libraryVersion:string;}
 export interface AndroidLibraryOptions {startMs:number|null;endMs:number|null;pageSize?:number;cursor?:Record<string,unknown>|null;since?:Record<string,unknown>|null;signal?:AbortSignal;}

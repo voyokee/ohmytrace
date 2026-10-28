@@ -39,6 +39,10 @@ public final class MainActivity extends Activity {
     private JavaScriptReplyProxy permissionReply;
     private String permissionId;
     private ValueCallback<Uri[]> fileReply;
+    private JavaScriptReplyProxy documentReply;
+    private String documentRequestId;
+    private long documentSize;
+    private final Map<String,DocumentWriteSession> documents=new ConcurrentHashMap<>();
     // The bundled Cesium/editor runtime requires JavaScript. Only the app's
     // local origin receives the bridge; external navigation leaves the WebView.
     @android.annotation.SuppressLint("SetJavaScriptEnabled")
@@ -81,8 +85,9 @@ public final class MainActivity extends Activity {
                 String text = message.getData(); if (text == null || text.length() > 1000000) throw new IllegalArgumentException("请求容量超限");
                 JSONObject request = new JSONObject(text); id = request.getString("id"); String method = request.getString("method"); JSONObject params = request.optJSONObject("params");
                 if (params == null) params = new JSONObject();
-                if (method.equals("cancel")) { CancellationSignal signal = operations.get(params.optString("requestId")); if (signal != null) signal.cancel(); return; }
+                if (method.equals("cancel")) { String requestId=params.optString("requestId");CancellationSignal signal = operations.get(requestId); if (signal != null) signal.cancel();if(requestId.equals(documentRequestId))cancelDocumentPicker();return; }
                 if (method.equals("requestPermission")) { requestPermission(id, params.optBoolean("location"), reply); return; }
+                if (method.equals("saveDocument")) { chooseDocument(id,params,reply);return; }
                 final String jobId = id; final JSONObject options = params; CancellationSignal signal = new CancellationSignal();
                 if (operations.putIfAbsent(id, signal) != null) throw new IllegalArgumentException("重复请求标识");
                 io.execute(() -> {
@@ -96,6 +101,9 @@ public final class MainActivity extends Activity {
                             case "readSamples": result = library.samples(options, signal); break;
                             case "stat": result = library.stat(options.getJSONObject("handle"), signal); break;
                             case "thumbnail": result = library.thumbnail(options, signal); break;
+                            case "writeDocument": document(options).append(options.getLong("offset"),android.util.Base64.decode(options.getString("base64"),android.util.Base64.DEFAULT));result=new JSONObject().put("written",true);break;
+                            case "finishDocument": {DocumentWriteSession saving=documents.remove(options.getString("documentId"));if(saving==null)throw new IllegalArgumentException("保存任务已失效");result=new JSONObject().put("bytes",saving.finish());break;}
+                            case "cancelDocument": {DocumentWriteSession saving=documents.remove(options.getString("documentId"));if(saving!=null)saving.cancel();result=new JSONObject().put("cancelled",true);break;}
                             default: throw new IllegalArgumentException("未知相册请求");
                         }
                         respond(reply, jobId, result, null);
@@ -118,6 +126,16 @@ public final class MainActivity extends Activity {
         setContentView(root); web.loadUrl(ORIGIN + "/assets/index.html");
     }
     private boolean local(Uri uri) { return "https".equals(uri.getScheme()) && "appassets.androidplatform.net".equals(uri.getHost()) && uri.getPath() != null && uri.getPath().startsWith("/assets/"); }
+    private DocumentWriteSession document(JSONObject options)throws Exception{DocumentWriteSession saving=documents.get(options.getString("documentId"));if(saving==null)throw new IllegalArgumentException("保存任务已失效");return saving;}
+    private void chooseDocument(String id,JSONObject options,JavaScriptReplyProxy reply)throws Exception{
+        if(documentReply!=null||!documents.isEmpty())throw new IllegalStateException("另一个文件仍在保存");long size=options.getLong("size");DocumentWriteSession.validateSize(size);
+        String mime=options.optString("mimeType","application/octet-stream").split(";",2)[0];if(!mime.matches("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+"))throw new IllegalArgumentException("文件格式无效");
+        String name=DocumentWriteSession.fileName(options.optString("name"));Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(mime);intent.putExtra(Intent.EXTRA_TITLE,name);
+        documentReply=reply;documentRequestId=id;documentSize=size;
+        try{startActivityForResult(intent,30);}catch(Exception error){documentReply=null;documentRequestId=null;throw error;}
+    }
+    private void removeDocument(Uri uri){try{getContentResolver().delete(uri,null,null);}catch(Exception ignored){/* Some document providers cannot remove an interrupted file. */}}
+    private void cancelDocumentPicker(){if(documentReply==null)return;respond(documentReply,documentRequestId,null,"保存已取消");documentReply=null;documentRequestId=null;finishActivity(30);}
     private void requestPermission(String id, boolean location, JavaScriptReplyProxy reply) throws Exception {
         if (permissionReply != null) throw new IllegalStateException("相册授权窗口已打开");
         ArrayList<String> permissions = new ArrayList<>();
@@ -139,12 +157,22 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 20 && fileReply != null) { fileReply.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data)); fileReply = null; }
+        if(requestCode==30){
+            final Uri uri=data==null?null:data.getData();final JavaScriptReplyProxy reply=documentReply;final String id=documentRequestId;final long size=documentSize;
+            if(reply==null){if(resultCode==RESULT_OK&&uri!=null)removeDocument(uri);return;}
+            if(resultCode!=RESULT_OK||uri==null){documentReply=null;documentRequestId=null;try{respond(reply,id,new JSONObject().put("cancelled",true),null);}catch(Exception error){respond(reply,id,null,error.getMessage());}return;}
+            io.execute(()->{try{
+                java.io.OutputStream output=getContentResolver().openOutputStream(uri,"w");if(output==null)throw new java.io.IOException("无法打开保存文件");
+                DocumentWriteSession saving=new DocumentWriteSession(size,output,()->removeDocument(uri));String token=java.util.UUID.randomUUID().toString();
+                runOnUiThread(()->{if(!id.equals(documentRequestId)){saving.cancel();return;}documents.put(token,saving);documentReply=null;documentRequestId=null;try{respond(reply,id,new JSONObject().put("documentId",token),null);}catch(Exception error){documents.remove(token);saving.cancel();respond(reply,id,null,error.getMessage());}});
+            }catch(Exception error){removeDocument(uri);runOnUiThread(()->{if(id.equals(documentRequestId)){documentReply=null;documentRequestId=null;respond(reply,id,null,error.getMessage());}});}});
+        }
     }
     private void respond(JavaScriptReplyProxy reply, String id, Object result, String error) {
         try { JSONObject payload = new JSONObject().put("id", id); if (error != null) payload.put("error", error); else payload.put("result", result == null ? JSONObject.NULL : result);
             runOnUiThread(() -> { try { if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) reply.postMessage(payload.toString()); } catch (Exception ignored) { } });
         } catch (Exception ignored) { /* Page may have been destroyed. */ }
     }
-    private void cancelAll() { for (CancellationSignal signal : operations.values()) signal.cancel(); }
+    private void cancelAll() { for (CancellationSignal signal : operations.values()) signal.cancel();cancelDocumentPicker();for(DocumentWriteSession saving:documents.values())saving.cancel();documents.clear(); }
     @Override protected void onDestroy() { cancelAll(); io.shutdownNow(); if (web != null) { web.destroy(); } super.onDestroy(); }
 }

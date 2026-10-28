@@ -190,6 +190,7 @@ final class MediaLibrary {
     }
     /** Small preview for a saved photo pointer, read from the album each time it is shown. */
     JSONObject preview(JSONObject options, CancellationSignal signal) throws Exception {
+        ScanWindow.requireDevice(options.optString("deviceId",""),preferences.getString("device",""));
         if (photos().equals("denied")) throw new SecurityException("PHOTO_PERMISSION_REQUIRED：请先允许访问照片");
         String volume = options.getString("volume"), id = options.getString("id"); int edge = Math.max(64, Math.min(512, options.optInt("maxEdge", 320)));
         if (!volumes().contains(volume) || !id.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("照片标识无效");

@@ -27,13 +27,16 @@ export class ThumbnailStore {
  async gc(referencedIds){return this.mutate(async()=>{const keep=new Set(referencedIds);for(const r of await this.list())if(!keep.has(r.assetId))await this.remove(r.assetId);const dir=await this.directory();if(dir){const names=new Set((await this.list()).filter(r=>r.backend==='opfs').map(r=>r.fileName));for await(const [name]of dir.entries())if(!names.has(name))await dir.removeEntry(name);}return this.stats();});}
  getJournal(){return this.tx('journal','readonly',s=>{const r=s.get('restore');return ()=>r.result||null;});}
  setJournal(record){return this.tx('journal','readwrite',s=>record?s.put({...record,id:'restore'}):s.delete('restore'));}
+ getForeignNative(){return this.tx('journal','readonly',s=>{const r=s.get('foreign-native');return ()=>Array.isArray(r.result?.uris)?r.result.uris:[];});}
+ setForeignNative(uris){return this.tx('journal','readwrite',s=>s.put({id:'foreign-native',uris:[...new Set(uris)]}));}
  close(){this.db?.close();this.db=null;}
 }
 export class MemoryThumbnailStore {
- constructor({limits=THUMBNAIL_LIMITS}={}){this.limits=limits;this.rows=new Map();this.journal=null;}
+ constructor({limits=THUMBNAIL_LIMITS}={}){this.limits=limits;this.rows=new Map();this.journal=null;this.foreignNative=[];}
  async list(){return [...this.rows.values()];}async record(id){return this.rows.get(id)||null;}async read(id){return this.rows.get(id)?.blob||null;}
  async put(id,blob,{operationId=null}={}){await validateThumbnail(blob,this.limits);const size=[...this.rows.values()].filter(r=>r.assetId!==id).reduce((n,r)=>n+r.size,0)+blob.size;if(size>this.limits.budgetBytes)throw new Error('THUMBNAIL_CAPACITY_LIMIT');const sha256=await digest(await blob.arrayBuffer());this.rows.set(id,{assetId:id,blob,size:blob.size,sha256,operationId,type:'image/jpeg'});return {assetId:id,store:'ohmytrace.thumbnails',sha256,size:blob.size};}
  async stats(){return {count:this.rows.size,bytes:[...this.rows.values()].reduce((n,r)=>n+r.size,0),budgetBytes:this.limits.budgetBytes,backend:'memory'};}
  async delete(id){this.rows.delete(id);}async gc(ids){for(const id of this.rows.keys())if(!ids.includes(id))this.rows.delete(id);return this.stats();}
  async getJournal(){return structuredClone(this.journal);}async setJournal(j){this.journal=j?structuredClone({...j,id:'restore'}):null;}
+ async getForeignNative(){return [...this.foreignNative];}async setForeignNative(uris){this.foreignNative=[...new Set(uris)];}
 }

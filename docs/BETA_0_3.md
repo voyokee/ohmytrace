@@ -12,6 +12,7 @@
 - 深港沿海归属、机场 / 路过推断、城市标题与升级重扫已通过 [PR #5](https://github.com/voyokee/ohmytrace/pull/5) 合入 `f75506f`；[Web](https://github.com/voyokee/ohmytrace/actions/runs/40543530986) 与 [Android](https://github.com/voyokee/ohmytrace/actions/runs/40543530999) 主干 CI 全绿，见 [BORDER_TRANSIT_FIX.md](BORDER_TRANSIT_FIX.md)。
 - 当前开发 `beta/0.3-first-confirmation`：Android / Web 自动导入后的最多三问、阶段草稿与首次短回放，见 [FIRST_USE.md](FIRST_USE.md)。
 - `v0.3.0` 尚未发布，完整退出标准继续逐项验证。
+- I2-A/B 已通过 [PR #9](https://github.com/voyokee/ohmytrace/pull/9) 合入 `a40e65c`，Node 20 / 24 与 Android / APK 检查全绿。I2-C/D/E 从该主干切出 `beta/0.3-data-sovereignty`。
 
 ## 退出标准追踪
 
@@ -26,8 +27,8 @@
 | 国家 / 地区显示与计数、默认离线地名查询 | 自动化与桌面浏览器已验证，真机待测；争议默认待法务复核 | `CN_REGION_POLICY.md`、代表坐标、242 包出口、存量数据与逐条同意回归 |
 | 最多三问、生成阶段草稿、无需输入日期格式 | 自动化与桌面浏览器已验证，真机待测 | 领域与浏览器用例，首次使用计时 |
 | 城市 / 常驻 / 旅程来源、统一卡片纠错、撤销与重新整理保留修改 | 统一卡片与自动化已验证，真机待测 | 各实体编辑命令、撤销、重新整理回归 |
-| 完整备份跨设备恢复实体和 ID 零差异 | 未测 | 两台设备恢复前后的规范数据与 ID 对比 |
-| GPX / GeoJSON 开放导出、持久存储与备份提醒 | 待实现 | 标准解析验证与浏览器用例 |
+| 完整备份跨设备恢复实体和 ID 零差异 | 自动化与桌面独立配置已验证，真实两设备未测 | 规范集合逐字段 / ID 比对、来源隔离、缺原图占位；真机矩阵待补 |
+| GPX / GeoJSON 开放导出、持久存储与备份提醒 | 自动化与桌面浏览器已验证，Android SAF 真机未测 | XML 独立解析、范围 / 日期精度、下载字节、时钟与提醒回归；外部工具截图见下 |
 | 人生 / 年份时间轴双向联动，阶段 / 年份 / 旅程回放分享 | 待完成 | 领域、浏览器和真机用例 |
 | 两类用户合计 5–10 位真实试用 | 未开始 | 匿名本地记录和用户自愿提供的汇总 |
 
@@ -45,6 +46,14 @@
 另测拒绝相册权限、拒绝照片位置、Android 14+ 部分照片授权扩大 / 撤回、缺失 GPS、HEIC 解码、索引重建、覆盖安装、存储空间不足、设备 B 无原图的恢复。已有原生测试可用 `connectedDebugAndroidTest` 在测试设备运行；它会创建并清理自己的合成照片，但不能代替真实相册验收。
 
 ## 本轮验证记录
+
+- I2-C/D/E：228 项 Life 领域测试、完整 `package.json` 测试链、3 项生产与 6 项发布测试通过；Editor / Viewer / Native 构建通过。Android Java 编译、11 项 JVM 测试与 Lint 通过。没有新增运行时依赖、权限或 Canonical schema 字段；机制见 [DATA_SOVEREIGNTY.md](DATA_SOVEREIGNTY.md)。
+- I2-C/D/E 桌面 Chrome 156 / Playwright 1.55.0：320 / 375 / 390 / 430px 与桌面三入口、抽屉各分区、N / Esc、实际导出下载、备份时戳、提交后持久化一次、首次 / 30 天 / 稍后 7 天提醒、独立配置恢复及原图占位通过。模拟原生端口验证保存字节与取消备份不写成功时戳；并通过首次使用、四类卡片、12k 原生相册、地名单条同意、时间轴、故事与 OPFS / 回滚回归。
+- I2-C/D/E RED/GREEN：旧共享端口第二消费者抢走待处理回复、恢复旧原生指针后与设备 B 同编号照片碰撞而丢观测，均先失败再修复。恢复来源隔离随日志提交 / 回滚 / 重启收敛。实际 IndexedDB 还发现内联主键写法及恢复提交后界面反馈错误，已在真实浏览器回归覆盖。保守来源校验仍不能跨安装按内容重绑原图，详见机制文档。
+- 既有 `browser.mjs` 回放断言在旧实现复现 RED：自动打开卡片调用用户交互暂停，刚开始即停止。为程序回放选择显式传入 `interaction:false`，普通用户选择仍暂停；记录列表测试先通过真实“我的”入口打开列表，不点击隐藏控件。I4 会继续收敛播放器入口。
+- 开放格式桌面核验（2026-10-28，**代理操作，非真人复核**）：应用导出的合成 GeoJSON 在 [geojson.io](https://geojson.io/) 编辑器载入后显示成都 / 台北，空几何旅程与阶段元数据保留，[截图](geojson-export-proof.jpg)；同一导出器的三城合成 GPX 在 [gpx.studio](https://gpx.studio/app) 通过文件打开显示三站及顺序路线，[截图](gpx-export-proof.jpg)。单站路线不能产生可见线段。未使用真实用户位置；真实人工桌面复核仍待补。
+- 500 地点 / 5k 照片元数据的两种格式导出约 77 ms（本地领域测试，门槛 < 1 s）。Android 卸载 / 清数据 / 覆盖安装、SAF 真实文件提供方和真实两设备恢复均标为未测，步骤见 [ANDROID_PHOTO_IMPORT.md](ANDROID_PHOTO_IMPORT.md)。
+- I2-C/D/E 帧率（相对 `a40e65c`）：关闭同时运行的外部地图后，全球 60 → 60 FPS、P95 17.3 → 17.2 ms；高山 119.8 → 120 FPS、P95 9.5 → 9.4 ms，差异在 5% 内，见 [原始记录](data-sovereignty-performance.json)。首轮并行外部 WebGL 地图时高山 77.5 → 60 FPS，未满足门槛，保留 [资源竞争记录](data-sovereignty-performance-contended.json)；不以该轮宣称通过。桌面软件渲染不能替代真机验收。
 
 - I2-A/B（`beta/0.3-cn-naming`，基于主干 `e52d73b`）：211 项 Life 领域测试、完整 `package.json` 测试链、6 项发布协议、3 项生产构建测试通过；Editor / Viewer / Native 构建完成。新增纯函数口径模块与 316,619 字节离线行政区搜索索引，无新增运行时依赖，原始几何未改。
 - RED/GREEN：旧实现上，台北旧名与归属错误、4 个旧国家名应计为 2、20 条默认搜索触发 20 次在线调用、离线来源误写 Nominatim 均先失败再通过；真实 Chrome 还复现在线 fetch 接收者错误（同意后未发请求），修复后同意恰好 1 次、取消 0 次。测试覆盖缓存同意、在线 ISO2、藏南覆盖幂等、全部 242 包出口、钓鱼岛无名称、重整后 ID 与人工名称保留。

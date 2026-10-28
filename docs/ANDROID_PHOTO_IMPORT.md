@@ -179,3 +179,26 @@ browser flow (12,000 rows, ~2 s of JS time). Phone EXIF throughput, HEIC EXIF on
 the vivo ROM and the real album size still need on-device measurement.
 Known limit: offline country polygons are generalized, so photos within a few km
 of a border (for example Shenzhen/Hong Kong) can be named after the neighbour.
+
+## Beta 0.3 I2：保存、恢复与数据行为（`MainActivity.java`、`DATA_SOVEREIGNTY.md`）
+
+本节为 2026-10-28 的新增机制；旧分组与边境说明以 `BORDER_TRANSIT_FIX.md`、
+`CN_REGION_POLICY.md` 为准。国家 / 地区口径和自动整理已升级到版本 5。
+
+代码审查确认旧 WebView 仅处理文件选择，没有下载监听和保存桥。
+现已加入共用的 SAF ACTION_CREATE_DOCUMENT 保存通道，完整备份、记录文件、
+CSV、GeoJSON、GPX 和分享文件使用同一通道。JVM 验证分块顺序、字节总量、
+取消与磁盘错误；编译与 Lint 不代表系统文件选择器或真实文件提供方验证。
+
+| 动作 | 预期 | 状态与待测步骤 |
+| --- | --- | --- |
+| 同 applicationId、同签名覆盖安装 | 保留 WebView IndexedDB、设置、缩略图、本地安装来源与扫描检查点；权限仍受系统控制 | **未测**。导入并备份后覆盖安装，逐项比较实体 / ID、提示状态、原图与缩略图，再增量导入 |
+| 系统清除 App 数据 | 本机记录、设置、缩略图、扫描日志和安装来源被清除；系统相册及 SAF 保存的外部备份应保留 | **未测**。记录备份位置和校验和，清数据后确认空库，再恢复并比较实体 / ID；原图关联须重新确认 |
+| 卸载后重装 | 私有数据与本地安装来源不应被当作仍存在；相册和用户保存的外部文件不随 App 主动删除 | **未测**。分别检查系统是否启用自动备份恢复；从自有完整备份恢复后比较记录并检查缺原图占位 |
+| 保存或取消 | 系统选择位置后完整写入；取消不标成功、不更新时间；失败尽力清理未完成文件 | **未测**。分别选本机与常见文档提供方，取消、写入时切后台 / 杀进程、空间不足，检查文件和备份提示 |
+| 设备 A → 空设备 B | 规范实体与 ID 一致；没有可验证的本机原图时显示占位，不读取同编号的另一张照片 | 自动化与桌面模拟已验证，**真机未测**。在两台设备放入不同内容但编号相同的照片，恢复后检查卡片与新增扫描 |
+
+新的原生指针带应用安装的随机来源标识，原生预览校验来源；恢复来的旧指针在独立
+本机元数据中标记为未关联。覆盖安装保留已有旧指针；清数据 / 重装导致来源变化时，
+不能仅凭相册编号重新关联。按内容重新关联尚未实现，再次扫描可能保留两份观测；
+不能用相同日期和坐标证明照片内容相同。以上行为仍需在 vivo 与中档 Android 上实测。

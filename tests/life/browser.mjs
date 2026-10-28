@@ -1,3 +1,4 @@
+import {openTool} from './browser-tools.mjs';
 // Optional end-to-end acceptance: PLAYWRIGHT_MODULE points at a Playwright package
 // when it is supplied by the host rather than installed in this static project.
 import assert from 'node:assert/strict';
@@ -37,7 +38,7 @@ try {
   let d=await dataset();assert.equal(d.trips.length,2);assert.equal(d.places.length,4);assert.equal(d.meta.origin,'user');
   const timelineYears=()=>page.locator('#tl-track .tl-year[data-year]').evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.year)));
   assert.deepEqual(await timelineYears(),[2025,2026],'Residence coverage alone must not add empty years to the timeline');
-  await page.locator('#btn-life').click();
+  await openTool(page,'#btn-life');
   const add=async(title,start,end,tripIndices)=>{
     await page.locator('#chapter-form [name=title]').fill(title);await page.locator('#chapter-form [name=start]').fill(start);await page.locator('#chapter-form [name=end]').fill(end);
     await page.locator('#chapter-form details').first().locator('summary').click();
@@ -59,16 +60,17 @@ try {
   await page.locator('#year-filter [data-year="2026"]').click();assert.equal(await page.locator('#list-count').innerText(),'1');assert.match(await page.locator('#list-body').innerText(),/深圳之行/);
   await page.locator('[data-act=all-years]').click();assert.equal(await page.locator('#list-count').innerText(),'2');
   await page.locator(`[data-life-scope="${d.chapters[1].id}"]`).click();
+  await openTool(page,'#btn-list');
   await page.locator('#list-body .item').filter({hasText:'北京实习'}).click();await page.waitForSelector('#card.show');assert.match(await page.locator('#card h2').innerText(),/北京实习/);
   await page.locator('#card [data-record-kind=place]').first().click();
   await page.waitForTimeout(2500);await page.screenshot({path:resolve(output,'03-chapter-trip-place.png')});
-  await page.locator('#btn-tone').click();assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'true');
-  await page.locator('#btn-tone').click();assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'false');
+  await openTool(page,'#btn-tone');assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'true');
+  await openTool(page,'#btn-tone');assert.equal(await page.locator('#btn-tone').getAttribute('aria-pressed'),'false');
   await page.locator('#btn-play').click();await page.waitForFunction(()=>document.querySelector('#btn-play').title==='停止回放');await page.waitForTimeout(2000);
   assert.match(await page.locator('#tl-status').innerText(),/从这里出发|北京实习|1/);await page.locator('#btn-play').click();
   await page.reload();await page.waitForSelector('#chapter-filter [data-life-scope]');
   assert.deepEqual((await dataset()).chapters,d.chapters);await page.locator(`[data-life-scope="${d.chapters[1].id}"]`).click();assert.equal(await page.locator('#list-count').innerText(),'1');
-  await page.locator('#btn-life').click();const downloadPromise=page.waitForEvent('download');await page.locator('[data-life-backup]').click();const download=await downloadPromise;const backup=await readFile(await download.path(),'utf8');assert.deepEqual(JSON.parse(backup).chapters,d.chapters);
+  await openTool(page,'#btn-life');const downloadPromise=page.waitForEvent('download');await page.locator('[data-life-backup]').click();const download=await downloadPromise;const backup=await readFile(await download.path(),'utf8');assert.deepEqual(JSON.parse(backup).chapters,d.chapters);
   await page.screenshot({path:resolve(output,'04-reloaded-relations.png')});
   await page.locator('#chapter-form [name=title]').fill('只有学习，没有旅行');await page.locator('#chapter-form [name=start]').fill('2020');await page.locator('#chapter-form [name=end]').fill('2024');
   await page.locator('#chapter-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===3);
@@ -76,7 +78,7 @@ try {
   assert.equal(await page.locator('#list-count').innerText(),'0');
   assert.deepEqual(await timelineYears(),[],'A Chapter without Trips retains its period band without empty year ticks');
   assert.notEqual(await page.locator('#timeline').evaluate(e=>getComputedStyle(e).pointerEvents),'none','Chapter without Trips must retain accessible timeline and scope controls');
-  await page.locator('[data-life-scope=""]').click();await page.locator('#btn-life').click();
+  await page.locator('[data-life-scope=""]').click();await openTool(page,'#btn-life');
   page.once('dialog',dialog=>dialog.accept());await page.locator(`[data-life-delete="${noTravel.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===2);
   // Edit and delete operate on Chapters only; restore must recover all relations.
   await page.locator(`[data-life-edit="${d.chapters[1].id}"]`).click();await page.locator('#chapter-form [name=title]').fill('北京实习 · 修订');await page.locator('#chapter-form button[type=submit]').click();
@@ -88,18 +90,18 @@ try {
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-life-restore]').setInputFiles({name:'LifeAtlas.json',mimeType:'application/json',buffer:Buffer.from(backup)});
   await page.waitForFunction(()=>document.querySelectorAll('.life-chapter').length===2);assert.deepEqual((await dataset()).chapters,d.chapters);
   // Reuse the original map-pick correction and CSV export UI.
-  await page.locator('[data-life-close]').click();await page.locator('#btn-data').click();await page.locator('[data-tab=places]').click();
+  await page.locator('[data-life-close]').click();await openTool(page,'#btn-data');await page.locator('[data-tab=places]').click();
   const placeBefore=(await dataset()).places.find(p=>p.name==='北京');
   await page.locator('.pl[data-name="北京"] [data-act=pick]').click();await page.waitForTimeout(2200);
   const canvas=page.locator('#globe canvas').first(),box=await canvas.boundingBox();await canvas.click({position:{x:box.width/2,y:box.height/2}});
   await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('已把'));
   const placeAfter=(await dataset()).places.find(p=>p.name==='北京');assert.equal(placeAfter.id,placeBefore.id);assert.ok(placeAfter.evidenceIds.length>placeBefore.evidenceIds.length);
-  await page.locator('#btn-data').click();await page.locator('[data-tab=import]').click();
+  await openTool(page,'#btn-data');await page.locator('[data-tab=import]').click();
   const csvDownloadPromise=page.waitForEvent('download');await page.locator('[data-act=export]').click();const csvDownload=await csvDownloadPromise;
   const exportedCSV=await readFile(await csvDownload.path(),'utf8');assert.match(exportedCSV,/visit_id,place_id,trip_id/);assert.match(exportedCSV,/北京实习/);await page.locator('#modal-close').click();
   // Real IndexedDB transaction abort: rejected edit leaves both committed data
   // and the open editor intact, without a false success notification.
-  await page.locator('#btn-data').click();await page.locator('[data-tab=edit]').click();
+  await openTool(page,'#btn-data');await page.locator('[data-tab=edit]').click();
   await page.locator('[data-i="1"][data-k=note]').fill('this must not be committed');const beforeError=await dataset();
   await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=put.apply(this,args);this.transaction.abort();IDBObjectStore.prototype.put=put;return r;};});
   await page.locator('[data-act=save-rows]').click();await page.waitForSelector('#life-storage-error:visible');
@@ -109,7 +111,7 @@ try {
   await page.waitForFunction(()=>!document.body.classList.contains('modal-open'));assert.equal((await dataset()).visits[1].legacy.note,'已验证的用户修订');
   assert.deepEqual((await dataset()).chapters,d.chapters);
   await page.reload();await page.waitForSelector('#chapter-filter [data-life-scope]');
-  await page.setViewportSize({width:390,height:844});await page.locator('#btn-life').click();
+  await page.setViewportSize({width:390,height:844});await openTool(page,'#btn-life');
   assert.ok(await page.locator('#life-dialog').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}));
   await page.screenshot({path:resolve(output,'05-mobile-chapters.png')});
   assert.deepEqual(errors,[]);console.log(JSON.stringify({result:'PASS',checks:['new-browser demo is ephemeral','CSV file import and export','overlapping Chapter CRUD','shared Trip relationships','scoped map/list/timeline and year reset','Chapter without Trips','Trip and Place flights','day/night','Trip Replay','reload persistence','JSON backup and restore','manual coordinate correction','failed edit preserves data and draft','successful edit preserves IDs and relationships','mobile layout'],output,entities:{trips:d.trips.length,chapters:d.chapters.length,places:d.places.length},pageErrors:errors},null,2));
