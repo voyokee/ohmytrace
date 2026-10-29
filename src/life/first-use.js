@@ -8,7 +8,7 @@ const manual=(d,e)=>evidenceOf(d,e).some(e=>e.state==='manual');
 const eligible=(d,r)=>!r.hidden&&d.places.some(p=>p.id===r.placeId&&!p.hidden)&&evidenceOf(d,r).some(e=>e.source?.kind==='photo-auto-import');
 export const residencePhotos=(d,r)=>d.memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.placeIds.includes(r.placeId)&&overlap(m,r));
 function links(d,r){const trips=d.trips.filter(t=>tripCountsAsTravel(d,t)&&overlap(t,r));return {relatedTripIds:trips.map(t=>t.id),memoryIds:residencePhotos(d,r).map(m=>m.id)};}
-export function prepareFirstUse(data,{now=new Date()}={}){
+export function prepareFirstUse(data,{now=new Date(),scanned=null}={}){
  if(data.meta.origin==='demo'||data.meta.firstUse||!data.memories.some(m=>m.kind==='photo'))return false;
  const residences=data.residences.filter(r=>eligible(data,r)),drafts=[];
  for(const r of residences){
@@ -19,7 +19,8 @@ export function prepareFirstUse(data,{now=new Date()}={}){
  const weak=r=>new Set(residencePhotos(data,r).map(m=>m.start.value).filter(Boolean)).size;
  const candidates=residences.filter(r=>!manual(data,r)).sort((a,b)=>(b.kind==='home')-(a.kind==='home')||weak(a)-weak(b)||(dateBound(b.start)??0)-(dateBound(a.start)??0)||a.id.localeCompare(b.id));
  const questions=candidates.slice(0,3).map(r=>r.id);
- data.meta.firstUse={version:1,status:questions.length?'pending':'complete',questions,answers:[],draftIds:drafts,startedAt:now.toISOString()};return true;
+ // How many photos the first import read, so the reveal can say how many of them had a location.
+ data.meta.firstUse={version:1,status:questions.length?'pending':'complete',questions,answers:[],draftIds:drafts,startedAt:now.toISOString(),...(Number.isInteger(scanned)&&scanned>=0?{scanned}:{})};return true;
 }
 /** Called by EditHistory, so a confirmation/type change and its draft share one undo patch. */
 export function answerResidence(data,{target,value},classify){
@@ -42,12 +43,12 @@ export function firstUseView(data){
  const places=data.places.filter(p=>placeCountsAsVisited(data,p.id)),countries=new Set(places.map(p=>photoRegion(p.location?.photoCity).sovereignCode).filter(Boolean));
  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)),years=trips.flatMap(t=>t.start.value?[Number(t.start.value.slice(0,4))]:[]);
  return {finished:!!flow.finishedAt,pending:flow.status==='pending'&&!!residence,answered:flow.answers.length,total:flow.questions.length,question:residence?{id:residence.id,place:place.name,kind:residence.kind,start:clone(residence.start),end:clone(residence.end),photos:photos.length,days:new Set(photos.map(m=>m.start.value).filter(Boolean)).size}:null,
-  chapters:chapters.map(c=>({id:c.id,title:c.title,start:clone(c.start),end:clone(c.end),confirmed:c.draft?c.draft.status==='confirmed':manual(data,c)})),counts:{cities:places.length,countries:countries.size,trips:trips.length,photos:data.memories.filter(m=>m.kind==='photo').length,located:data.memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.placeIds.length).length},year:years.length?Math.max(...years):null};
+  chapters:chapters.map(c=>({id:c.id,title:c.title,start:clone(c.start),end:clone(c.end),confirmed:c.draft?c.draft.status==='confirmed':manual(data,c)})),counts:{cities:places.length,countries:countries.size,trips:trips.length,photos:data.memories.filter(m=>m.kind==='photo').length,located:data.memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.placeIds.length).length,scanned:flow.scanned??data.memories.filter(m=>m.kind==='photo').length},year:years.length?Math.max(...years):null};
 }
 export class FirstUseService {
  constructor(repository,edits){this.repository=repository;this.edits=edits;this.commands=[];}
  view(){return firstUseView(this.repository.getDataset());}
- async prepare(){const d=this.repository.getDataset();if(d.meta.firstUse)return this.view();if(d.meta.origin==='demo'||!d.memories.some(m=>m.kind==='photo'))return null;await this.repository.update(d=>prepareFirstUse(d));return this.view();}
+ async prepare({scanned=null}={}){const d=this.repository.getDataset();if(d.meta.firstUse)return this.view();if(d.meta.origin==='demo'||!d.memories.some(m=>m.kind==='photo'))return null;await this.repository.update(d=>prepareFirstUse(d,{scanned}));return this.view();}
  async answer(choice,value){const q=this.view()?.question;if(!q)return;
   if(choice!=='skip'){if(!['confirm','change'].includes(choice))throw new Error('请选择确认、修改或跳过');const before=this.edits.undoStack.at(-1)?.id;await this.edits.execute({type:'confirm-residence',target:{kind:'residence',id:q.id},value:choice==='confirm'?q.kind:value});const after=this.edits.undoStack.at(-1)?.id;if(after&&after!==before)this.commands.push(after);}
   await this.repository.update(d=>{const f=d.meta.firstUse;if(!f||f.answers.some(a=>a.residenceId===q.id))return;f.answers.push({residenceId:q.id,choice,at:new Date().toISOString()});if(f.answers.length>=f.questions.length)f.status='complete';});return this.view();

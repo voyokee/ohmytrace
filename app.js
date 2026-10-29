@@ -233,14 +233,15 @@ async function load() {
   try {
     life=await createLifeBridge({defaultCSV:DEFAULT_CSV,sceneCSV:sceneDemo?demoCsv(sceneDemo):null});
     if(demoParams.get('preview')==='earth-home'&&life.canPreviewDemo())life.previewDemo();
-    backupGuide=new BackupGuide({settings:new LocalSettings(),onReminder:message=>toast(message,6000)});
+    // During the first reveal the dot on 我的 carries the reminder; a toast would cover the reveal.
+    backupGuide=new BackupGuide({settings:new LocalSettings(),onReminder:message=>{if(!revealPending&&!emptyImport&&!firstUseUI?.isOpen)toast(message,6000);}});
     lifeUI=mountChapterUI({repository:life.repository,adapter:life.adapter,onScope:setChapter,onError:storageError,
       status:()=>life.status(),onBackup:()=>download('OnceHere-records.json',life.repository.backup(),'application/json'),
       onRestore:async file=>{const text=await file.text();if(!confirm('用此记录备份替换当前人生记录？建议先下载当前备份。'))return;
         stopPlay();await life.restore(text);await backupGuide.importCommitted(life.repository.getDataset());life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     firstUse=new FirstUseService(life.repository,life.edits);
-    firstUseUI=mountEarthFirstUse({service:firstUse,earthHome:{host:f=>earthHome.host(f),release:()=>earthHome.release(),render:()=>earthHome.render(),get hosting(){return earthHome.hosting;}},reducedMotion,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
+    firstUseUI=mountEarthFirstUse({service:firstUse,onRetry:()=>void photoUI?.open(),onDemo:()=>document.querySelector('#empty-demo')?.click(),earthHome:{host:f=>earthHome.host(f),release:()=>earthHome.release(),render:()=>earthHome.render(),get hosting(){return earthHome.hosting;}},reducedMotion,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
     // The dialog covers the globe while a scan runs; pausing its render loop keeps
     // worker replies and storage commits from queueing behind globe frames.
@@ -249,11 +250,14 @@ async function load() {
       if(active){scanPreview.reset();if(viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}}
       else{scanPreview.clear();if(photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}}};
     // Set by the first automatic import; the reveal waits until the import dialog is dismissed.
-    let revealPending=false;
+    // A first import that found no located photo gets an explanation instead of an empty reveal.
+    let revealPending=false,emptyImport=null;
     photoUI=mountPhotoUI({service:photos,download,onScanning,onPreview:points=>scanPreview.add(points),onError:error=>toast('照片处理失败：'+error.message,6000),
       onBackupSaved:(data,bytes)=>{backupGuide.markBackup(data,bytes);myPanel?.render();},
-      onImportFinished:()=>{const auto=revealPending;revealPending=false;if(!firstUseUI.present({auto}))toast('照片已整理，可在地球上查看旅行');},
-      onCommitted:async result=>{if(result.automatic){const started=!!firstUse.view();await firstUse.prepare();revealPending=!started&&!!firstUse.view();}await backupGuide.importCommitted(life.repository.getDataset());recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();myPanel?.render();earthHome?.reset();toast('已补充照片与旅行记录');}});
+      onImportFinished:()=>{const auto=revealPending,empty=emptyImport;revealPending=false;emptyImport=null;if(empty){firstUseUI.explainEmpty(empty);return;}if(!firstUseUI.present({auto}))toast('照片已整理，可在地球上查看旅行');},
+      onCommitted:async result=>{let next=null;if(result.automatic){const started=!!firstUse.view(),summary=result.summary||{},located=(summary.photos||0)-(summary.unlocated||0);
+        if(!started&&!summary.regrouped&&located<=0){emptyImport={scanned:summary.scanned||0};next='reveal';}
+        else{await firstUse.prepare({scanned:summary.scanned});revealPending=!started&&!!firstUse.view();if(revealPending)next='reveal';}}await backupGuide.importCommitted(life.repository.getDataset());recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();myPanel?.render();earthHome?.reset();if(!next)toast('已补充照片与旅行记录');return next;}});
     myPanel=mountMyPanel({repository:life.repository,guide:backupGuide,backup:()=>photoUI.backup(),restore:()=>photoUI.open({storage:true}),onData:tab=>openModal(tab),onError:error=>toast(error.message,6000)});
     recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,getScope:()=>life.adapter.scope,compact:true,titleFor:earthTripTitle,onMode:mode=>earthHome?.modeChanged(mode),
       onClose:()=>earthHome?earthHome.back():deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>{earthHome?.changed(target);syncRecordSelection(target);},

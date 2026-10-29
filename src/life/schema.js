@@ -71,7 +71,7 @@ export function validateDataset(data) {
   if (!data || data.schemaVersion !== SCHEMA_VERSION) throw new Error(`不支持的 Life schema 版本：${data?.schemaVersion}`);
   requireText(data.id, 'dataset ID');
   if (!Number.isSafeInteger(data.revision) || data.revision < 0 || !data.meta || !['new','user','legacy','demo'].includes(data.meta.origin)) throw new Error('无效的数据集元信息');
-  const f=data.meta.firstUse;if(f&&(f.version!==1||!['pending','complete'].includes(f.status)||!Array.isArray(f.questions)||f.questions.length>3||new Set(f.questions).size!==f.questions.length||f.questions.some(id=>typeof id!=='string')||!Array.isArray(f.answers)||f.answers.length>3||new Set(f.answers.map(a=>a.residenceId)).size!==f.answers.length||f.answers.some(a=>!f.questions.includes(a.residenceId)||!['confirm','change','skip'].includes(a.choice))||!Array.isArray(f.draftIds)||f.draftIds.some(id=>typeof id!=='string')))throw new Error('首次确认进度无效');
+  const f=data.meta.firstUse;if(f&&(f.version!==1||!['pending','complete'].includes(f.status)||!Array.isArray(f.questions)||f.questions.length>3||new Set(f.questions).size!==f.questions.length||f.questions.some(id=>typeof id!=='string')||!Array.isArray(f.answers)||f.answers.length>3||new Set(f.answers.map(a=>a.residenceId)).size!==f.answers.length||f.answers.some(a=>!f.questions.includes(a.residenceId)||!['confirm','change','skip'].includes(a.choice))||!Array.isArray(f.draftIds)||f.draftIds.some(id=>typeof id!=='string')||f.scanned!==undefined&&!(Number.isInteger(f.scanned)&&f.scanned>=0)))throw new Error('首次确认进度无效');
   const allIds = new Set(), sets = {};
   for (const key of COLLECTIONS) {
     if (!Array.isArray(data[key])) throw new Error(`缺少集合：${key}`);
