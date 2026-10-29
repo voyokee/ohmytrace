@@ -20,17 +20,17 @@ export async function createLifeBridge({defaultCSV,sceneCSV,store}={}) {
     canPreviewDemo(){return !sceneCSV&&!!defaultCSV&&ephemeral();},
     previewDemo(){if(!this.canPreviewDemo())return false;beforeDemo=repository.data;repository.data=fictional(defaultCSV);repository.notify();return true;},
     exitDemo(){if(sceneCSV||repository.data.meta.origin!=='demo')return false;repository.data=beforeDemo||emptyDataset();beforeDemo=null;repository.notify();return true;},
-    status(){const d=repository.getDataset();return sceneCSV?'景观演示 · 临时预览，请返回首页保存个人数据':d.meta.origin==='demo'?'虚构示例 · 尚未写入个人数据':d.meta.migration?.status==='complete'?'旧足迹已迁移 · 原始数据保留 · 保存在此浏览器':d.visits.length?'个人数据 · 保存在此浏览器':'个人数据为空 · 保存在此浏览器';},
+    status(){const d=repository.snapshot();return sceneCSV?'景观演示 · 临时预览，请返回首页保存个人数据':d.meta.origin==='demo'?'虚构示例 · 尚未写入个人数据':d.meta.migration?.status==='complete'?'旧足迹已迁移 · 原始数据保留 · 保存在此浏览器':d.visits.length?'个人数据 · 保存在此浏览器':'个人数据为空 · 保存在此浏览器';},
     async importCSV(text,mode){requireWritable();return repository.update(d=>importCSVInto(d,text,mode));},
     async editRows(rows){requireWritable();return repository.update(d=>{reconcileRows(d,rows,{manual:true});d.meta.origin='user';});},
     async clear(){requireWritable();return repository.update(d=>{for(const key of COLLECTIONS)d[key]=[];delete d.meta.firstUse;delete d.meta.photoAutoGrouping;d.meta.origin='user';});},
     async restore(text){requireWritable();return repository.restore(text);},
-    editDraft(){return datasetRows(repository.getDataset());},
+    editDraft(){return datasetRows(repository.snapshot());},
     async setPlace(id,location,manual=true){
       // Geocoding a fictional preview must not create a persisted user dataset.
       if(repository.data.meta.origin==='demo'){const d=repository.getDataset();updatePlace(d,id,location,{manual});repository.data=d;repository.notify();return;}
       return repository.update(d=>updatePlace(d,id,location,{manual}));
     },
-    exportCSV(){return exportLegacyCSV(repository.getDataset());}
+    exportCSV(){return exportLegacyCSV(repository.snapshot());}
   };
 }

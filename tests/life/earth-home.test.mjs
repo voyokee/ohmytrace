@@ -64,3 +64,15 @@ test('a stage keeps explicitly associated unknown-date trips without inventing d
  const view=earthScopedSnapshot(projectDataset(d,{type:'chapter',id}),d);
  assert.equal(view.trips.length,1);assert.equal(view.trips[0].stops.length,1);assert.equal(t.start.precision,'unknown');
 });
+test('render paths read one frozen snapshot per stored value instead of copying the dataset each time',async()=>{
+  const repo=new LifeRepository(new MemoryStore());await repo.initialize({legacyStorage:null});
+  await repo.update(d=>importCSVInto(d,'日期,行程,地点,类型,备注,坐标\n2025-05,新旅行,杭州,旅行,,"30.27,120.15"\n2025-05,新旅行,苏州,旅行,,"31.3,120.6"','replace'));
+  const a=repo.snapshot();assert.equal(repo.snapshot(),a,'repeated reads share one copy');assert.ok(Object.isFrozen(a)&&Object.isFrozen(a.trips[0])&&Object.isFrozen(a.trips[0].visitIds));
+  assert.throws(()=>{a.trips[0].title='x';},TypeError);
+  const draft=repo.getDataset();draft.trips[0].title='改过';assert.equal(repo.snapshot().trips[0].title,'新旅行','getDataset stays a private, writable copy');
+  // Everything the earth home renders from must accept the frozen snapshot.
+  const t=a.trips[0],p=a.places[0];
+  assert.equal(recentTrips(a)[0].id,t.id);recordCardModel(a,{kind:'trip',id:t.id});recordCardModel(a,{kind:'place',id:p.id},{year:2025});
+  earthScopedSnapshot(projectDataset(a),a,2025);projectDataset(a,{type:'trip',id:t.id});earthTripTitle(a,t);
+  await repo.update(d=>{d.trips[0].title='新标题';});const b=repo.snapshot();assert.notEqual(b,a);assert.equal(b.trips[0].title,'新标题');
+});

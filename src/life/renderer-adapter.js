@@ -88,15 +88,15 @@ export class RendererAdapter {
       this.emit();
     });
   }
-  getRenderSnapshot() {return {...projectDataset(this.repository.getDataset(),this.scope),focus:clone(this.focus)};}
+  getRenderSnapshot() {return {...projectDataset(this.repository.snapshot(),this.scope),focus:clone(this.focus)};}
   setScope(scope) {
     if(!['all','year','chapter'].includes(scope?.type)||scope.type==='year'&&(!Number.isInteger(scope.year)||scope.year<1||scope.year>9999))throw new Error('无效浏览范围');
-    projectDataset(this.repository.getDataset(),scope);this.scope=clone(scope);this.focus=null;this.emit();
+    projectDataset(this.repository.snapshot(),scope);this.scope=clone(scope);this.focus=null;this.emit();
   }
   focusTrip(id) {this.setFocus('trip',id,'trips');}
   focusPlace(id) {this.setFocus('place',id,'places');}
   setFocus(type,id,key) {
-    if(!this.repository.getDataset()[key].some(e=>e.id===id))throw new Error('聚焦对象不存在');
+    if(!this.repository.snapshot()[key].some(e=>e.id===id))throw new Error('聚焦对象不存在');
     this.focus={type,id};this.emit();
   }
   subscribe(listener) {this.listeners.add(listener);return ()=>this.listeners.delete(listener);}

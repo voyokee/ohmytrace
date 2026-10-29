@@ -3,7 +3,7 @@ import {dateBound} from '../life/schema.js';
 import {saveDocument} from '../platform/document-save.js';
 const size=bytes=>bytes>=1048576?(bytes/1048576).toFixed(1)+' MB':(bytes/1024).toFixed(1)+' KB';
 export function mountMyPanel({repository,guide,backup,restore,onData,onError=()=>{}}){
- const element=document.querySelector('#my-dialog'),button=document.querySelector('#btn-my'),data=()=>repository.getDataset();let info=null,busy=false;
+ const element=document.querySelector('#my-dialog'),button=document.querySelector('#btn-my'),data=()=>repository.snapshot();let info=null,busy=false;
  const close=()=>element.close();
  function render(){
   const d=data(),v=guide.view(d);document.querySelector('#my-dot').hidden=!v.reminder;

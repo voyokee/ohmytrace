@@ -47,7 +47,7 @@ export function firstUseView(data){
 }
 export class FirstUseService {
  constructor(repository,edits){this.repository=repository;this.edits=edits;this.commands=[];}
- view(){return firstUseView(this.repository.getDataset());}
+ view(){return firstUseView(this.repository.snapshot());}
  async prepare({scanned=null}={}){const d=this.repository.getDataset();if(d.meta.firstUse)return this.view();if(d.meta.origin==='demo'||!d.memories.some(m=>m.kind==='photo'))return null;await this.repository.update(d=>prepareFirstUse(d,{scanned}));return this.view();}
  async answer(choice,value){const q=this.view()?.question;if(!q)return;
   if(choice!=='skip'){if(!['confirm','change'].includes(choice))throw new Error('请选择确认、修改或跳过');const before=this.edits.undoStack.at(-1)?.id;await this.edits.execute({type:'confirm-residence',target:{kind:'residence',id:q.id},value:choice==='confirm'?q.kind:value});const after=this.edits.undoStack.at(-1)?.id;if(after&&after!==before)this.commands.push(after);}

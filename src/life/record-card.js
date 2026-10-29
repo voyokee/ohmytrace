@@ -50,7 +50,7 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
   let photoReturn=null,photoId=null,selection=null,mode='overview',busy=false,message='',failure='',page=0,shown=20,generation=0,urls=[],controller=null;
   const pairs={undo:[],redo:[]},feedback=node('div',{id:'record-feedback',class:'glass',role:'status',hidden:true});
   document.body.append(feedback);
-  const data=()=>repository.getDataset();
+  const data=()=>repository.snapshot();
   const readonly=()=>data().meta.origin==='demo'||document.body.classList.contains('story-readonly');
   const release=()=>{generation++;controller?.abort();urls.forEach(url=>URL.revokeObjectURL(url));urls=[];};
   function notice(){

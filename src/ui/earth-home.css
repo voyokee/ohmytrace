@@ -2,6 +2,8 @@
    Every colour, radius, size and duration comes from the tokens in styles.css :root.
    Plain sans type, flat opaque panels, one accent for the one primary action. */
 .icon{width:18px;height:18px;flex-shrink:0;stroke-width:1.9;}
+/* Secondary controls must read as controls on a phone in daylight: a little more fill than the classic UI. */
+.earth-home{--surface-raised:rgba(255,255,255,.08);}
 
 /* ---------- top bar: wordmark, time scope, stats, 我的 ---------- */
 .earth-home #brand{top:max(20px,env(safe-area-inset-top));left:var(--s6);right:110px;max-width:none;display:flex;flex-wrap:wrap;align-items:center;column-gap:var(--s3);row-gap:var(--s3);}
@@ -12,7 +14,7 @@
 #earth-time{order:1;}.earth-home #stats{order:2;}
 #earth-time span{overflow:hidden;text-overflow:ellipsis;}
 #earth-time .icon{width:15px;height:15px;opacity:.7;}
-#earth-time:hover{background:var(--surface-press);}
+@media(hover:hover){#earth-time:hover{background:var(--surface-press);}}
 .earth-home #toolbar{top:max(20px,env(safe-area-inset-top));right:var(--s5);}
 .earth-home #btn-my{width:auto;height:44px;padding:0 14px 0 var(--s3);display:flex;align-items:center;gap:6px;border-radius:var(--r-pill);background:var(--chip);border:1px solid var(--line-2);box-shadow:none;}
 .earth-home #btn-my svg{width:17px;height:17px;}
@@ -27,10 +29,10 @@
 /* Blur over a live WebGL canvas is re-sampled every frame; the chip colour is already near-opaque. */
 .earth-home .mk-label,.earth-home .tb{backdrop-filter:none;-webkit-backdrop-filter:none;}
 .earth-home .cluster-count{width:30px;height:30px;margin:-15px 0 0 -15px;background:var(--ink-on-accent);color:var(--accent);border:1.5px solid color-mix(in srgb,var(--accent) 75%,transparent);box-shadow:0 2px 8px #0008;font-size:var(--t-xs);font-weight:600;}
-.earth-home .mk-cluster.sel .cluster-count,.earth-home .mk-cluster:hover .cluster-count{background:var(--accent);color:var(--ink-on-accent);border-color:var(--accent);}
+@media(hover:hover){.earth-home .mk-cluster.sel .cluster-count,.earth-home .mk-cluster:hover .cluster-count{background:var(--accent);color:var(--ink-on-accent);border-color:var(--accent);}}
 
 /* ---------- the sheet ---------- */
-#earth-sheet{position:fixed;z-index:9;left:50%;bottom:max(var(--s4),env(safe-area-inset-bottom));width:min(520px,calc(100% - var(--s6)));transform:translateX(-50%);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);color:var(--text);box-shadow:var(--shadow-float);display:flex;flex-direction:column;max-height:calc(100dvh - 126px);isolation:isolate;translate:0 var(--drag,0px);transition:height var(--dur-slow) var(--spring),translate var(--dur) var(--spring);}
+#earth-sheet{position:fixed;z-index:9;left:50%;bottom:max(var(--s4),env(safe-area-inset-bottom));width:min(520px,calc(100% - var(--s6)));transform:translateX(-50%);border-radius:var(--r-lg);background:var(--surface-solid);border:1px solid var(--line);color:var(--text);box-shadow:var(--shadow-float);display:flex;flex-direction:column;max-height:calc(100dvh - 126px);isolation:isolate;translate:0 var(--drag,0px);transition:height var(--dur-slow) var(--spring),translate var(--dur) var(--spring);}
 #earth-sheet.dragging{transition:none;}
 /* Half fits short records instead of leaving an empty strip over the globe. */
 #earth-sheet[data-height=half]{height:auto;max-height:min(450px,52dvh);}
@@ -38,10 +40,12 @@
 @media(prefers-reduced-motion:reduce){#earth-sheet{transition:none;}}
 .earth-handle{height:44px;min-height:44px;flex-shrink:0;display:block;position:relative;font-size:0;touch-action:none;}
 .earth-handle:after{content:'';position:absolute;width:36px;height:4px;border-radius:4px;background:var(--line-2);top:var(--s3);left:calc(50% - 18px);transition:background var(--dur-fast);}
-.earth-handle:hover:after{background:var(--faint);}
+@media(hover:hover){.earth-handle:hover:after{background:var(--faint);}}
 .earth-sheet-bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:0 var(--s3);border-bottom:1px solid var(--line);font-size:var(--t-sm);}
-.earth-sheet-bar button{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0 var(--s2);border-radius:var(--r-sm);color:var(--muted);}
-.earth-sheet-bar button:hover{color:var(--text);background:var(--surface-raised);}
+.earth-sheet-bar{padding:var(--s1) var(--s3) var(--s2);}
+.earth-sheet-bar button{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0 var(--s3) 0 var(--s2);border-radius:var(--r-pill);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);font-size:var(--t-md);}
+.earth-sheet-bar button[data-earth=size]{padding:0 var(--s2) 0 var(--s3);}
+@media(hover:hover){.earth-sheet-bar button:hover{color:var(--text);background:var(--surface-raised);}}
 .earth-sheet-bar button .icon{width:16px;height:16px;}
 .earth-sheet-bar span{font-weight:600;color:var(--text);}
 .earth-sheet-content{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
@@ -51,7 +55,7 @@
 .earth-summary-top{display:flex;align-items:center;justify-content:space-between;font-size:var(--t-xs);color:var(--muted);}
 .earth-summary-top>span{display:inline-flex;align-items:center;gap:6px;}
 .earth-summary-top button{display:inline-flex;align-items:center;gap:2px;min-height:44px;font-size:var(--t-sm);color:var(--text);}
-.earth-summary-top button:hover{color:var(--accent);}
+@media(hover:hover){.earth-summary-top button:hover{color:var(--accent);}}
 .earth-summary-top button .icon{width:15px;height:15px;}
 .earth-summary-main{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:0 0 var(--s2);}
 .earth-cover{width:56px;height:56px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);font-variant-numeric:tabular-nums;line-height:1.1;}
@@ -62,11 +66,11 @@
 .earth-summary h2{margin:0 0 4px;font:650 var(--t-xl)/1.3 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .earth-summary p{margin:0;font-size:var(--t-sm);color:var(--muted);line-height:1.6;font-variant-numeric:tabular-nums;}
 .earth-chevron{color:var(--faint);}
-.earth-summary-main:hover .earth-chevron{color:var(--text);}
+@media(hover:hover){.earth-summary-main:hover .earth-chevron{color:var(--text);}}
 .earth-summary-actions{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);}
 .earth-primary{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);background:var(--accent);color:var(--ink-on-accent);border-radius:var(--r-md);padding:0 18px;min-height:44px;font-size:var(--t-md);font-weight:600;transition:filter var(--dur-fast);}
 .earth-primary .icon{width:14px;height:14px;fill:currentColor;stroke-width:0;}
-.earth-primary:hover{filter:brightness(1.07);}
+@media(hover:hover){.earth-primary:hover{filter:brightness(1.07);}}
 .earth-primary:active{filter:brightness(.94);}
 .earth-note{font-size:var(--t-xs);color:var(--faint);text-align:right;}
 button.earth-note{min-height:44px;color:var(--muted);}
@@ -77,7 +81,7 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-directory input::placeholder{color:var(--faint);}
 .earth-directory h3,.earth-time-options h3{font-size:var(--t-xs);color:var(--muted);font-weight:500;margin:var(--s5) 0 var(--s1);}
 .earth-trip-row{display:flex;align-items:center;gap:var(--s3);min-height:60px;text-align:left;border-radius:var(--r-sm);padding:var(--s2);margin:0 calc(var(--s2) * -1);width:calc(100% + var(--s4));transition:background var(--dur-fast);box-shadow:0 1px 0 var(--line);}
-.earth-trip-row:hover{background:var(--surface-raised);}
+@media(hover:hover){.earth-trip-row:hover{background:var(--surface-raised);}}
 .earth-trip-row>span:first-child{flex:1;min-width:0;}
 .earth-trip-row strong{display:block;font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .earth-trip-row small{display:block;font-size:var(--t-xs);color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums;}
@@ -87,7 +91,7 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-years{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:var(--s2);}
 .earth-years button{text-align:center;font-variant-numeric:tabular-nums;}
 .earth-time-options button{min-height:44px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);padding:var(--s2) var(--s4);font-size:var(--t-sm);text-align:left;transition:background var(--dur-fast);}
-.earth-time-options button:hover{background:var(--surface-press);}
+@media(hover:hover){.earth-time-options button:hover{background:var(--surface-press);}}
 .earth-time-options button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);font-weight:600;}
 .earth-muted{font-size:var(--t-sm);color:var(--muted);}
 
@@ -102,8 +106,8 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-first-counts{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);margin:0;font-size:var(--t-sm);color:var(--muted);}
 .earth-first-counts b{font-size:28px;font-weight:650;color:var(--text);margin-right:4px;font-variant-numeric:tabular-nums;}
 .earth-first-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s1);}
-.earth-first-button{min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-raised);color:var(--text);font-size:var(--t-md);}
-.earth-first-button:hover{background:var(--surface-press);}
+.earth-first-button{min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);font-size:var(--t-md);}
+@media(hover:hover){.earth-first-button:hover{background:var(--surface-press);}}
 .earth-first-link{align-self:flex-start;min-height:44px;color:var(--muted);font-size:var(--t-sm);text-decoration:underline;}
 .earth-first-field{display:flex;flex-direction:column;gap:6px;font-size:var(--t-sm);color:var(--muted);}
 .earth-first-field select{min-height:44px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);padding:0 var(--s3);font:inherit;}
@@ -111,7 +115,7 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-first-draft{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:56px;padding:var(--s2) 0;text-align:left;box-shadow:0 1px 0 var(--line);}
 .earth-first-draft strong{font-size:var(--t-md);font-weight:550;}
 .earth-first-draft small{font-size:var(--t-xs);color:var(--muted);}
-.earth-first-draft:hover strong{color:var(--accent);}
+@media(hover:hover){.earth-first-draft:hover strong{color:var(--accent);}}
 .earth-first-hint{margin:0;font-size:var(--t-xs);color:var(--faint);line-height:1.5;}
 .earth-first-error{margin:0;color:var(--bad);font-size:var(--t-sm);}
 .earth-first button:disabled{opacity:.5;}
@@ -125,8 +129,8 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-home #card .record-source{color:var(--faint);font-size:var(--t-xs);margin:6px 0;flex-shrink:0;}
 .earth-home #card .record-source p{color:var(--faint);}
 .earth-home #card .record-actions{display:flex;gap:var(--s2);margin:4px 0;padding:var(--s2) 0;border:0;flex-shrink:0;}
-.earth-home #card .record-actions button{flex:1;min-height:44px;border:1px solid var(--line);background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);font-size:var(--t-sm);transition:background var(--dur-fast);}
-.earth-home #card .record-actions button:hover{background:var(--surface-press);}
+.earth-home #card .record-actions button{flex:1;min-height:44px;border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);font-size:var(--t-sm);transition:background var(--dur-fast);}
+@media(hover:hover){.earth-home #card .record-actions button:hover{background:var(--surface-press);}}
 .earth-home #card .record-actions button:first-child{background:var(--accent);color:var(--ink-on-accent);border-color:transparent;font-weight:600;}
 .earth-home #card .record-actions button:disabled{opacity:.4;}
 .earth-home #card .record-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;max-height:none;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
@@ -159,7 +163,7 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-home #pickbar{z-index:15;}
 .earth-home:has(#story-composer[open]) #earth-sheet,.earth-home:has(#my-dialog[open]) #earth-sheet{visibility:hidden;}
 .earth-demo{display:block;min-height:44px;font-size:var(--t-sm);color:var(--muted);margin-top:var(--s2);}
-.earth-demo:hover{color:var(--text);}
+@media(hover:hover){.earth-demo:hover{color:var(--text);}}
 /* Undo feedback floats next to the sheet, never over its actions. */
 @media(max-width:999px){
   body.earth-home:has(#earth-sheet[data-height=half]) #btn-home{bottom:calc(min(450px,52dvh) + 34px);}
@@ -201,6 +205,9 @@ button.earth-note{min-height:44px;color:var(--muted);}
 .earth-home #btn-home{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 /* The handle needs raw pointer movement for the existing sheet drag gesture. */
 .earth-home #earth-sheet .earth-handle{touch-action:none;}
+/* Wherever panning is allowed, a press that drifts past the tap slop is cancelled as a pan, even with nothing to
+   scroll. Controls that cannot scroll take no pan gestures, so the release still counts (forgiveTaps). */
+.earth-home :is(.earth-sheet-bar,#earth-time,#btn-my,#btn-home,#earth-sheet .earth-sheet-content.earth-fits,dialog .x){touch-action:none;}
 
 /* Press feedback starts in the pointer-down frame, without the hover transition. */
 .earth-home :is(#earth-sheet,#my-dialog,#photo-dialog) :is(button,[role=button],label.btn,label.auto-link,summary):active,

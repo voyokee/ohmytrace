@@ -363,7 +363,7 @@ function placeNames() {
 function buildModel() {
   if(!life)return;
   const previous=state.places;
-  lifeSnapshot=life.adapter.getRenderSnapshot();if(earthHome&&!storyBaseLife)lifeSnapshot=earthScopedSnapshot(lifeSnapshot,life.repository.getDataset(),state.year);state.rows=lifeSnapshot.rows;state.places=lifeSnapshot.places;
+  lifeSnapshot=life.adapter.getRenderSnapshot();if(earthHome&&!storyBaseLife)lifeSnapshot=earthScopedSnapshot(lifeSnapshot,life.repository.snapshot(),state.year);state.rows=lifeSnapshot.rows;state.places=lifeSnapshot.places;
   for(const [key,p]of Object.entries(state.places)){
     const old=previous[key];if(old?.lat===p.lat&&old?.lon===p.lon&&old?.h!=null)p.h=old.h;
   }
@@ -1412,7 +1412,7 @@ function replayTarget() {
 function renderChips() {
   const out = [];
   if(publicViewer||storyBaseLife){$('#chips').innerHTML=`<span class="chip">${publicViewer?'只读分享 · 不会读取你的数据':'回放中'}</span>`;return;}
-  const demo=life?.repository?.getDataset().meta.origin==='demo'&&!sceneDemo;
+  const demo=life?.repository?.snapshot().meta.origin==='demo'&&!sceneDemo;
   if(demo)out.push('<button class="chip" data-act="exit-demo" aria-label="退出示例，回到开始">示例 · 退出</button><button class="chip" data-act="demo-photos">用我的照片开始 →</button>');
   // Replays are made from the visitor's own footprints, so the entry waits for real trips.
   const replay=life&&!sceneDemo&&!demo?replayTarget():null;
@@ -1426,7 +1426,7 @@ function renderChips() {
   $('#tab-badge').textContent = n || '';
   $('#data-dot').hidden = !n;
   const share=$('#btn-share');
-  if(share){const data=(storyBaseLife||life)?.repository?.getDataset();share.disabled=!storyExperience?.composer||!data||data.meta.origin==='demo'||!['places','visits','memories','chapters'].some(key=>data[key].length);}
+  if(share){const data=(storyBaseLife||life)?.repository?.snapshot();share.disabled=!storyExperience?.composer||!data||data.meta.origin==='demo'||!['places','visits','memories','chapters'].some(key=>data[key].length);}
 }
 
 function itemHTML(x) {
@@ -1559,7 +1559,7 @@ function renderCard() {
   if (!show) { el.classList.remove('show','expanded'); return; }
   const expanded=expandedCardId===x.id;el.classList.toggle('expanded',expanded);
   const primary=x.kind==='trip'?x.stops.find(s=>located(s.place))?.place:x.place;
-  const replayButton=x.kind==='trip'&&!storyScene&&!publicViewer&&!storyBaseLife&&life?.repository?.getDataset().meta.origin!=='demo'?`<button class="card-replay" data-story-quick="trip:${esc(x.id)}">▶ 回放</button>`:'';
+  const replayButton=x.kind==='trip'&&!storyScene&&!publicViewer&&!storyBaseLife&&life?.repository?.snapshot().meta.origin!=='demo'?`<button class="card-replay" data-story-quick="trip:${esc(x.id)}">▶ 回放</button>`:'';
   const mobileActions=`<div class="card-mobile-actions">${replayButton}${primary&&located(primary)?`<button class="card-primary" data-act="card-near" data-place-name="${esc(primary)}">近看 ${esc(coreName(primary))}</button>`:''}<button data-act="card-details" aria-expanded="${expanded}" aria-controls="card-detail-body">${expanded?'收起详情 ▴':'地点与详情 ▾'}</button></div>`;
   let html = `<button class="x card-x" data-act="close" aria-label="关闭">${ICON.close}</button>${storyScene?'<button class="card-story-back" data-act="story-back">‹ 回到回放</button>':''}`;
   if (x.kind === 'trip') {
@@ -1949,7 +1949,7 @@ function bindEvents() {
   $('#btn-home').addEventListener('click', () => { storyExperience?.pauseForInteraction();stopPlay(); deselect(); });
   $('#btn-tone').addEventListener('click', toggleTone);
   $('#btn-share')?.addEventListener('click',()=>{
-    if((storyBaseLife||life)?.repository?.getDataset().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
+    if((storyBaseLife||life)?.repository?.snapshot().meta.origin==='demo'){toast('示例数据不能分享，导入自己的照片后就可以分享');return;}
     storyExperience?.pauseForInteraction();
     storyExperience?.composer?.open({resume:!!storyBaseLife});
   });

@@ -6,8 +6,27 @@ import {paths} from './icons.js';
 const Icon=({name})=>html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML=${{__html:paths[name]||''}} />`;
 const period=t=>periodText(t.start,t.end);
 
+// A thumb drifts a few pixels while pressing. Past the browser's tap slop the click is dropped, even on controls that
+// cannot scroll, so the press looks ignored. Native buttons accept a press released on them; do the same for touch.
+// A pan the browser takes over (a scrolling list) still cancels the press, and a late native click is not doubled.
+export function forgiveTaps(doc=document){
+  let press=null,forgiven=null;
+  doc.addEventListener('pointerdown',e=>{const target=e.pointerType==='touch'&&e.isPrimary&&e.target.closest?.('button,[role=button],label,summary');press=target&&!target.closest('.mk,.earth-handle')?{target,x:e.clientX,y:e.clientY,clicked:false}:null;},true);
+  doc.addEventListener('pointercancel',()=>{press=null;},true);
+  doc.addEventListener('click',e=>{
+    if(e.isTrusted&&forgiven?.target.contains(e.target)&&performance.now()-forgiven.at<600){forgiven=null;e.preventDefault();e.stopImmediatePropagation();return;}
+    if(press?.target.contains(e.target))press.clicked=true;
+  },true);
+  doc.addEventListener('pointerup',e=>{
+    const p=press;if(!p||e.pointerId===undefined||e.pointerType!=='touch')return;
+    const r=p.target.getBoundingClientRect(),moved=Math.hypot(e.clientX-p.x,e.clientY-p.y),slack=8;
+    if(moved<6||moved>48||e.clientX<r.left-slack||e.clientX>r.right+slack||e.clientY<r.top-slack||e.clientY>r.bottom+slack)return;
+    setTimeout(()=>{if(p.clicked||!p.target.isConnected||p.target.disabled)return;forgiven={target:p.target,at:performance.now()};p.target.click();},80);
+  },true);
+}
+
 export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onChapter,onSelect,onClear,onReplay,captureCamera,restoreCamera,thumbnail,recordCard,onPause}){
-  document.body.classList.add('earth-home');
+  document.body.classList.add('earth-home');forgiveTaps();
   const root=document.createElement('section'),handle=document.createElement('button'),bar=document.createElement('div'),content=document.createElement('div'),card=document.querySelector('#card');
   root.id='earth-sheet';root.dataset.height='peek';root.setAttribute('aria-label','旅行');
   handle.type='button';handle.dataset.earth='expand';handle.className='earth-handle';handle.textContent='展开旅行';handle.setAttribute('aria-label','展开当前旅行');
@@ -20,12 +39,13 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   // A flow from outside (first use) can borrow the sheet; it supplies the content and handles Escape.
   let hosted=null;
   let coverKey='',coverURL=null,coverTicket=0;
-  const data=()=>repository.getDataset(),available=(filter='')=>recentTrips(data(),new Set(getTrips().map(t=>t.id)),filter);
+  const data=()=>repository.snapshot(),available=(filter='')=>recentTrips(data(),new Set(getTrips().map(t=>t.id)),filter);
   const count=t=>tripLocationCount(data(),t,new Set((getTrips().find(p=>p.id===t.id)?.stops||[]).map(s=>s.visitId)));
   const label=()=>getScope().type==='chapter'?data().chapters.find(c=>c.id===getScope().id)?.title||'人生阶段':getYear()!=null?getYear()+' 年':'全部时间';
   function snapshot(){return {view:structuredClone(view),camera:captureCamera(),scroll:view.mode==='detail'||view.mode==='record'?card.querySelector('.record-body')?.scrollTop||0:content.scrollTop,record:recordCard.snapshot(),query};}
   function push(){if(view.mode==='directory')directoryScroll=content.scrollTop;if(view.mode==='time')scopeScroll=content.scrollTop;history.push(snapshot());}
-  function navigate(mode,height='full'){push();view={...view,mode,height};render();}
+  // Opening the view already shown (a repeated tap) must not stack it, or 返回 lands on the same view.
+  function navigate(mode,height='full'){if(view.mode!==mode)push();view={...view,mode,height};render();}
   function selected(target){
     if(restoring)return;
     hosted=null;
@@ -91,7 +111,9 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   }
   function Cities({cities}){return html`<div class="earth-directory">${cities.map(p=>html`<button key=${p.id} type="button" data-earth="city" data-place=${p.id} class="earth-trip-row"><span><strong>${p.name}</strong></span><${Icon} name="chevron-right" /></button>`)}</div>`;}
   function Bar({title,height}){return html`<button type="button" data-earth="back" aria-label="返回上一层"><${Icon} name="chevron-left" />返回</button><span>${title}</span><button type="button" data-earth="size">${height==='half'?html`展开<${Icon} name="maximize-2" />`:html`收起<${Icon} name="minimize-2" />`}</button>`;}
-  function render(){
+  // Content that fits takes no pan gestures, so a drifting press on it still counts (see forgiveTaps and the CSS).
+  function render(){paint();content.classList.toggle('earth-fits',!content.hidden&&content.scrollHeight<=content.clientHeight+1);}
+  function paint(){
     renderView(html`<span>${label()}</span><${Icon} name="chevron-down" />`,scopeButton);root.dataset.height=view.height;root.dataset.mode=view.mode;
     document.body.classList.toggle('earth-full',view.height==='full');
     const detail=view.mode==='detail'||view.mode==='record';card.hidden=!detail;

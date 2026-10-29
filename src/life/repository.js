@@ -36,9 +36,22 @@ export class IndexedDBStore {
   close() { this.db?.close(); this.db=null; }
 }
 
+function deepFreeze(value) {
+  if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key in value)deepFreeze(value[key]);}
+  return value;
+}
+
 export class LifeRepository {
   constructor(store = new IndexedDBStore()) { this.store=store;this.data=null;this.listeners=new Set();this.queue=Promise.resolve();this.uncertain=false; }
   getDataset() { if(!this.data)throw new Error('数据尚未载入');return clone(this.data); }
+  // Read-only view for rendering. A deep copy of a large library costs about 100 ms on a phone, and one screen reads
+  // the data many times, so this copies once per stored value and freezes it. Code that changes data uses
+  // getDataset() or update(); writing to a snapshot throws.
+  snapshot() {
+    if(!this.data)throw new Error('数据尚未载入');
+    if(this.frozenFrom!==this.data){this.frozen=deepFreeze(clone(this.data));this.frozenFrom=this.data;}
+    return this.frozen;
+  }
   subscribe(listener) { this.listeners.add(listener);return ()=>this.listeners.delete(listener); }
   notify() { for(const listener of this.listeners) { try { listener(this.getDataset()); } catch(error) { globalThis.console?.error('Life subscriber failed',error); } } }
   async initialize({ legacyStorage = globalThis.localStorage, migrateLegacy } = {}) {
