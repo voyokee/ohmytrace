@@ -12,6 +12,8 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   root.append(handle,bar,content,card);document.body.append(root);
   const scopeButton=button([node('span',{},'全部时间'),icon('chevron-down')],'time',{id:'earth-time','aria-haspopup':'dialog'});document.querySelector('#brand').append(scopeButton);
   let view={mode:'peek',height:'peek',target:null},history=[],restoring=false,query='',directoryScroll=0,scopeScroll=0,replayState=null;
+  // A flow from outside (first use) can borrow the sheet; it supplies the content and handles Escape.
+  let hosted=null;
   let coverKey='',coverURL=null,coverTicket=0;
   const data=()=>repository.getDataset(),available=(filter='')=>recentTrips(data(),new Set(getTrips().map(t=>t.id)),filter);
   const count=t=>tripLocationCount(data(),t,new Set((getTrips().find(p=>p.id===t.id)?.stops||[]).map(s=>s.visitId)));
@@ -21,6 +23,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   function navigate(mode,height='full'){push();view={...view,mode,height};render();}
   function selected(target){
     if(restoring)return;
+    hosted=null;
     const same=JSON.stringify(target)===JSON.stringify(view.target);
     if(!same||view.mode!=='detail')push();view={mode:'detail',height:'half',target:structuredClone(target)};render();
   }
@@ -31,6 +34,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   }
   function clearRecord(){recordCard.close();onClear();}
   function back(){
+    if(hosted){hosted.onEscape?.();return;}
     const previous=history.pop();
     if(!previous){reset();return;}
     restoring=true;view=previous.view;query=previous.query;
@@ -38,7 +42,9 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     restoring=false;render();content.scrollTop=previous.scroll;restoreCamera(previous.camera);
     if(view.mode==='detail')card.querySelector('.record-body')?.scrollTo(0,previous.scroll);
   }
-  function reset(){history=[];view={mode:'peek',height:'peek',target:null};clearRecord();render();}
+  function reset(){hosted=null;history=[];view={mode:'peek',height:'peek',target:null};clearRecord();render();}
+  function host(flow){hosted=flow;history=[];recordCard.close();view={mode:flow.mode,height:flow.height||'half',target:null};render();}
+  function release(){if(hosted)reset();}
   function modeChanged(mode){
     if(restoring||view.mode!=='detail'&&view.mode!=='record')return;
     if(mode!=='overview'&&view.mode==='detail'){push();view={...view,mode:'record',height:'full'};onPause();render();}
@@ -91,6 +97,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     handle.setAttribute('aria-label',view.height==='peek'?'展开当前旅行':'收起当前内容');
     const title=view.mode==='directory'?'全部旅行':view.mode==='time'?'时间范围':view.mode==='cities'?'附近城市':view.mode==='record'?'详情':'';
     bar.replaceChildren(button([icon('chevron-left'),'返回'],'back',{'aria-label':'返回上一层'}),node('span',{},title),button(view.height==='half'?['展开',icon('maximize-2')]:['收起',icon('minimize-2')],'size'));
+    if(hosted&&view.mode===hosted.mode){bar.hidden=true;const next=hosted.render(),step=content.firstElementChild?.dataset.step;content.replaceChildren(next);if(next.dataset.step!==step)content.scrollTop=0;return;}
     if(view.mode==='peek')content.replaceChildren(summary());
     if(view.mode==='directory'){content.replaceChildren(directory());content.scrollTop=directoryScroll;}
     if(view.mode==='time'){content.replaceChildren(timeChooser());content.scrollTop=scopeScroll;}
@@ -108,7 +115,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     if(action==='city')onSelect({kind:'place',id:b.dataset.place});
     if(action==='select')onSelect({kind:'trip',id:b.dataset.trip});
     if(action==='back') {if(view.mode==='record'){recordCard.escape();}else back();}
-    if(action==='expand'&&event.detail>0&&performance.now()<suppressedUntil)return;
+    if(action==='expand'&&(hosted||event.detail>0&&performance.now()<suppressedUntil))return;
     if(action==='expand'){if(view.mode==='peek'){const t=available()[0];if(t)onSelect({kind:'trip',id:t.id});}else back();}
     if(action==='size'){view.height=view.height==='half'?'full':'half';render();}
     if(action==='replay-range')void replay(getYear()!=null?{type:'year',year:getYear()}:getScope()).catch(error=>window.alert(error.message));
@@ -127,6 +134,6 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   handle.addEventListener('pointerdown',e=>{start=e.clientY;root.classList.add('dragging');handle.setPointerCapture(e.pointerId);});
   handle.addEventListener('pointermove',e=>{if(start==null)return;const d=e.clientY-start;root.style.setProperty('--drag',(d>0?d:d*.3).toFixed(1)+'px');});
   handle.addEventListener('pointercancel',()=>{start=null;settle();});
-  handle.addEventListener('pointerup',e=>{if(start==null)return;const delta=start-e.clientY;start=null;settle();if(Math.abs(delta)>35)suppressedUntil=performance.now()+400;if(delta>35){if(view.mode==='peek'){const t=available()[0];if(t)onSelect({kind:'trip',id:t.id});}else{view.height='full';onPause();render();}}else if(delta< -35)back();});
-  return {featured:()=>available()[0]?.id||null,openCities(cities){push();view={mode:'cities',height:'half',target:null,cities};onPause();render();},render,selected,changed,modeChanged,reset,back,replay,restoreReplay,escape(){if(view.mode==='peek')return false;if(view.mode==='record'){recordCard.escape();}else back();return true;},get state(){return structuredClone(view);}};
+  handle.addEventListener('pointerup',e=>{if(start==null)return;const delta=start-e.clientY;start=null;settle();if(hosted)return;if(Math.abs(delta)>35)suppressedUntil=performance.now()+400;if(delta>35){if(view.mode==='peek'){const t=available()[0];if(t)onSelect({kind:'trip',id:t.id});}else{view.height='full';onPause();render();}}else if(delta< -35)back();});
+  return {host,release,get hosting(){return !!hosted;},featured:()=>available()[0]?.id||null,openCities(cities){push();view={mode:'cities',height:'half',target:null,cities};onPause();render();},render,selected,changed,modeChanged,reset,back,replay,restoreReplay,escape(){if(hosted){hosted.onEscape?.();return true;}if(view.mode==='peek')return false;if(view.mode==='record'){recordCard.escape();}else back();return true;},get state(){return structuredClone(view);}};
 }

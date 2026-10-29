@@ -596,7 +596,13 @@ body:has(#timeline.has-chapters) #card,body:has(#timeline.has-chapters) #list { 
 .auto-result { margin:4px 0 0; font-size:17px; text-align:center; }
 .auto-result b { font-size:24px; color:var(--accent); margin:0 2px; }
 .auto-error { margin:0; color:var(--bad); font-size:14px; }
-#photo-dialog .photo-auto .auto-main { justify-content:center; text-align:center; }
+#photo-dialog .photo-auto .auto-main { display:flex; align-items:center; justify-content:center; text-align:center; }
+.auto-why { font-size:13px; color:var(--faint); }
+/* While photos are read the dialog becomes a strip at the bottom; the globe behind it lights up. */
+#photo-dialog.scanning { margin:auto auto max(16px,env(safe-area-inset-bottom)); width:min(460px,calc(100vw - 24px)); }
+#photo-dialog.scanning::backdrop { background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
+#photo-dialog.scanning .photo-auto { gap:8px; padding:14px 18px 12px; }
+#photo-dialog.scanning .dlg-head { padding-top:12px; padding-bottom:0; border:0; }
 
 /* One bottom card for private city, journey and life-stage records. */
 #card.record-card { top:auto; bottom:150px; left:34px; width:min(440px,calc(100vw - 68px)); max-height:min(540px,52dvh); padding:16px; display:flex; flex-direction:column; overflow:hidden; }

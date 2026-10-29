@@ -13,7 +13,7 @@ export class WebAutoImport {
   if(this.running)throw new Error('正在导入');if(this.service.readOnly)throw new Error('示例不能保存照片');
   this.running=true;this.controller=new AbortController();const {signal}=this.controller;
   try{
-   const batch=await this.service.scanner.scan(files,{resumeBatchId,automatic:true,onProgress:p=>onProgress({phase:'reading',scanned:p.processed,total:p.total})});
+   const batch=await this.service.scanner.scan(files,{resumeBatchId,automatic:true,onProgress:p=>onProgress({phase:'reading',scanned:p.processed,total:p.total,points:p.asset?.coordinates?[p.asset.coordinates]:[]})});
    if(batch.status==='cancelled')throw new DOMException('已取消','AbortError');signal.throwIfAborted();
    const assets=await this.service.assetsFor(batch),rows=assets.filter(a=>a.processingStatus==='analyzed'&&a.coordinates&&a.extractedTime).map(a=>({uri:'media:'+a.assetId,title:a.originalFile.name,...a.coordinates,local:a.extractedTime.localDateTime,offsetMinutes:a.extractedTime.offsetMinutes,takenMs:a.extractedTime.utcEpochMs}));
    const previous=this.repository.getDataset(),known=new Set(previous.memories.map(m=>m.uri)),outdated=this.outdated(),fresh=rows.filter(r=>!known.has(r.uri));

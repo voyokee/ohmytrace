@@ -4,7 +4,8 @@ const publicViewer=document.body.hasAttribute('data-story-viewer');
 const {createLifeBridge}=publicViewer?{}:await import('./src/life/app-bridge.js');
 const {mountChapterUI}=publicViewer?{}:await import('./src/life/chapter-ui.js');
 const {FirstUseService}=publicViewer?{}:await import('./src/life/first-use.js');
-const {mountFirstUse}=publicViewer?{}:await import('./src/life/first-use-ui.js');
+const {mountEarthFirstUse}=publicViewer?{}:await import('./src/ui/earth-first-use.js');
+const {createScanPreview}=publicViewer?{}:await import('./src/life/media/scan-preview.js');
 const {mountRecordCard,recordCardModel}=publicViewer?{}:await import('./src/life/record-card.js');
 const {mountStoryExperience}=await import('./src/life/story/app-integration.js');
 const {visualContext}=await import('./src/life/story/schema.js');
@@ -239,18 +240,20 @@ async function load() {
         stopPlay();await life.restore(text);await backupGuide.importCommitted(life.repository.getDataset());life.adapter.setScope({type:'all'});state.year=null;state.sel=null;refresh();sampleHeights();geocodeMissing();toast('人生记录已恢复');}});
     life.repository.subscribe(()=>{if(viewer)refresh();});
     firstUse=new FirstUseService(life.repository,life.edits);
-    firstUseUI=mountFirstUse({service:firstUse,reducedMotion,autoIntro:false,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
+    firstUseUI=mountEarthFirstUse({service:firstUse,earthHome:{host:f=>earthHome.host(f),release:()=>earthHome.release(),render:()=>earthHome.render(),get hosting(){return earthHome.hosting;}},reducedMotion,onOpenChapter:id=>{openRecord({kind:'chapter',id});recordCard.edit();},onShareYear:year=>storyExperience?.composer.open({source:{type:'year',year}}),onIntro:done=>{if(storyExperience)return storyExperience.intro(done);done();}});
     const photos=new PhotoHistoryService(life.repository,{readOnly:!!sceneDemo});
     // The dialog covers the globe while a scan runs; pausing its render loop keeps
     // worker replies and storage commits from queueing behind globe frames.
     let photoPausedLoop=false;
-    const onScanning=active=>{if(!viewer)return;
-      if(active&&viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}
-      else if(!active&&photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}};
-    photoUI=mountPhotoUI({service:photos,download,onScanning,onError:error=>toast('照片处理失败：'+error.message,6000),
+    const onScanning=active=>{body.classList.toggle('photo-scanning',active);if(!viewer)return;
+      if(active){scanPreview.reset();if(viewer.useDefaultRenderLoop){photoPausedLoop=true;viewer.useDefaultRenderLoop=false;}}
+      else{scanPreview.clear();if(photoPausedLoop){photoPausedLoop=false;viewer.useDefaultRenderLoop=true;scene?.requestRender();}}};
+    // Set by the first automatic import; the reveal waits until the import dialog is dismissed.
+    let revealPending=false;
+    photoUI=mountPhotoUI({service:photos,download,onScanning,onPreview:points=>scanPreview.add(points),onError:error=>toast('照片处理失败：'+error.message,6000),
       onBackupSaved:(data,bytes)=>{backupGuide.markBackup(data,bytes);myPanel?.render();},
-      onImportFinished:()=>toast('照片已整理，可在地球上查看旅行'),
-      onCommitted:async result=>{if(result.automatic)await firstUse.prepare();await backupGuide.importCommitted(life.repository.getDataset());recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();myPanel?.render();earthHome?.reset();toast('已补充照片与旅行记录');}});
+      onImportFinished:()=>{const auto=revealPending;revealPending=false;if(!firstUseUI.present({auto}))toast('照片已整理，可在地球上查看旅行');},
+      onCommitted:async result=>{if(result.automatic){const started=!!firstUse.view();await firstUse.prepare();revealPending=!started&&!!firstUse.view();}await backupGuide.importCommitted(life.repository.getDataset());recordCard?.close();stopPlay();mapChooser?.close();state.city=null;state.sel=null;state.year=null;life.adapter.setScope({type:'all'});refresh();sampleHeights();myPanel?.render();earthHome?.reset();toast('已补充照片与旅行记录');}});
     myPanel=mountMyPanel({repository:life.repository,guide:backupGuide,backup:()=>photoUI.backup(),restore:()=>photoUI.open({storage:true}),onData:tab=>openModal(tab),onError:error=>toast(error.message,6000)});
     recordCard=mountRecordCard({element:$('#card'),repository:life.repository,edits:life.edits,getYear:()=>state.year,getScope:()=>life.adapter.scope,compact:true,titleFor:earthTripTitle,onMode:mode=>earthHome?.modeChanged(mode),
       onClose:()=>earthHome?earthHome.back():deselect({home:false}),onSelect:target=>openRecord(target),onChange:target=>{earthHome?.changed(target);syncRecordSelection(target);},
@@ -1144,6 +1147,38 @@ async function buildVegetation(name, token, signal) {
 }
 
 
+/* ---------- scan preview: places light up while photos are still being read ---------- */
+
+// The import holds the render loop for worker throughput, so frames are drawn here on demand,
+// at most four a second. Points are a preview only; the real markers replace them on commit.
+const scanPreview=(()=>{
+  let cells=null,points=null,timer=0,last=0;
+  const occluder=new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84,Cesium.Cartesian3.ZERO);
+  const color=Cesium.Color.fromCssColorString('#ffb547'),outline=Cesium.Color.fromCssColorString('#1c1306');
+  const draw=()=>{
+    timer=0;last=performance.now();if(!viewer||viewer.isDestroyed()||!points)return;
+    occluder.cameraPosition=viewer.camera.positionWC;
+    for(let i=0;i<points.length;i++){const p=points.get(i);p.show=occluder.isPointVisible(p.position);}
+    scene.requestRender();if(!viewer.useDefaultRenderLoop)viewer.render();
+  };
+  return {
+    reset(){this.clear();cells=createScanPreview();},
+    /** Returns how many distinct places the current scan has found so far. */
+    add(list){
+      if(!viewer||!cells)return cells?.size||0;
+      let added=false;
+      for(const o of list){
+        if(!cells.add(o.latitude,o.longitude))continue;
+        points??=scene.primitives.add(new Cesium.PointPrimitiveCollection());
+        points.add({position:Cesium.Cartesian3.fromDegrees(o.longitude,o.latitude,0),pixelSize:7,color,outlineColor:outline,outlineWidth:1.5,disableDepthTestDistance:Number.POSITIVE_INFINITY});added=true;
+      }
+      if(added){viewer.canvas.dataset.scanPoints=String(cells.size);if(!timer)timer=setTimeout(draw,Math.max(0,250-(performance.now()-last)));}
+      return cells.size;
+    },
+    clear(){clearTimeout(timer);timer=0;if(points){scene.primitives.remove(points);points=null;}cells=null;},
+  };
+})();
+
 /* ---------- footprint overlay ---------- */
 
 function markerObstacles() {
@@ -1826,7 +1861,7 @@ async function onPlaceAction(act, card, btn) {
 /* ================= events ================= */
 
 function bindEvents() {
-  document.addEventListener('earth-confirm',()=>{if(!firstUseUI?.open({resume:true}))lifeUI?.open();});
+  document.addEventListener('earth-confirm',()=>{if(!firstUseUI?.present({resume:true}))lifeUI?.open();});
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-act],[data-id],[data-year],[data-place],[data-tab]');
     if (!t) return;
@@ -1960,6 +1995,9 @@ async function boot() {
     }});
   renderChips();
   earthHome?.render();
+  // An unfinished first use resumes where it stopped; one never started still gets its replay.
+  const pendingFirstUse=firstUse?.view();
+  if(pendingFirstUse&&!pendingFirstUse.finished&&!document.querySelector('dialog[open]'))firstUseUI.present({resume:true,auto:!pendingFirstUse.answered});
 }
 
 await boot();

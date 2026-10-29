@@ -91,6 +91,30 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-time-options button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);font-weight:600;}
 .earth-muted{font-size:var(--t-sm);color:var(--muted);}
 
+/* While photos are read, only the scan strip and the lighting globe are shown. */
+.earth-home.photo-scanning #earth-sheet,.earth-home.photo-scanning #btn-home{visibility:hidden;}
+
+/* ---------- first use inside the sheet ---------- */
+.earth-first{padding:var(--s2) var(--s5) var(--s5);display:flex;flex-direction:column;gap:var(--s3);}
+.earth-first-kicker{margin:0;font-size:var(--t-xs);color:var(--muted);}
+.earth-first h2{margin:0;font:650 var(--t-xl)/1.35 var(--sans);}
+.earth-first .earth-muted{margin:0;line-height:1.6;}
+.earth-first-counts{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);margin:0;font-size:var(--t-sm);color:var(--muted);}
+.earth-first-counts b{font-size:28px;font-weight:650;color:var(--text);margin-right:4px;font-variant-numeric:tabular-nums;}
+.earth-first-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s1);}
+.earth-first-button{min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-raised);color:var(--text);font-size:var(--t-md);}
+.earth-first-button:hover{background:var(--surface-press);}
+.earth-first-link{align-self:flex-start;min-height:36px;color:var(--muted);font-size:var(--t-sm);text-decoration:underline;}
+.earth-first-field{display:flex;flex-direction:column;gap:6px;font-size:var(--t-sm);color:var(--muted);}
+.earth-first-field select{min-height:42px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);padding:0 var(--s3);font:inherit;}
+.first-drafts{display:flex;flex-direction:column;}
+.earth-first-draft{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:56px;padding:var(--s2) 0;text-align:left;box-shadow:0 1px 0 var(--line);}
+.earth-first-draft strong{font-size:var(--t-md);font-weight:550;}
+.earth-first-draft small{font-size:var(--t-xs);color:var(--muted);}
+.earth-first-draft:hover strong{color:var(--accent);}
+.earth-first-error{margin:0;color:var(--bad);font-size:var(--t-sm);}
+.earth-first button:disabled{opacity:.5;}
+
 /* ---------- record card inside the sheet ---------- */
 .earth-home #earth-sheet #card{position:static;display:flex;flex-direction:column;transform:none;inset:auto;width:100%;max-width:none;min-height:0;max-height:none;opacity:1;padding:0 var(--s5) var(--s4);background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--text);flex:1;border-radius:0;overflow:hidden;}
 .earth-home #earth-sheet #card:not(.show){display:none;}

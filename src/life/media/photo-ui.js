@@ -29,7 +29,7 @@ export function batchSummary(assets){
     failed:assets.filter(a=>['error','unsupported','oversize'].includes(a.processingStatus)).length,possibleDuplicates:assets.filter(a=>a.possibleDuplicateAssetIds?.length).length,noTime:images.filter(a=>!a.extractedTime).length};
 }
 
-export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},onImportFinished=()=>{},onBackupSaved=()=>{},download}) {
+export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanning=()=>{},onPreview=()=>0,onImportFinished=()=>{},onBackupSaved=()=>{},download}) {
   const native=androidPhotoCapability(),nativeImporter=native?new AndroidLibraryImporter(service,native):null;
   // In the Android app the whole flow is one button: read the album, drop what has no
   // usable location, group by city and save. The reviewable file flow stays for the Web.
@@ -114,18 +114,21 @@ export function mountPhotoUI({service,onCommitted=()=>{},onError=()=>{},onScanni
     const s=autoState,again=autoImporter.hasImported(),legacy=autoImporter.hasLegacy(),regroup=autoImporter.outdated(),reading=['reading','placing','previews'].includes(s?.phase);
     const body=reading?`<div class="auto-progress"><div class="auto-bar"><span data-auto-bar></span></div><p data-auto-status></p></div><button class="auto-link" type="button" data-photo-auto-cancel>取消</button>`
       :s?.phase==='done'?`<p class="auto-result">${s.summary.regrouped?'已重新整理足迹，手动修改已保留':s.summary.newTrips||s.summary.newPlaces?`新增 <b>${s.summary.newTrips}</b> 次旅行 · <b>${s.summary.newPlaces}</b> 个地方`:s.summary.photos?'已补充到原有的旅行里':'没有发现新的足迹'}</p><button class="btn primary auto-main" type="button" data-photo-auto-done>去地球上看看</button>`
-      :`<p class="auto-intro">${regroup?'整理规则已更新：修正边境与沿海地名，识别机场和路过停留，并按城市命名旅程。可用已保存的照片记录重新整理，保留手动分类、标题和拆分。':legacy?'之前导入的照片足迹会按城市重新整理，保留手动修改。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。原图不会上传或复制，只在本机保存记录和小预览图。'}</p>${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}${native?`<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>`:`<label class="btn primary auto-main">选择照片<input type="file" data-photo-auto-files multiple accept="image/*,.heic,.heif,.zip" hidden></label>${folderSupported?'<label class="auto-link">选择照片文件夹<input type="file" data-photo-auto-folder webkitdirectory multiple hidden></label>':''}${webResume?'<label class="auto-link">继续上次导入（重新选择同一批原图）<input type="file" data-photo-auto-resume multiple accept="image/*,.heic,.heif" hidden></label>':''}`}${again?'<button class="auto-link" type="button" data-photo-auto-regroup>重新整理足迹</button>':''}`;
+      :`<p class="auto-intro">${regroup?'整理规则已更新：修正边境与沿海地名，识别机场和路过停留，并按城市命名旅程。可用已保存的照片记录重新整理，保留手动分类、标题和拆分。':legacy?'之前导入的照片足迹会按城市重新整理，保留手动修改。':again?'只会补充新拍的照片。':'读取照片里的拍摄地点和时间，自动整理成你去过的地方。原图不会上传或复制，只在本机保存记录和小预览图。'}</p>${!again&&!legacy&&!regroup?'<p class="auto-intro auto-why">需要读取照片里的拍摄位置，用来把照片放到城市上；不会持续定位，也不会上传位置。</p>':''}${s?.phase==='error'?`<p class="auto-error" role="alert">${esc(s.message)}</p>`:''}${native?`<button class="btn primary auto-main" type="button" data-photo-auto-start>${legacy?'重新整理并导入':again?'导入新照片':'开始导入'}</button>`:`<label class="btn primary auto-main">选择照片<input type="file" data-photo-auto-files multiple accept="image/*,.heic,.heif,.zip" hidden></label>${folderSupported?'<label class="auto-link">选择照片文件夹<input type="file" data-photo-auto-folder webkitdirectory multiple hidden></label>':''}${webResume?'<label class="auto-link">继续上次导入（重新选择同一批原图）<input type="file" data-photo-auto-resume multiple accept="image/*,.heic,.heif" hidden></label>':''}`}${again?'<button class="auto-link" type="button" data-photo-auto-regroup>重新整理足迹</button>':''}`;
+    // While reading, the dialog shrinks to a strip so places can light up on the globe behind it.
+    dialog.classList.toggle('scanning',reading);
     dialog.innerHTML=`<div class="dlg-head"><h3>从相册开始</h3><button class="x" type="button" data-photo-close aria-label="关闭">×</button></div><div class="dlg-body photo-auto">${body}${!reading?'<div class="photo-footer"><button data-photo-manage>备份与存储</button><button data-photo-auto-advanced>高级导入与记录</button></div>':''}</div>`;
     paintAuto();
   }
   function paintAuto(){
     const s=autoState,bar=dialog.querySelector('[data-auto-bar]'),status=dialog.querySelector('[data-auto-status]');if(!bar||!status)return;
     const pct=['placing','previews'].includes(s.phase)?100:s.total?Math.min(99,Math.round(s.scanned/s.total*100)):4;bar.style.width=pct+'%';
-    status.textContent=s.phase==='previews'?`正在保留本机小预览图 ${s.scanned} / ${s.total}`:s.phase==='placing'?'正在整理去过的地方…':s.total?`正在读取照片 ${s.scanned.toLocaleString()} / ${s.total.toLocaleString()}`:'正在读取照片…';
+    const found=s.found?` · 已发现 ${s.found} 个地方`:'';
+    status.textContent=s.phase==='previews'?`正在保留本机小预览图 ${s.scanned} / ${s.total}`:s.phase==='placing'?'正在整理去过的地方…':(s.total?`正在读取照片 ${s.scanned.toLocaleString()} / ${s.total.toLocaleString()}`:'正在读取照片…')+found;
   }
   async function startAuto({regroup=false,files,resumeBatchId=null}={}){
     if(autoImporter.running)return;autoState={phase:'reading',scanned:0,total:null};renderAuto();onScanning(true);
-    try{const summary=await autoImporter[regroup?'regroup':'run']({files,resumeBatchId,onProgress:p=>{autoState={...autoState,...p};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
+    try{const summary=await autoImporter[regroup?'regroup':'run']({files,resumeBatchId,onProgress:({points,...p})=>{const found=points?.length?onPreview(points):autoState.found;autoState={...autoState,...p,found};if(dialog.querySelector('[data-auto-bar]'))paintAuto();else renderAuto();}});
       autoState={phase:'done',summary};await onCommitted({tripId:null,automatic:true,summary});}
     catch(error){autoState=error?.name==='AbortError'?null:{phase:'error',message:plain(error)};}
     finally{onScanning(false);if(dialog.open)renderAuto();}

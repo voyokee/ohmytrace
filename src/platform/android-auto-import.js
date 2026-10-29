@@ -51,7 +51,8 @@ export class AndroidAutoImport {
         if(Number.isInteger(page.total))total=page.total;scanned+=page.scanned;checkpoint=page.checkpoint;cursor=page.cursor;
         const device=deviceOf(page.scopeId||page.checkpoint?.scopeId);
         for(const [volume,id,latitude,longitude,local,offsetMinutes,takenMs] of page.located){const raw=`android-media:${volume}/${id}`,ownedLegacy=knownUris.has(raw)&&!foreign.has(raw)&&device&&device===priorDevice;rows.push({uri:device&&!ownedLegacy?`android-media:${device}@${volume}/${id}`:raw,latitude,longitude,local,offsetMinutes,takenMs});}
-        onProgress({phase:'reading',scanned,total});
+        // Coordinates only light a preview; nothing is saved until the whole scan is grouped.
+        onProgress({phase:'reading',scanned,total,points:page.located.map(([,,latitude,longitude])=>({latitude,longitude}))});
       }while(cursor);
       const known=new Set(this.repository.getDataset().memories.map(m=>m.uri)),fresh=rows.filter(r=>!known.has(r.uri));
       onProgress({phase:'placing',scanned,total});
