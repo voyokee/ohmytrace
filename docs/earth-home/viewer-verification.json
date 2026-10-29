@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "packagedRuntime": false,
+  "viewport": "390x844",
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "hasTouch": true,
+  "fullLifePlayback": true,
+  "nativeTouchExploration": true,
+  "photoMemory": true,
+  "storageReads": 0,
+  "externalResourcesBlocked": true,
+  "pageErrors": [],
+  "physicalDeviceTest": false
+}

@@ -18,6 +18,8 @@ export function mountMyPanel({repository,guide,backup,restore,onData,onError=()=
  button.addEventListener('click',()=>void open());
  element.addEventListener('click',async event=>{
   const target=event.target.closest('button');if(!target)return;
+  if(target.hasAttribute('data-my-photos')){close();document.querySelector('#btn-photos').click();return;}
+  if(target.hasAttribute('data-my-confirm')){close();document.dispatchEvent(new CustomEvent('earth-confirm'));return;}
   if(target.hasAttribute('data-my-close')){close();return;}
   if(['btn-life','btn-tone','btn-data','btn-list'].includes(target.id)){close();return;}
   if(target.dataset.myData){close();onData(target.dataset.myData);return;}

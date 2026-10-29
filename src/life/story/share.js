@@ -1,4 +1,4 @@
-import {clone,validateDataset,validatePeriod} from '../schema.js';
+import {clone,validateDataset,validatePeriod,dateBound} from '../schema.js';
 import {validateStory,validateScene,keys,list,ids,text,memoryInStory} from './schema.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from '../travel-policy.js';
 import {photoPlaceName} from '../geocoding/region-policy.js';
@@ -10,9 +10,10 @@ export const COORDINATE_RULE='0.1-degree-grid (~11 km latitude); not an administ
 export function projectShare(data,story,{images={}}={}){
   validateDataset(data);validateStory(story);
   const policy=story.privacySettings;
-  const sceneStops=new Set(story.orderedScenes.filter(s=>s.kind==='place'&&s.tripId).map(s=>s.tripId+'|'+s.placeId));
+  const sceneStops=story.orderedScenes.filter(s=>s.kind==='place'&&s.tripId);
+  const stopMatches=(t,v)=>sceneStops.some(s=>s.tripId===t.id&&s.placeId===v.placeId&&(dateBound(v.start)??-Infinity)<=(dateBound(s.end,true)??Infinity)&&(dateBound(v.end,true)??Infinity)>=(dateBound(s.start)??-Infinity));
   const chapters=data.chapters.filter(c=>!c.hidden&&story.selectedChapterIds.includes(c.id)).map(c=>({...c,homeAnchors:c.homeAnchors.filter(id=>visiblePlace(data,id))}));
-  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>{const v=data.visits.find(v=>v.id===id);return visitCountsAsTravel(data,v,t)&&sceneStops.has(t.id+'|'+v.placeId);})}));
+  const trips=data.trips.filter(t=>tripCountsAsTravel(data,t)&&story.selectedTripIds.includes(t.id)&&!policy.excludedTripIds.includes(t.id)).map(t=>({...t,visitIds:t.visitIds.filter(id=>{const v=data.visits.find(v=>v.id===id);return visitCountsAsTravel(data,v,t)&&stopMatches(t,v);})}));
   if(story.selectedChapterIds.some(id=>!data.chapters.some(c=>c.id===id))||story.selectedTripIds.some(id=>!data.trips.some(t=>t.id===id)))throw new Error('原始人生记录已改变，请重新生成故事');
   if(story.selectedChapterIds.some(id=>data.chapters.find(c=>c.id===id)?.hidden)||story.selectedTripIds.some(id=>!tripCountsAsTravel(data,data.trips.find(t=>t.id===id))))throw new Error('原始人生记录已改变，请重新生成故事');
   const selectedMemories=data.memories.filter(m=>!m.hidden&&story.includedMemories.includes(m.id)&&!policy.excludedMemoryIds.includes(m.id)&&

@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
 <link rel="stylesheet" href="styles.css?v=20261027-app-toolbar">
 <link rel="stylesheet" href="src/life/story/story.css?v=20261026-story">
+<link rel="stylesheet" href="src/ui/earth-home.css">
 <script>window.CESIUM_BASE_URL = 'vendor/cesium/';</script>
 <script src="vendor/cesium/Cesium.js" defer></script>
 <script src="app.js?v=20261027-app-toolbar" defer></script>
@@ -35,6 +36,7 @@
 <dialog id="my-dialog" class="dialog glass my-panel" aria-label="我的">
   <div class="dlg-head"><h2>我的</h2><button class="x" type="button" data-my-close aria-label="关闭我的">×</button></div>
   <div class="dlg-body scroll">
+    <section data-my-section="photos"><h3>照片与旅行</h3><button class="btn" type="button" data-my-photos>添加照片</button><button class="btn" type="button" data-my-confirm>确认居住与人生阶段</button></section>
     <section data-my-section="backup"><h3>备份与恢复</h3><p class="hint" data-my-backup-status></p><p class="hint" data-my-storage></p><div class="row-actions"><button class="btn" type="button" data-my-backup>完整备份</button><button class="btn" type="button" data-my-restore>从备份恢复</button><button class="btn" type="button" data-my-later hidden>稍后</button></div></section>
     <section data-my-section="export"><h3>导出</h3><label>范围 <select data-my-range aria-label="导出范围"><option value="all">全部</option></select></label><div class="row-actions"><button class="btn" type="button" data-my-export="geojson">地图文件（GeoJSON）</button><button class="btn" type="button" data-my-export="gpx">路线文件（GPX）</button></div><p class="hint">连接顺序来自记录，实际经过路径未知。</p></section>
     <section data-my-section="life"><h3>人生阶段</h3><button id="btn-life" class="btn" type="button" aria-label="人生阶段">管理人生阶段</button></section>

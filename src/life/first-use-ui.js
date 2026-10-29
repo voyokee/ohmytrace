@@ -1,6 +1,6 @@
 const date=d=>d.precision==='ongoing'?'现在':d.precision==='unknown'?'时间待确认':d.value.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1 年 $2 月 $3 日').replace(/^(\d{4})-(\d{2})$/,'$1 年 $2 月').replace(/^(\d{4})$/,'$1 年');
 const node=(tag,text,attrs={})=>{const el=document.createElement(tag);if(text)el.textContent=text;for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);return el;};
-export function mountFirstUse({service,onOpenChapter,onShareYear,onIntro=null,reducedMotion=false}){
+export function mountFirstUse({service,onOpenChapter,onShareYear,onIntro=null,reducedMotion=false,autoIntro=true}){
  const dialog=node('dialog','',{id:'first-use-dialog',class:'dialog glass','aria-label':'确认你的人生阶段'});document.body.append(dialog);
  let mode='reveal',busy=false,changing=false,error='',timer=null,generation=0;
  const button=(text,action,primary=false)=>node('button',text,{'data-first-action':action,type:'button',class:primary?'btn primary':'btn'});
@@ -37,5 +37,5 @@ export function mountFirstUse({service,onOpenChapter,onShareYear,onIntro=null,re
   }catch(e){error=e.message;}finally{busy=false;if(dialog.open)render();}
  });
  dialog.addEventListener('cancel',e=>{e.preventDefault();if(!busy)void finish().catch(e=>{error=e.message;render();});});
- return {open({resume=false}={}){const v=service.view();if(!v||v.finished)return false;stop();mode=resume&&v.answered?'questions':'reveal';changing=false;error='';render();if(!dialog.open)dialog.showModal();if(mode==='reveal'&&!reducedMotion&&onIntro&&v.counts.cities){const ticket=generation;timer=setTimeout(()=>{if(ticket===generation&&dialog.open)void intro().catch(e=>{error=e.message;if(!dialog.open)dialog.showModal();render();});},1200);}return true;},get isOpen(){return dialog.open;},dispose(){stop();dialog.remove();}};
+ return {open({resume=false}={}){const v=service.view();if(!v||v.finished)return false;stop();mode=resume&&v.answered?'questions':'reveal';changing=false;error='';render();if(!dialog.open)dialog.showModal();if(autoIntro&&mode==='reveal'&&!reducedMotion&&onIntro&&v.counts.cities){const ticket=generation;timer=setTimeout(()=>{if(ticket===generation&&dialog.open)void intro().catch(e=>{error=e.message;if(!dialog.open)dialog.showModal();render();});},1200);}return true;},get isOpen(){return dialog.open;},dispose(){stop();dialog.remove();}};
 }

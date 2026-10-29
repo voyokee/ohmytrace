@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "productionRuntime": true,
+  "browser": "156.0.8078.48",
+  "viewports": [
+    "390×844",
+    "320×568",
+    "1440×1000"
+  ],
+  "flows": [
+    "home/detail/photos/large-photo/back",
+    "directory/search/select/restore",
+    "year/city/visit/trip/back",
+    "chapter/city",
+    "rename/split/undo",
+    "scoped-share",
+    "replay/gallery-scroll-restore",
+    "handle-drag",
+    "my/add-photo-entry"
+  ],
+  "data": "fictional records and generated thumbnail fixtures",
+  "androidDeviceEvidence": false,
+  "buildId": "3c56ca88b84aefeb91cc426605b353050ddc5fdfcbe48ae79052e4cbf9a6eb62"
+}

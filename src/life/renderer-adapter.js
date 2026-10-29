@@ -1,7 +1,7 @@
 import {clone,dateBound,validateDataset} from './schema.js';
 import {datasetRows} from './legacy.js';
 import {tripCountsAsTravel,visitCountsAsTravel,placeCountsAsVisited,visiblePlace,memoryVisibleOnMap} from './travel-policy.js';
-import {photoPlaceName,normalizeRegion} from './geocoding/region-policy.js';
+import {photoPlaceName,normalizeRegion,cityIdentity} from './geocoding/region-policy.js';
 import {readTripTitle} from './media/journey-title.js';
 
 const format=d=>d.precision==='unknown'?'未知':d.precision==='ongoing'?'至今':d.value;
@@ -19,14 +19,17 @@ function inYear(item,year) {
 }
 export function projectDataset(data,scope={type:'all'}) {
   validateDataset(data);
-  const keys=new Map(),used=new Set();
+  const keys=new Map(),used=new Set(),identities=new Map(),canonical=new Map();
+  for(const p of data.places.filter(p=>!p.hidden)){const key=cityIdentity(p);if(!identities.has(key))identities.set(key,p.id);canonical.set(p.id,identities.get(key));}
   for(const p of data.places) {
+    const representative=canonical.get(p.id);
+    if(representative&&representative!==p.id){keys.set(p.id,keys.get(representative));continue;}
     const name=photoPlaceName(p,data);let key=name;
     if(used.has(key)){let i=2;while(used.has(`${name} · ${i}`))i++;key=`${name} · ${i}`;}
     used.add(key);keys.set(p.id,key);
   }
   const places=Object.create(null),placeIds=Object.create(null);
-  for(const p of data.places){const key=keys.get(p.id),city=p.location?.photoCity,region=city&&normalizeRegion({...city,admin1:city.region});placeIds[key]=p.id;places[key]={...clone(p.location),...(city?{photoCity:{...city,country:region.country,sovereignCode:region.sovereignCode,region:region.admin1}}:{}),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
+  for(const p of data.places){if(canonical.get(p.id)&&canonical.get(p.id)!==p.id)continue;const key=keys.get(p.id),city=p.location?.photoCity,region=city&&normalizeRegion({...city,admin1:city.region});placeIds[key]=p.id;places[key]={...clone(p.location),...(city?{photoCity:{...city,country:region.country,sovereignCode:region.sovereignCode,region:region.admin1}}:{}),...(p.coordinates?{lat:p.coordinates.latitude,lon:p.coordinates.longitude}:{}),lifePlaceId:p.id,sourceName:p.name};}
   const visits=new Map(data.visits.map(v=>[v.id,v]));
   const photoTrips=new Set(data.memories.filter(m=>m.kind==='photo').flatMap(m=>m.tripIds));
   let trips=data.trips.filter(t=>!t.hidden&&t.visitIds.some(id=>{const v=visits.get(id);return !v.hidden&&visiblePlace(data,v.placeId);})).map(t=>{

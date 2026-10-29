@@ -273,3 +273,9 @@ export function photoPlaceName(place,data){
  const r=normalizeRegion({country:city.country,countryCode:city.countryCode,admin1:city.region});
  return place.name===city.country?r.country:place.name===city.region?r.admin1:regionOf(place.name).displayName;
 }
+// Only a trusted administrative identity can unite aliases. A shared name or
+// nearby coordinates cannot prove that two records describe the same city.
+export function cityIdentity(place){
+  const city=place?.location?.photoCity;
+  return city?.key ? JSON.stringify([city.countryCode||city.country||'',city.region||'',city.key]) : 'place:'+place?.id;
+}

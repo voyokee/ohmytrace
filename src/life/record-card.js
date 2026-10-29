@@ -1,39 +1,42 @@
 import {clone,dateBound} from './schema.js';
 import {sourceSummary} from './edits.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from './travel-policy.js';
-import {photoPlaceName,photoRegion} from './geocoding/region-policy.js';
+import {photoPlaceName,photoRegion,cityIdentity} from './geocoding/region-policy.js';
 import {readTripTitle} from './media/journey-title.js';
 
 const collections={place:'places',trip:'trips',residence:'residences',chapter:'chapters'};
 const dateText=d=>!d||d.precision==='unknown'?'日期待确认':d.precision==='ongoing'?'至今':d.value;
 const period=e=>dateText(e.start)+(e.start?.value===e.end?.value&&e.start?.precision===e.end?.precision?'':' — '+dateText(e.end));
 const overlaps=(a,b)=>(dateBound(a.start)??-Infinity)<=(dateBound(b.end,true)??Infinity)&&(dateBound(a.end,true)??Infinity)>=(dateBound(b.start)??-Infinity);
-export function recordCardModel(data,target,{year=null}={}){
+export function recordCardModel(data,target,{year=null,scope:browsingScope=null}={}){
   const key=collections[target?.kind],entity=key&&data[key].find(e=>e.id===target.id&&!e.hidden);
   if(!entity)return null;
   const placeName=id=>photoPlaceName(data.places.find(p=>p.id===id),data);
   const inYear=e=>year===null||overlaps(e,{start:{precision:'year',value:String(year)},end:{precision:'year',value:String(year)}});
+  const chapter=browsingScope?.type==='chapter'?data.chapters.find(c=>c.id===browsingScope.id&&!c.hidden):null;
+  const inStage=e=>!chapter||overlaps(e,chapter);
+  const aliases=new Set(target.kind==='place'?data.places.filter(p=>!p.hidden&&cityIdentity(p)===cityIdentity(entity)).map(p=>p.id):[]);
   const placeId=target.kind==='place'?entity.id:target.kind==='residence'?entity.placeId:null;
   const visits=data.visits.filter(v=>!v.hidden&&visiblePlace(data,v.placeId));
-  const relevant=target.kind==='place'?visits.filter(v=>v.placeId===placeId&&inYear(v)):target.kind==='trip'?visits.filter(v=>entity.visitIds.includes(v.id)):target.kind==='residence'?visits.filter(v=>v.placeId===placeId&&overlaps(v,entity)):visits.filter(v=>entity.relatedTripIds.includes(v.tripId));
+  const relevant=target.kind==='place'?visits.filter(v=>aliases.has(v.placeId)&&inYear(v)&&inStage(v)&&(!chapter||chapter.relatedTripIds.includes(v.tripId)||chapter.homeAnchors.some(id=>aliases.has(id)))):target.kind==='trip'?visits.filter(v=>entity.visitIds.includes(v.id)&&inYear(v)&&inStage(v)):target.kind==='residence'?visits.filter(v=>v.placeId===placeId&&overlaps(v,entity)):visits.filter(v=>entity.relatedTripIds.includes(v.tripId));
   const relatedIds=new Set(relevant.map(v=>v.tripId).filter(Boolean));
   const journeys=data.trips.filter(t=>!t.hidden&&(target.kind==='chapter'?entity.relatedTripIds.includes(t.id):target.kind==='trip'?t.id===entity.id:relatedIds.has(t.id))).sort((a,b)=>(dateBound(b.start)??-Infinity)-(dateBound(a.start)??-Infinity));
   const traveled=t=>tripCountsAsTravel(data,t)&&(target.kind!=='place'||relevant.some(v=>v.tripId===t.id&&visitCountsAsTravel(data,v,t)));
-  const photos=data.memories.filter(m=>m.kind==='photo'&&!m.hidden&&inYear(m)&&(target.kind==='place'?m.placeIds.includes(placeId):target.kind==='trip'?m.tripIds.includes(entity.id):target.kind==='residence'?m.placeIds.includes(placeId)&&overlaps(m,entity):entity.memoryIds.includes(m.id)||m.tripIds.some(id=>entity.relatedTripIds.includes(id))||entity.homeAnchors.some(id=>m.placeIds.includes(id))&&overlaps(m,entity)));
-  const residences=data.residences.filter(r=>!r.hidden&&r.placeId===placeId&&inYear(r));
+  const photos=data.memories.filter(m=>m.kind==='photo'&&!m.hidden&&inYear(m)&&inStage(m)&&(target.kind==='place'?m.placeIds.some(id=>aliases.has(id))&&(!chapter||chapter.memoryIds.includes(m.id)||m.tripIds.some(id=>chapter.relatedTripIds.includes(id))||chapter.homeAnchors.some(id=>aliases.has(id))):target.kind==='trip'?m.tripIds.includes(entity.id):target.kind==='residence'?m.placeIds.includes(placeId)&&overlaps(m,entity):entity.memoryIds.includes(m.id)||m.tripIds.some(id=>entity.relatedTripIds.includes(id))||entity.homeAnchors.some(id=>m.placeIds.includes(id))&&overlaps(m,entity)));
+  const residences=data.residences.filter(r=>!r.hidden&&(aliases.size?aliases.has(r.placeId):r.placeId===placeId)&&inYear(r)&&inStage(r));
   const mergeKind=target.kind==='residence'?'place':target.kind,mergeId=target.kind==='residence'?placeId:entity.id;
   const visitType=entity.visitType||(target.kind==='residence'?entity.kind:target.kind==='trip'?({转机:'transit',路过:'pass-through'}[entity.type]||'travel'):residences.some(r=>r.kind==='home')?'home':residences.length?'past':relevant.length&&relevant.every(v=>v.legacy.type==='转机')?'transit':relevant.length&&relevant.every(v=>v.legacy.type==='路过')?'pass-through':'travel');
   const scope=target.kind==='trip'&&!tripCountsAsTravel(data,entity)?{type:'place',id:relevant[0]?.placeId}: {type:target.kind,id:entity.id};
   const provenance=sourceSummary(data,entity);if(target.kind==='trip')provenance.detail+=' 地点之间为推测连接，不代表实际轨迹。';
   return {target:clone(target),entity,visitType,title:target.kind==='place'?photoPlaceName(entity,data):target.kind==='trip'?readTripTitle(data,entity):entity.title,region:placeId?photoRegion(data.places.find(p=>p.id===placeId)?.location?.photoCity).displayName:null,
     kindLabel:target.kind==='place'?({transit:'转机', 'pass-through':'路过',home:'居住城市',past:'曾住城市'}[visitType]||'城市'):target.kind==='residence'?(entity.kind==='home'?'现居':'曾居'):target.kind==='chapter'?'人生阶段':tripCountsAsTravel(data,entity)?'旅程':'路过 / 转机',
-    period:target.kind==='place'?(year===null?'照片与到访记录':year+' 年 · 照片与到访记录'):period(entity),provenance,actions:['回放','照片','分享','不对？'],scope:year!==null&&target.kind==='place'?{...scope,year}:scope,
+    period:target.kind==='place'?(year===null?'照片与到访记录':year+' 年 · 照片与到访记录'):period(entity),provenance,actions:['回放','照片','分享','不对？'],scope:{...scope,...(year!==null?{year}:{}),...(chapter&&target.kind!=='chapter'?{chapterId:chapter.id}:{})},
     photos,photoIds:photos.map(m=>m.id),journeys:journeys.filter(traveled).map(t=>({kind:'trip',id:t.id,title:readTripTitle(data,t),period:period(t)})),
     connections:journeys.filter(t=>!traveled(t)).map(t=>({kind:'trip',id:t.id,title:t.title,period:period(t)})),
     residences:residences.map(r=>({kind:'residence',id:r.id,title:r.title,period:period(r)})),
-    places:relevant.filter((v,i,all)=>all.findIndex(o=>o.placeId===v.placeId)===i).map(v=>({kind:'place',id:v.placeId,title:placeName(v.placeId),period:period(v)})),
+    places:relevant.filter((v,i,all)=>all.findIndex(o=>cityIdentity(data.places.find(p=>p.id===o.placeId))===cityIdentity(data.places.find(p=>p.id===v.placeId)))===i).map(v=>({kind:'place',id:v.placeId,title:placeName(v.placeId),period:period(v)})),
     mergeKind,mergeId,mergeOptions:data[collections[mergeKind]].filter(e=>!e.hidden&&e.id!==mergeId).map(e=>({id:e.id,title:mergeKind==='place'?photoPlaceName(e,data):e.title})),
-    splitVisits:target.kind==='trip'?relevant.map(v=>({id:v.id,title:placeName(v.placeId),period:period(v)})):[]};
+    splitVisits:target.kind==='trip'?visits.filter(v=>entity.visitIds.includes(v.id)).map(v=>({id:v.id,title:placeName(v.placeId),period:period(v)})):[]};
 }
 
 // DOM construction deliberately uses text nodes for all user-entered names.
@@ -43,8 +46,8 @@ function node(tag,attrs={},...children){
   for(const child of children.flat())if(child!==null&&child!==undefined)e.append(typeof child==='string'?document.createTextNode(child):child);
   return e;
 }
-export function mountRecordCard({element,repository,edits,getYear=()=>null,onClose=()=>{},onSelect=()=>{},onChange=()=>{},onReplay=()=>{},onShare=()=>{},onExplore=()=>{},thumbnail=async()=>null}){
-  let selection=null,mode='overview',busy=false,message='',failure='',page=0,shown=20,generation=0,urls=[],controller=null;
+export function mountRecordCard({element,repository,edits,getYear=()=>null,onClose=()=>{},onSelect=()=>{},onChange=()=>{},onReplay=()=>{},onShare=()=>{},onExplore=()=>{},thumbnail=async()=>null,getScope=()=>null,compact=false,titleFor=null,onMode=()=>{}}){
+  let photoReturn=null,photoId=null,selection=null,mode='overview',busy=false,message='',failure='',page=0,shown=20,generation=0,urls=[],controller=null;
   const pairs={undo:[],redo:[]},feedback=node('div',{id:'record-feedback',class:'glass',role:'status',hidden:true});
   document.body.append(feedback);
   const data=()=>repository.getDataset();
@@ -87,7 +90,7 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     const photos=model.photos.slice(page*12,page*12+12),grid=node('div',{class:'record-photo-grid'}),targets=new Map();
     if(!photos.length)grid.append(node('p',{class:'hint'},'这条记录还没有关联照片。'));
     for(const m of photos){
-      const placeholder=node('span',{},'正在读取照片…');
+      const placeholder=node(compact?'button':'span',compact?{type:'button','data-record-action':'photo-open','data-photo-id':m.id,'aria-label':'查看照片 '+(m.title||'照片')}:{},'正在读取照片…');
       grid.append(node('figure',{},placeholder,node('figcaption',{},m.title||'照片',node('small',{},dateText(m.start)))));
       // Bounded workers below prevent a 5k library from requesting 5k images.
       placeholder.dataset.recordPhoto=m.id;targets.set(m.id,placeholder);
@@ -108,7 +111,7 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
   function render(){
     if(document.body.classList.contains('story-readonly')){feedback.hidden=true;return false;}
     notice();if(!selection){release();element.classList.remove('show','record-card');document.body.classList.remove('card-open');return false;}
-    const model=recordCardModel(data(),selection,{year:getYear()});
+    const model=recordCardModel(data(),selection,{year:getYear(),scope:getScope()});
     if(!model){element.classList.remove('show');document.body.classList.remove('card-open');return false;}
     const previous=element.querySelector('.record-body')?.scrollTop||0;
     release();controller=new AbortController();const ticket=generation;
@@ -118,18 +121,24 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     const actions=node('nav',{class:'record-actions','aria-label':'记录操作'},model.actions.map((label,i)=>node('button',{type:'button','data-record-action':['replay','photos','share','correct'][i],class:i===0?'card-replay':'',disabled:busy||(i===2||i===3)&&readonly()},label)));
     const content=node('div',{class:'record-body'});
     if(model.region)content.append(node('p',{class:'hint record-region'},model.region));
-    if(mode==='correct')content.append(correction(model));
+    if(compact&&titleFor&&selection.kind==='trip')model.title=titleFor(data(),model.entity);
+    if(compact){actions.children[0].textContent='重走';actions.children[3].textContent='编辑';}
+    if(mode==='photo'){const memory=model.photos.find(m=>m.id===photoId);content.append(node('p',{},memory?.title||'照片'),node('button',{type:'button',class:'btn','data-record-action':'photos'},'返回照片'));if(memory)thumbnail(memory,{signal:controller.signal}).then(blob=>{if(ticket!==generation)return;if(!blob?.size)throw new Error();const url=URL.createObjectURL(blob);urls.push(url);content.append(node('img',{src:url,alt:memory.title||'照片',class:'earth-photo-large'}));}).catch(()=>{if(ticket===generation)content.append(node('p',{class:'hint'},'原图不在本机，或尚未授权读取。'));});}
+    else if(mode==='correct')content.append(correction(model));
     else if(mode==='photos')content.append(gallery(model,ticket));
     else {
-      content.append(...[links('居住记录',model.residences),links('相关旅程 · '+model.journeys.length,model.journeys),links('路过 / 转机',model.connections)].filter(Boolean));
-      if(selection.kind==='trip'){const places=links('途经城市',model.places);if(places)content.append(places);}
+      content.append(...[links('居住记录',model.residences),compact&&selection.kind==='trip'?null:links((compact&&selection.kind==='place'?'到访与相关旅行 · ':'相关旅程 · ')+model.journeys.length,model.journeys),links('路过 / 转机',model.connections)].filter(Boolean));
+      if(compact&&selection.kind==='trip')content.append(node('p',{class:'hint'},'地点顺序已知，连接为推测，不代表实际轨迹。'));
+      if(selection.kind==='trip'){const places=links('途经城市',model.places);if(places){if(compact)places.classList.add('earth-city-links');content.append(places);}}
       if(selection.kind==='chapter'){content.append(node('p',{class:'hint'},'阶段中的居住地点、旅程和照片共同组成这段回放。'));const anchors=links('阶段地点',model.entity.homeAnchors.filter(id=>visiblePlace(data(),id)).map(id=>({kind:'place',id,title:photoPlaceName(data().places.find(p=>p.id===id),data())})));if(anchors)content.append(anchors);}
+      if(compact){const preview=gallery({...model,photos:model.photos.slice(0,3)},ticket);preview.querySelector('h3').textContent='照片 · '+model.photos.length;content.append(preview);if(model.photos.length>3)content.append(node('button',{type:'button',class:'record-more','data-record-action':'photos'},'查看全部 '+model.photos.length+' 张照片'));}
       const placeId=selection.kind==='place'?selection.id:selection.kind==='residence'?model.entity.placeId:model.places[0]?.id;
+      if(compact)content.append(source);
       if(placeId)content.append(node('button',{type:'button',class:'record-more','data-record-action':'explore','data-record-id':placeId},'近看这里'));
     }
     element.replaceChildren(node('button',{type:'button',class:'x card-x','data-record-action':'close','aria-label':'关闭记录卡片'},'×'),
-      node('div',{class:'card-kicker'},model.kindLabel),node('h2',{title:model.title},model.title),node('div',{class:'card-date'},model.period),source,actions,content);
-    content.scrollTop=previous;document.body.classList.add('card-open');element.classList.add('show');return true;
+      node('div',{class:'card-kicker'},model.kindLabel),node('h2',{title:model.title},model.title),node('div',{class:'card-date'},model.period),...(compact?[]:[source]),actions,content);
+    content.scrollTop=previous;document.body.classList.add('card-open');element.classList.add('show');onMode(mode);return true;
   }
   async function perform(command){
     if(busy||readonly())return;const before=clone(selection);busy=true;failure='';render();
@@ -158,11 +167,12 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     if(action==='select'){onSelect({kind:button.dataset.recordKind,id:button.dataset.recordId});return;}
     if(action==='explore'){onExplore(button.dataset.recordId);return;}
     if(action==='delete'){void perform({type:'delete',target:clone(selection)});return;}
-    const model=selection&&recordCardModel(data(),selection,{year:getYear()});if(!model)return;
+    const model=selection&&recordCardModel(data(),selection,{year:getYear(),scope:getScope()});if(!model)return;
     if(action==='replay'){Promise.resolve(onReplay(model.scope)).catch(e=>{failure=e.message;notice();});return;}
     if(action==='share'){Promise.resolve(onShare(model.scope)).catch(e=>{failure=e.message;notice();});return;}
     if(action==='correct'){mode='correct';render();element.querySelector('[name=name]')?.focus({preventScroll:true});return;}
-    if(action==='photos'){mode='photos';page=0;}
+    if(action==='photo-open'){photoReturn={page,scroll:element.querySelector('.record-body')?.scrollTop||0};mode='photo';photoId=button.dataset.photoId;}
+    if(action==='photos'){const returning=mode==='photo';mode='photos';page=returning?photoReturn?.page||0:0;}
     if(action==='overview')mode='overview';
     if(action==='more')shown+=20;
     if(action==='photo-prev')page=Math.max(0,page-1);
@@ -175,11 +185,11 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     const command=type==='rename'?{type,target:clone(selection),name:values.get('name')}:type==='classify'?{type,target:clone(selection),value:values.get('value')}:type==='merge'?{type,kind:model.mergeKind,ids:[model.mergeId,values.get('other')]}:{type,kind:'trip',id:selection.id,visitIds:values.getAll('visitIds'),title:values.get('title')};
     void perform(command);
   };
-  function escape(){if(!selection)return false;if(mode!=='overview'){mode='overview';render();element.querySelector('[data-record-action=correct]')?.focus();}else{close();onClose();}return true;}
+  function escape(){if(!selection)return false;if(mode==='photo'){mode='photos';page=photoReturn?.page||0;render();element.querySelector('.record-body')?.scrollTo(0,photoReturn?.scroll||0);return true;}if(mode!=='overview'){mode='overview';render();element.querySelector('[data-record-action=correct]')?.focus();}else{close();onClose();}return true;}
   const keydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();escape();}};
   element.addEventListener('keydown',keydown);
   element.addEventListener('click',click);element.addEventListener('submit',submit);feedback.addEventListener('click',click);
   const off=repository.subscribe(()=>render()),offHistory=edits.subscribe(()=>notice());
-  return {open(target){selection=clone(target);mode='overview';failure='';page=0;shown=20;render();},close,render,escape,edit(){if(selection&&!readonly()){mode='correct';render();element.querySelector('[name=name]')?.focus();}},get selection(){return clone(selection);},
+  return {snapshot(){return {selection:clone(selection),mode,page,photoId,photoReturn:clone(photoReturn),scroll:element.querySelector('.record-body')?.scrollTop||0};},restore(saved){if(!saved?.selection)return;selection=clone(saved.selection);mode=saved.mode;page=saved.page;photoId=saved.photoId;photoReturn=clone(saved.photoReturn);render();element.querySelector('.record-body')?.scrollTo(0,saved.scroll);},open(target){selection=clone(target);mode='overview';failure='';page=0;shown=20;render();},close,render,escape,edit(){if(selection&&!readonly()){mode='correct';render();element.querySelector('[name=name]')?.focus();}},get selection(){return clone(selection);},
     dispose(){release();off();offHistory();element.removeEventListener('keydown',keydown);element.removeEventListener('click',click);element.removeEventListener('submit',submit);feedback.remove();}};
 }

@@ -1,0 +1,117 @@
+/* Product experiment: one globe and a single, progressively disclosed sheet. */
+body.earth-home{--accent:#f4f3ee;--earth-ink:#192127;--earth-paper:#fafaf7;}
+.earth-home #brand{top:max(24px,env(safe-area-inset-top));left:32px;max-width:calc(100% - 140px);}
+.earth-home #brand h1{font:600 27px/1.2 var(--sans);letter-spacing:-1px;margin:0 0 20px;}
+.earth-home #brand .eyebrow,.earth-home #chips,.earth-home #timeline,.earth-home #list,.earth-home #empty,.earth-home #btn-share,.earth-home #btn-photos{display:none!important;}
+.earth-home #stats{position:fixed;top:82px;left:190px;font-size:12px;color:#cbd3d7;}
+.earth-home #toolbar{top:max(20px,env(safe-area-inset-top));right:28px;}
+.earth-home #btn-my{width:64px;height:42px;border-radius:24px;background:#ffffff10;border:1px solid #ffffff24;box-shadow:none;}
+.earth-home #btn-my svg{width:19px;height:19px;}
+.earth-home #btn-my:after{content:'我的';font-size:12px;margin-left:4px;}
+.earth-home #btn-my{display:flex;align-items:center;justify-content:center;}
+#earth-time{min-height:40px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 14px;background:#ffffff12;border:1px solid #ffffff24;border-radius:22px;pointer-events:auto;color:#f5f7fa;font-size:13px;}
+.earth-home #btn-home{bottom:220px;right:32px;top:auto;left:auto;width:44px;height:44px;border-radius:50%;}
+.earth-home #credits{bottom:4px;}
+#earth-sheet{position:fixed;z-index:9;left:50%;bottom:max(22px,env(safe-area-inset-bottom));width:min(520px,calc(100% - 40px));transform:translateX(-50%);border-radius:24px;background:var(--earth-paper);color:var(--earth-ink);box-shadow:0 14px 60px #0005;display:flex;flex-direction:column;max-height:calc(100dvh - 126px);isolation:isolate;}
+#earth-sheet[data-height=half]{height:min(450px,52dvh);}
+#earth-sheet[data-height=full]{height:calc(100dvh - 126px);}
+.earth-handle{height:20px;min-height:20px;display:block;position:relative;font-size:0;touch-action:none;}
+.earth-handle:after{content:'';position:absolute;width:34px;height:4px;border-radius:4px;background:#d2d4d3;top:9px;left:calc(50% - 17px);}
+.earth-sheet-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px 9px;border-bottom:1px solid #18252a10;font-size:12px;}
+.earth-sheet-bar button{min-height:38px;padding:0 8px;color:#556067;}
+.earth-sheet-bar span{font-weight:600;}
+.earth-sheet-content{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;}
+.earth-summary{padding:0 22px 20px;}
+.earth-summary-top{display:flex;align-items:center;justify-content:space-between;font-size:11px;letter-spacing:.04em;color:#798187;}
+.earth-summary-top button{min-height:32px;font-size:12px;color:#4d5960;}
+.earth-summary-main{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:8px 0 14px;}
+.earth-cover{width:58px;height:62px;flex-shrink:0;display:grid;place-items:center;background:linear-gradient(145deg,#e2eeeb,#c7dbdb);color:#638387;border-radius:14px;font-size:30px;overflow:hidden;}
+.earth-cover img{width:100%;height:100%;object-fit:cover;}
+.earth-summary-copy{min-width:0;flex:1;}
+.earth-summary h2{margin:0 0 5px;font-size:19px;font-weight:650;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.earth-summary p{margin:0;font-size:12px;color:#778087;line-height:1.6;}
+.earth-chevron{font-size:22px;color:#a0a8a8;}
+.earth-summary-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.earth-primary{background:#202a2e;color:white;border-radius:24px;padding:0 20px;min-height:44px;font-size:13px;font-weight:550;}
+.earth-note{font-size:10px;color:#8b9295;}
+.earth-directory,.earth-time-options{padding:16px 22px 24px;}
+.earth-directory input{width:100%;border:1px solid #dfe3e1;background:#f0f2ef;color:#243137;border-radius:12px;padding:12px;font:inherit;outline-offset:3px;}
+.earth-directory h3,.earth-time-options h3{font-size:12px;color:#7c8689;font-weight:500;margin:24px 0 8px;}
+.earth-trip-row{display:flex;align-items:center;gap:12px;min-height:76px;text-align:left;width:100%;border-bottom:1px solid #1b2c3210;padding:10px 0;}
+.earth-trip-row>span:nth-child(2){flex:1;min-width:0;}
+.earth-trip-row strong{display:block;font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.earth-trip-row small{display:block;font-size:11px;color:#7d878b;margin-top:6px;}
+.earth-row-icon{width:40px;height:44px;border-radius:10px;background:#e9eeeb;display:grid;place-items:center;color:#7b918a;}
+.earth-time-options{display:flex;flex-wrap:wrap;gap:10px;}
+.earth-time-options h3,.earth-time-options p{width:100%;}
+.earth-time-options button{min-height:44px;border-radius:12px;border:1px solid #dee3df;padding:8px 16px;font-size:13px;text-align:left;}
+.earth-time-options button[aria-pressed=true]{background:#223337;color:#fff;border-color:transparent;}
+.earth-muted{font-size:13px;color:#758184;}
+.earth-home #earth-sheet #card{position:static;display:flex;flex-direction:column;transform:none;inset:auto;width:100%;max-width:none;min-height:0;max-height:none;opacity:1;padding:0 22px 18px;background:none;border:0;box-shadow:none;backdrop-filter:none;color:#202d32;flex:1;border-radius:0;overflow:hidden;}
+.earth-home #earth-sheet #card:not(.show){display:none;}
+.earth-home #card .card-x{display:none;}
+.earth-home #card h2{font:600 23px/1.35 var(--sans);letter-spacing:0;margin:7px 0 5px;flex-shrink:0;}
+.earth-home #card .card-kicker{margin-top:12px;color:#83908f;font-size:10px;flex-shrink:0;}
+.earth-home #card .card-date{color:#758186;font-size:12px;flex-shrink:0;}
+.earth-home #card .record-source{color:#6f7e81;font-size:10px;margin:6px 0;flex-shrink:0;}
+.earth-home #card .record-source p{color:#65777c;}
+.earth-home #card .record-actions{display:flex;gap:6px;padding:10px 0;border:0;flex-shrink:0;}
+.earth-home #card .record-actions button{flex:1;min-height:44px;border:1px solid #dde3de;background:#f1f3ee;color:#3e5055;border-radius:24px;font-size:12px;}
+.earth-home #card .record-actions button:first-child{background:#25373c;color:white;border-color:transparent;}
+.earth-home #card .record-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;max-height:none;}
+.earth-home #card .record-body h3{font-size:11px;color:#82908f;font-weight:500;margin:16px 0 6px;}
+.earth-home #card .record-links .mini{min-height:44px;color:#33494e;border-bottom:1px solid #253f4210;background:none;}
+.earth-home #card .record-links small{color:#82908e;}
+.earth-home #card .record-links strong{font-weight:500;}
+.earth-home #card .hint{color:#77878b;}
+.earth-home #card .record-more{min-height:44px;color:#637e78;}
+.earth-home #card .record-corrections input,.earth-home #card .record-corrections select{color:#24383e;background:#eff2ec;border:1px solid #cbd6cf;}
+.earth-home #card .btn{color:#31494d;background:#e8ede7;border-color:#d4ded6;min-height:44px;}
+.earth-home #card .record-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.earth-home #card .record-photo-grid figure{margin:0;min-width:0;}
+.earth-home #card .record-photo-grid figure>button,.earth-home #card .record-photo-grid figure>span{display:block;width:100%;aspect-ratio:1;border-radius:12px;background:#e5ebe5;overflow:hidden;color:#71857b;font-size:10px;}
+.earth-home #card .record-photo-grid img{width:100%;height:100%;object-fit:cover;}
+.earth-home #card .record-photo-grid figcaption{color:#7f8c86;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.earth-home #card .earth-photo-large{display:block;max-width:100%;max-height:55dvh;object-fit:contain;margin:12px auto;}
+.earth-home.earth-full #btn-home{display:none;}
+.earth-home #record-feedback{z-index:12;top:auto;bottom:230px;left:20px;right:auto;width:max-content;max-width:min(380px,calc(100vw - 100px));height:auto;}
+.earth-home.story-active #earth-sheet,.earth-home.story-active #earth-time,.earth-home.story-active #btn-home{display:none;}
+.earth-home.story-active #brand,.earth-home.story-active #toolbar{display:none;}
+.earth-home #story-player .story-head>[data-story-edit],.earth-home #story-player .story-step{display:none;}
+.earth-home #story-player{max-width:600px;}
+.earth-home #pickbar{z-index:15;}
+@media(min-width:1000px){
+  #earth-sheet{left:32px;transform:none;width:380px;bottom:28px;}
+  #earth-sheet[data-height=half]{height:min(500px,60dvh);}
+  #earth-sheet[data-height=full]{height:calc(100dvh - 150px);}
+  .earth-home #btn-home{right:32px;bottom:40px;}
+}
+@media(max-width:720px){
+  .earth-home #brand{top:max(22px,env(safe-area-inset-top));left:22px;max-width:calc(100% - 105px);}
+  .earth-home #brand h1{font-size:24px;margin-bottom:20px;}
+  .earth-home #stats{top:81px;left:auto;right:22px;max-width:180px;font-size:11px;}
+  .earth-home #toolbar{top:max(18px,env(safe-area-inset-top));right:18px;}
+  #earth-time{max-width:150px;font-size:12px;padding:0 12px;}
+  #earth-sheet{width:calc(100% - 28px);bottom:max(22px,env(safe-area-inset-bottom));border-radius:22px;}
+  .earth-summary{padding:0 18px 17px;}
+  .earth-summary h2{font-size:18px;}
+  .earth-summary p{font-size:11px;}
+  .earth-note{font-size:9px;}
+  .earth-home #btn-home{bottom:224px;right:20px;}
+  .earth-home #earth-sheet #card{padding:0 18px 15px;}
+  .earth-home #card h2{font-size:20px;}
+}
+@media(max-width:350px){.earth-note{display:none;}.earth-home #stats{font-size:10px;max-width:135px;}#earth-time{max-width:125px;}}
+
+.earth-home:has(#story-composer[open]) #earth-sheet,.earth-home:has(#my-dialog[open]) #earth-sheet{visibility:hidden;}
+
+.earth-demo{display:block;min-height:38px;font-size:12px;color:#74877d;margin-top:5px;}
+.earth-home #stats{width:auto;margin-top:0;line-height:40px;}
+@media(max-width:999px){body.earth-home:has(#earth-sheet[data-height=half]) #btn-home{bottom:calc(min(450px,52dvh) + 34px);}}
+
+.earth-home #card .card-kicker{display:none;}
+.earth-home #card .earth-city-links{display:flex;flex-wrap:wrap;gap:6px;}
+.earth-home #card .earth-city-links h3{width:100%;}
+.earth-home #card .earth-city-links .mini{width:auto;min-height:32px;padding:4px 12px;background:#edf1eb;border:0;border-radius:20px;}
+.earth-home #card .earth-city-links small{display:none;}
+.earth-home #card .record-actions{margin:4px 0;padding:8px 0;}
