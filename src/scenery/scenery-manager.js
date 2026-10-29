@@ -61,7 +61,8 @@ export class SceneryManager {
     this.shader.setUniform('u_day',day);this.shader.setUniform('u_time',this.reducedMotion?0:now/1000*this.config.template.wind);
     this.shader.setUniform('u_autumn',this.config.template.autumn||0);this.shader.setUniform('u_snow',this.config.template.snow||0);
     this.effects.update(now,day);
-    this.viewer.canvas.dataset.scenery=JSON.stringify(this.details());
+    const details=JSON.stringify(this.details());
+    if(this.viewer.canvas.dataset.scenery!==details)this.viewer.canvas.dataset.scenery=details;
   }
   toggle(){for(const model of this.models)model.show=!model.show;}
   unavailable(name){if(this.config?.name===name)this.phase='unavailable';}

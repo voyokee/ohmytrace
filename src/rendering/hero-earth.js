@@ -63,6 +63,10 @@ function terrainGeometry(data) {
 
 export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration = 1.65 } = {}) {
   const scene = viewer.scene;
+  // update() runs on every animation frame, idle or not. Canvas data attributes are read by the
+  // marker overlay and tests; rewriting unchanged values each frame only queues DOM mutations.
+  const published={};
+  const publish=(key,value)=>{if(published[key]===value)return;published[key]=value;viewer.canvas.dataset[key]=value;};
   const continuous=Cesium.VERSION==='1.120'&&new URLSearchParams(location.search).get('handoff')!=='0';
   const regionalEnabled=continuous&&new URLSearchParams(location.search).get('regional')!=='0';
   const traceEnabled=new URLSearchParams(location.search).get('handofftrace')==='1';
@@ -224,22 +228,23 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
       if (handoffs[handoffs.length - 1]?.phase !== state.phase) {
         handoffs.push({ phase: state.phase, altitude: Math.round(altitude), mix: +state.mix.toFixed(3) });
         if (handoffs.length > 12) handoffs.shift();
-        viewer.canvas.dataset.handoffs = JSON.stringify(handoffs);
+        publish('handoffs',JSON.stringify(handoffs));
       }
-      viewer.canvas.dataset.renderer = state.phase;
-      viewer.canvas.dataset.earthMix = state.mix.toFixed(3);
-      viewer.canvas.dataset.worldGroundBlend=currentGroundBlend.toFixed(3);
-      viewer.canvas.dataset.worldNativeReliefRatio=String(terrainExaggeration/WORLD_RELIEF);
-      viewer.canvas.dataset.earthTexture = String(textures?.day.width || 0);
-      viewer.canvas.dataset.earthDetail = detail;
-      viewer.canvas.dataset.worldRelief=String(reliefReady);
-      viewer.canvas.dataset.worldDataSource=worldDataSource;
-      viewer.canvas.dataset.surfaceReady=String(layers[0]?.ready);
+      publish('renderer',state.phase);
+      publish('earthMix',state.mix.toFixed(3));
+      publish('worldGroundBlend',currentGroundBlend.toFixed(3));
+      publish('worldNativeReliefRatio',String(terrainExaggeration/WORLD_RELIEF));
+      publish('earthTexture',String(textures?.day.width || 0));
+      publish('earthDetail',detail);
+      publish('worldRelief',String(reliefReady));
+      publish('worldDataSource',worldDataSource);
+      publish('surfaceReady',String(layers[0]?.ready));
       if(worldForest) {
         worldForest.update({mix:state.mix,day,altitude,now,canopyScale:regional?.supported ? regionalWorldScale(altitude) : 1,groundBlend:currentGroundBlend});
-        if(materials)materials.surface.uniforms.canopyMix=Math.min(1,worldForest.details().worldTrees/1000);
-        viewer.canvas.dataset.worldForest=JSON.stringify(worldForest.details());
-        viewer.canvas.dataset.worldReady=String(worldForest.details().worldReady);
+        const forestDetails=worldForest.details();
+        if(materials)materials.surface.uniforms.canopyMix=Math.min(1,forestDetails.worldTrees/1000);
+        publish('worldForest',JSON.stringify(forestDetails));
+        publish('worldReady',String(forestDetails.worldReady));
       }
       if(traceEnabled&&now-lastTrace>=150) {
         lastTrace=now;const r=regional?.details();
@@ -248,7 +253,7 @@ export function setupCinematic(viewer, { onError = () => {}, terrainExaggeration
           worldTrees:worldForest?.details().worldTrees||0,regionalTrees:r?.regionalInstances||0,regionalReady:!!r?.regionalReady,
           regionalOpacity:r?.regionalOpacity||0,regionalRadius:r?.regionalRadius||0,regionalHeight:r?.regionalTreeHeight||0,
           localReady,nativeExaggeration:scene.verticalExaggeration});
-        if(handoffTrace.length>120)handoffTrace.shift();viewer.canvas.dataset.handoffTrace=JSON.stringify(handoffTrace);
+        if(handoffTrace.length>120)handoffTrace.shift();publish('handoffTrace',JSON.stringify(handoffTrace));
       }
       scene.globe.show = terrainEnabled && (state.terrain || surfaceIsolated);
       scene.skyAtmosphere.show = state.mix < 0.01 && atmosphereEnabled;

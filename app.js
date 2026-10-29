@@ -576,14 +576,19 @@ async function initGlobe() {
       lightUniforms: nightMaterial.uniforms, reducedMotion, now,terrainReady,localReady:['ready','empty'].includes(sceneryManager.details().sceneryPhase) });
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
-    renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !orbit && !(scenery.name&&!reducedMotion) &&
-      !state.playing && !pickName && now >= globalSpinUntil && now >= arcGrowUntil && now-lastInput>800);
+    // Resolution follows the camera only. A switch resizes every framebuffer and visibly softens then
+    // re-sharpens the globe, so a tap, a UI click or lights fading over a still view keep the current mode.
+    const cameraBusy = cameraMoving || flying || !!orbit || !!(scenery.name&&!reducedMotion) || state.playing || now < globalSpinUntil;
+    if (cameraBusy) renderPolicy.still(false);
+    else if (!pickName && !lightsAnimating && now >= arcGrowUntil && now-lastInput>800) renderPolicy.still(true);
     if (!renderPolicy.tick(now)) return;
     if(benchmark.enabled)scene.requestRender();
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
     const animatedScenery = scenery.name && !reducedMotion && !body.classList.contains('modal-open');
-    const moving = flying || !!orbit || !!animatedScenery || cameraMoving || lightsAnimating;
+    // Panels drop their backdrop blur while the globe moves. Fading lights are not motion: toggling the
+    // class on every click restyled the whole page and made the sheet flicker between glass and solid.
+    const moving = flying || !!orbit || !!animatedScenery || cameraMoving;
     if(body.classList.contains('scene-active') !== moving) body.classList.toggle('scene-active',moving);
     if (lightsAnimating || animatedScenery || flying || now < arcGrowUntil) scene.requestRender();
     if (flying || pickName || body.classList.contains('modal-open') || now - lastInput < 4000 || reducedMotion) return;
@@ -646,7 +651,8 @@ async function initGlobe() {
     loaded = true;
     $('#loader').classList.add('out');
     setTimeout(() => $('#loader').remove(), 1300);
-    setTimeout(() => {if(!storyScene)homeView(reducedMotion?0:3.4);}, 250);
+    // Skip the opening overview if a record is already open or a flight has started.
+    setTimeout(() => {if(!storyScene&&!state.sel&&!state.city&&!flying)homeView(reducedMotion?0:3.4);}, 250);
     // Light the footprints one by one as the globe settles.
     setTimeout(() => {
       lightsOn = true;
@@ -704,6 +710,29 @@ function homeView(duration = 2.4) {
   });
 }
 
+// The earth-home sheet covers the bottom of a phone or the left of a desktop. Aim so the target sits
+// in the middle of the uncovered globe instead of behind the sheet. Null keeps the plain centred flight.
+let framingCamera;
+function framedAboveSheet(center,offset) {
+  const sheet=earthHome&&!storyBaseLife&&!body.classList.contains('story-active')&&$('#earth-sheet');
+  if(!sheet||sheet.hidden)return null;
+  // Measure where the sheet is going, not where its height transition currently is.
+  const transition=sheet.style.transition;sheet.style.transition='none';const r=sheet.getBoundingClientRect();sheet.style.transition=transition;
+  const w=viewer.canvas.clientWidth,h=viewer.canvas.clientHeight;
+  if(!r.height||r.height>h*.7)return null;
+  let dx=0,dy=0;
+  if(r.width>w*.6)dy=h/2-(($('#brand')?.getBoundingClientRect().bottom||0)+r.top)/2;
+  else if(r.left<w/2)dx=(r.right+w)/2-w/2;
+  if(Math.hypot(dx,dy)<24)return null;
+  framingCamera??=new Cesium.Camera(scene);
+  const cam=framingCamera,focal=h/(2*Math.tan(viewer.camera.frustum.fovy/2));
+  cam.frustum=viewer.camera.frustum.clone();
+  cam.lookAt(center,offset);cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  if(dy)cam.lookDown(Math.atan(dy/focal));
+  if(dx)cam.lookLeft(Math.atan(dx/focal));
+  return {position:Cesium.Cartesian3.clone(cam.position),direction:Cesium.Cartesian3.clone(cam.direction),up:Cesium.Cartesian3.clone(cam.up)};
+}
+
 // close: drop low over a single place so its trees, flowers and clouds are in view
 function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, placeName } = {}) {
   if(reducedMotion)duration=0;
@@ -723,9 +752,12 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   // Fetch/survey the destination during the flight; distance bands keep local models/effects
   // hidden from orbit. Unknown ground heights retain the normal arrival-time fallback.
   if(close&&placeName&&terrainReady&&Number.isFinite(state.places[placeName]?.h))setScenery(placeName);
+  const offset=new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), pitch, range);
+  const framed=!close&&framedAboveSheet(sphere.center,offset);
   return new Promise(res => {
-    viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(sphere.center, 0), {
-      offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), pitch, range),
+    const fly=framed?(o=>viewer.camera.flyTo({destination:framed.position,orientation:{direction:framed.direction,up:framed.up},...o}))
+      :(o=>viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(sphere.center, 0),{offset,...o}));
+    fly({
       duration,
       complete: () => {
         if (flight !== flightGeneration) { res(false); return; }
@@ -790,13 +822,22 @@ function syncLights() {
   if (scene) scene.requestRender();
 }
 
+// Evaluated per light on every animating frame; rebuild only when the model or the year changes.
+let scopedLit = { trips: null, homes: null, snapshot: null, year: undefined, names: new Set() };
+function scopedLitPlaces() {
+  const c = scopedLit;
+  if (c.trips === trips && c.homes === homes && c.snapshot === lifeSnapshot && c.year === state.year) return c.names;
+  const names = new Set(visibleHomes().map(h => h.place));
+  for (const t of trips) if (inYear(t)) for (const s of t.stops) names.add(s.place);
+  for (const p of lifeSnapshot?.photoPlaces || []) if (state.year == null || p.years.includes(state.year)) names.add(p.place);
+  scopedLit = { trips, homes, snapshot: lifeSnapshot, year: state.year, names };
+  return names;
+}
+
 function lightTarget(name) {
   if (!lightsOn) return 0;
   if (replayLit) return replayLit.has(name) ? 1 : 0;
-  if (state.year || life?.adapter.scope.type==='chapter') {
-    const lit = visibleHomes().some(h => h.place === name) || trips.filter(inYear).some(t => t.stops.some(s => s.place === name)) || lifeSnapshot?.photoPlaces?.some(p=>p.place===name&&(state.year==null||p.years.includes(state.year)));
-    return lit ? 1 : 0;
-  }
+  if (state.year || life?.adapter.scope.type==='chapter') return scopedLitPlaces().has(name) ? 1 : 0;
   return 1;
 }
 
@@ -1208,13 +1249,15 @@ function arcPositions(a, b, n = 72) {
   return out;
 }
 
-// Draws an arc from its start after `delay`, then settles to a constant line so idle frames stay cheap.
+// Draws an arc from its start after `delay`. The line stays dynamic afterwards: swapping in constant
+// positions moves it to a static batch that Cesium rebuilds asynchronously, so it blinked out for a few frames.
+// Idle frames are not rendered at all, so a dynamic line costs nothing at rest.
 function growArc(e,positions,delay,ms) {
   if(reducedMotion)return 0;
   const t0=performance.now()+delay;arcGrowUntil=Math.max(arcGrowUntil,t0+ms+80);
   e.polyline.show=new Cesium.CallbackProperty(()=>performance.now()>=t0,false);
-  e.polyline.positions=new Cesium.CallbackProperty(()=>{const f=Math.min(1,(performance.now()-t0)/ms),k=1-(1-f)**3;return positions.slice(0,Math.max(2,Math.ceil(k*positions.length)));},false);
-  setTimeout(()=>{e.polyline.positions=positions;e.polyline.show=true;},delay+ms+60);
+  e.polyline.positions=new Cesium.CallbackProperty(()=>{const f=Math.min(1,(performance.now()-t0)/ms);if(f>=1)return positions;
+    const k=1-(1-f)**3;return positions.slice(0,Math.max(2,Math.ceil(k*positions.length)));},false);
   scene.requestRender();return ms;
 }
 function renderArcs(){arcSignature=null;updateArcs();}
@@ -1239,23 +1282,23 @@ function updateArcs() {
       material:new Cesium.PolylineDashMaterialProperty({color:Cesium.Color.fromCssColorString(HOME_COLOR).withAlpha(featured?.95:.75),dashLength:18})}});
     if(grow)delay+=growArc(originEntity,positions,delay,900);
   };
+  // The focus is part of the signature, so an unchanged signature means the same lines. Rebuilding them
+  // on every selection refresh re-batched the geometry for nothing.
+  if(!fresh)return;
+  arcSignature=signature;if(grow)arcGrown=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
   // Dashed arc from where the person lived at the time to the focused trip.
-  if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
-  if(fresh) {
-    arcSignature=signature;if(grow)arcGrown=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
-    origin();
-    for(const t of wanted) {
-      if(t.routeKind==='unknown')continue;
-      const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
-      for(let i=1;i<points.length;i++) {
-        const positions=arcPositions(points[i-1],points[i]);
-        const e=arcSource.entities.add({polyline:{positions,width:focus?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
-          material:t.inferredConnections?new Cesium.PolylineDashMaterialProperty({dashLength:12,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)}):new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
-        if(grow&&focus?.id===t.id)delay+=growArc(e,positions,delay,650);
-        arcEntities.push({trip:t,e});
-      }
+  origin();
+  for(const t of wanted) {
+    if(t.routeKind==='unknown')continue;
+    const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
+    for(let i=1;i<points.length;i++) {
+      const positions=arcPositions(points[i-1],points[i]);
+      const e=arcSource.entities.add({polyline:{positions,width:focus?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
+        material:t.inferredConnections?new Cesium.PolylineDashMaterialProperty({dashLength:12,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)}):new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
+      if(grow&&focus?.id===t.id)delay+=growArc(e,positions,delay,650);
+      arcEntities.push({trip:t,e});
     }
-  } else origin();
+  }
 }
 
 /* ================= UI ================= */

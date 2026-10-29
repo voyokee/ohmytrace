@@ -7,6 +7,6 @@ export class CameraDirector {
     if(!flying)this.phase=scenery?'immersive':altitude>2400000?'global':'place';
     this.publish();
   }
-  publish(){if(this.viewer?.canvas)this.viewer.canvas.dataset.cameraPhase=this.phase;}
+  publish(){const canvas=this.viewer?.canvas;if(canvas&&canvas.dataset.cameraPhase!==this.phase)canvas.dataset.cameraPhase=this.phase;}
   details(){return {cameraPhase:this.phase,cameraGeneration:this.generation};}
 }
