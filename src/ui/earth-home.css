@@ -8,13 +8,13 @@
 .earth-home #brand h1{width:100%;margin:0;font:650 var(--t-display)/1.2 var(--sans);letter-spacing:0;color:var(--text);text-shadow:0 1px 8px #0008;}
 .earth-home #brand .eyebrow,.earth-home #chips,.earth-home #timeline,.earth-home #list,.earth-home #empty,.earth-home #btn-share,.earth-home #btn-photos{display:none!important;}
 .earth-home #stats{position:static;width:auto;margin:0;font-size:var(--t-xs);line-height:1.4;color:var(--muted);text-shadow:0 1px 6px #000c;}
-#earth-time{display:inline-flex;align-items:center;gap:6px;min-height:36px;max-width:220px;padding:0 var(--s3) 0 14px;border-radius:var(--r-pill);background:var(--chip);border:1px solid var(--line-2);color:var(--text);font-size:var(--t-sm);pointer-events:auto;white-space:nowrap;overflow:hidden;transition:background var(--dur-fast);}
+#earth-time{display:inline-flex;align-items:center;gap:6px;min-height:44px;max-width:220px;padding:0 var(--s3) 0 14px;border-radius:var(--r-pill);background:var(--chip);border:1px solid var(--line-2);color:var(--text);font-size:var(--t-sm);pointer-events:auto;white-space:nowrap;overflow:hidden;transition:background var(--dur-fast);}
 #earth-time{order:1;}.earth-home #stats{order:2;}
 #earth-time span{overflow:hidden;text-overflow:ellipsis;}
 #earth-time .icon{width:15px;height:15px;opacity:.7;}
 #earth-time:hover{background:var(--surface-press);}
 .earth-home #toolbar{top:max(20px,env(safe-area-inset-top));right:var(--s5);}
-.earth-home #btn-my{width:auto;height:38px;padding:0 14px 0 var(--s3);display:flex;align-items:center;gap:6px;border-radius:var(--r-pill);background:var(--chip);border:1px solid var(--line-2);box-shadow:none;}
+.earth-home #btn-my{width:auto;height:44px;padding:0 14px 0 var(--s3);display:flex;align-items:center;gap:6px;border-radius:var(--r-pill);background:var(--chip);border:1px solid var(--line-2);box-shadow:none;}
 .earth-home #btn-my svg{width:17px;height:17px;}
 .earth-home #btn-my:after{content:'我的';font-size:var(--t-sm);}
 .earth-home #btn-home{bottom:220px;right:var(--s5);top:auto;left:auto;width:44px;height:44px;border-radius:50%;background:var(--chip);border:1px solid var(--line-2);}
@@ -36,24 +36,24 @@
 #earth-sheet[data-height=half]{height:auto;max-height:min(450px,52dvh);}
 #earth-sheet[data-height=full]{height:calc(100dvh - 126px);}
 @media(prefers-reduced-motion:reduce){#earth-sheet{transition:none;}}
-.earth-handle{height:22px;min-height:22px;display:block;position:relative;font-size:0;touch-action:none;}
-.earth-handle:after{content:'';position:absolute;width:36px;height:4px;border-radius:4px;background:var(--line-2);top:9px;left:calc(50% - 18px);transition:background var(--dur-fast);}
+.earth-handle{height:44px;min-height:44px;flex-shrink:0;display:block;position:relative;font-size:0;touch-action:none;}
+.earth-handle:after{content:'';position:absolute;width:36px;height:4px;border-radius:4px;background:var(--line-2);top:var(--s3);left:calc(50% - 18px);transition:background var(--dur-fast);}
 .earth-handle:hover:after{background:var(--faint);}
-.earth-sheet-bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:0 var(--s3) var(--s2);border-bottom:1px solid var(--line);font-size:var(--t-sm);}
-.earth-sheet-bar button{display:inline-flex;align-items:center;gap:4px;min-height:38px;padding:0 var(--s2);border-radius:var(--r-sm);color:var(--muted);}
+.earth-sheet-bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:0 var(--s3);border-bottom:1px solid var(--line);font-size:var(--t-sm);}
+.earth-sheet-bar button{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0 var(--s2);border-radius:var(--r-sm);color:var(--muted);}
 .earth-sheet-bar button:hover{color:var(--text);background:var(--surface-raised);}
 .earth-sheet-bar button .icon{width:16px;height:16px;}
 .earth-sheet-bar span{font-weight:600;color:var(--text);}
 .earth-sheet-content{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
 
 /* ---------- peek: the latest trip ---------- */
-.earth-summary{padding:0 var(--s5) var(--s5);}
+.earth-summary{padding:0 var(--s5) var(--s3);}
 .earth-summary-top{display:flex;align-items:center;justify-content:space-between;font-size:var(--t-xs);color:var(--muted);}
 .earth-summary-top>span{display:inline-flex;align-items:center;gap:6px;}
-.earth-summary-top button{display:inline-flex;align-items:center;gap:2px;min-height:32px;font-size:var(--t-sm);color:var(--text);}
+.earth-summary-top button{display:inline-flex;align-items:center;gap:2px;min-height:44px;font-size:var(--t-sm);color:var(--text);}
 .earth-summary-top button:hover{color:var(--accent);}
 .earth-summary-top button .icon{width:15px;height:15px;}
-.earth-summary-main{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:var(--s3) 0 var(--s4);}
+.earth-summary-main{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:0 0 var(--s2);}
 .earth-cover{width:56px;height:56px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);font-variant-numeric:tabular-nums;line-height:1.1;}
 .earth-cover b{font-size:19px;font-weight:650;}
 .earth-cover small{font-size:11px;color:var(--muted);}
@@ -69,10 +69,10 @@
 .earth-primary:hover{filter:brightness(1.07);}
 .earth-primary:active{filter:brightness(.94);}
 .earth-note{font-size:var(--t-xs);color:var(--faint);text-align:right;}
-button.earth-note{min-height:38px;color:var(--muted);}
+button.earth-note{min-height:44px;color:var(--muted);}
 
 /* ---------- directory and time scope ---------- */
-.earth-directory,.earth-time-options{padding:var(--s4) var(--s5) var(--s6);}
+.earth-directory,.earth-time-options{padding:var(--s1) var(--s5) var(--s6);}
 .earth-directory input{width:100%;border:1px solid var(--line);background:var(--surface-raised);color:var(--text);border-radius:var(--r-sm);padding:var(--s3) 14px;font:inherit;outline-offset:3px;}
 .earth-directory input::placeholder{color:var(--faint);}
 .earth-directory h3,.earth-time-options h3{font-size:var(--t-xs);color:var(--muted);font-weight:500;margin:var(--s5) 0 var(--s1);}
@@ -86,7 +86,7 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-time-options h3,.earth-time-options p,.earth-years{width:100%;}
 .earth-years{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:var(--s2);}
 .earth-years button{text-align:center;font-variant-numeric:tabular-nums;}
-.earth-time-options button{min-height:40px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);padding:var(--s2) var(--s4);font-size:var(--t-sm);text-align:left;transition:background var(--dur-fast);}
+.earth-time-options button{min-height:44px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);padding:var(--s2) var(--s4);font-size:var(--t-sm);text-align:left;transition:background var(--dur-fast);}
 .earth-time-options button:hover{background:var(--surface-press);}
 .earth-time-options button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);font-weight:600;}
 .earth-muted{font-size:var(--t-sm);color:var(--muted);}
@@ -95,7 +95,7 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-home.photo-scanning #earth-sheet,.earth-home.photo-scanning #btn-home{visibility:hidden;}
 
 /* ---------- first use inside the sheet ---------- */
-.earth-first{padding:var(--s2) var(--s5) var(--s5);display:flex;flex-direction:column;gap:var(--s3);}
+.earth-first{padding:0 var(--s5) var(--s5);display:flex;flex-direction:column;gap:var(--s2);}
 .earth-first-kicker{margin:0;font-size:var(--t-xs);color:var(--muted);}
 .earth-first h2{margin:0;font:650 var(--t-xl)/1.35 var(--sans);}
 .earth-first .earth-muted{margin:0;line-height:1.6;}
@@ -104,14 +104,15 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-first-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s1);}
 .earth-first-button{min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-raised);color:var(--text);font-size:var(--t-md);}
 .earth-first-button:hover{background:var(--surface-press);}
-.earth-first-link{align-self:flex-start;min-height:36px;color:var(--muted);font-size:var(--t-sm);text-decoration:underline;}
+.earth-first-link{align-self:flex-start;min-height:44px;color:var(--muted);font-size:var(--t-sm);text-decoration:underline;}
 .earth-first-field{display:flex;flex-direction:column;gap:6px;font-size:var(--t-sm);color:var(--muted);}
-.earth-first-field select{min-height:42px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);padding:0 var(--s3);font:inherit;}
+.earth-first-field select{min-height:44px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-raised);color:var(--text);padding:0 var(--s3);font:inherit;}
 .first-drafts{display:flex;flex-direction:column;}
 .earth-first-draft{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:56px;padding:var(--s2) 0;text-align:left;box-shadow:0 1px 0 var(--line);}
 .earth-first-draft strong{font-size:var(--t-md);font-weight:550;}
 .earth-first-draft small{font-size:var(--t-xs);color:var(--muted);}
 .earth-first-draft:hover strong{color:var(--accent);}
+.earth-first-hint{margin:0;font-size:var(--t-xs);color:var(--faint);line-height:1.5;}
 .earth-first-error{margin:0;color:var(--bad);font-size:var(--t-sm);}
 .earth-first button:disabled{opacity:.5;}
 
@@ -119,12 +120,12 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-home #earth-sheet #card{position:static;display:flex;flex-direction:column;transform:none;inset:auto;width:100%;max-width:none;min-height:0;max-height:none;opacity:1;padding:0 var(--s5) var(--s4);background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--text);flex:1;border-radius:0;overflow:hidden;}
 .earth-home #earth-sheet #card:not(.show){display:none;}
 .earth-home #card .card-x,.earth-home #card .card-kicker{display:none;}
-.earth-home #card h2{font:650 var(--t-xl)/1.3 var(--sans);margin:var(--s3) 0 4px;flex-shrink:0;}
+.earth-home #card h2{font:650 var(--t-xl)/1.3 var(--sans);margin:0 0 4px;flex-shrink:0;}
 .earth-home #card .card-date{color:var(--muted);font-size:var(--t-sm);flex-shrink:0;font-variant-numeric:tabular-nums;}
 .earth-home #card .record-source{color:var(--faint);font-size:var(--t-xs);margin:6px 0;flex-shrink:0;}
 .earth-home #card .record-source p{color:var(--faint);}
 .earth-home #card .record-actions{display:flex;gap:var(--s2);margin:4px 0;padding:var(--s2) 0;border:0;flex-shrink:0;}
-.earth-home #card .record-actions button{flex:1;min-height:40px;border:1px solid var(--line);background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);font-size:var(--t-sm);transition:background var(--dur-fast);}
+.earth-home #card .record-actions button{flex:1;min-height:44px;border:1px solid var(--line);background:var(--surface-raised);color:var(--text);border-radius:var(--r-md);font-size:var(--t-sm);transition:background var(--dur-fast);}
 .earth-home #card .record-actions button:hover{background:var(--surface-press);}
 .earth-home #card .record-actions button:first-child{background:var(--accent);color:var(--ink-on-accent);border-color:transparent;font-weight:600;}
 .earth-home #card .record-actions button:disabled{opacity:.4;}
@@ -135,7 +136,7 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-home #card .record-links strong{font-weight:500;}
 .earth-home #card .record-more{min-height:44px;color:var(--accent);}
 .earth-home #card .record-corrections input,.earth-home #card .record-corrections select{color:var(--text);background:var(--surface-raised);border:1px solid var(--line-2);border-radius:var(--r-sm);}
-.earth-home #card .btn{color:var(--text);background:var(--surface-raised);border-color:var(--line-2);min-height:40px;border-radius:var(--r-md);}
+.earth-home #card .btn{color:var(--text);background:var(--surface-raised);border-color:var(--line-2);min-height:44px;border-radius:var(--r-md);}
 .earth-home #card .record-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
 .earth-home #card .record-photo-grid figure{margin:0;min-width:0;}
 .earth-home #card .record-photo-grid figure>button,.earth-home #card .record-photo-grid figure>span{display:block;width:100%;aspect-ratio:1;border-radius:var(--r-sm);background:var(--surface-raised);overflow:hidden;color:var(--faint);font-size:10px;}
@@ -144,7 +145,9 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-home #card .earth-photo-large{display:block;max-width:100%;max-height:55dvh;object-fit:contain;margin:var(--s3) auto;border-radius:var(--r-md);}
 .earth-home #card .earth-city-links{display:flex;flex-wrap:wrap;gap:6px;}
 .earth-home #card .earth-city-links h3{width:100%;}
-.earth-home #card .earth-city-links .mini{width:auto;min-height:32px;padding:4px var(--s3);background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--r-sm);}
+/* The button owns the whole 44px box; only its inset chip is painted. */
+.earth-home #card .earth-city-links .mini{position:relative;isolation:isolate;width:auto;min-height:44px;justify-content:center;padding:10px var(--s3);background:none;border:0;border-radius:var(--r-sm);}
+.earth-home #card .earth-city-links .mini:before{content:'';position:absolute;inset:6px 0;z-index:-1;background:var(--surface-raised);border:1px solid var(--line);border-radius:inherit;pointer-events:none;}
 .earth-home #card .earth-city-links small{display:none;}
 
 /* ---------- states ---------- */
@@ -155,7 +158,7 @@ button.earth-note{min-height:38px;color:var(--muted);}
 .earth-home #story-player{max-width:600px;}
 .earth-home #pickbar{z-index:15;}
 .earth-home:has(#story-composer[open]) #earth-sheet,.earth-home:has(#my-dialog[open]) #earth-sheet{visibility:hidden;}
-.earth-demo{display:block;min-height:38px;font-size:var(--t-sm);color:var(--muted);margin-top:var(--s2);}
+.earth-demo{display:block;min-height:44px;font-size:var(--t-sm);color:var(--muted);margin-top:var(--s2);}
 .earth-demo:hover{color:var(--text);}
 /* Undo feedback floats next to the sheet, never over its actions. */
 @media(max-width:999px){
@@ -179,10 +182,38 @@ button.earth-note{min-height:38px;color:var(--muted);}
   .earth-home #toolbar{right:var(--s4);}
   #earth-time{max-width:150px;}
   #earth-sheet{width:calc(100% - var(--s5));border-radius:var(--r-lg);}
-  .earth-summary{padding:0 18px 18px;}
+  .earth-summary{padding:0 18px 10px;}
   .earth-summary h2{font-size:20px;}
   .earth-home #btn-home{bottom:224px;right:var(--s4);}
   .earth-home #earth-sheet #card{padding:0 18px var(--s4);}
   .earth-home #card h2{font-size:20px;}
 }
 @media(max-width:350px){.earth-note{display:none;}#earth-time{max-width:125px;}}
+
+/* Touch boxes belong to the controls themselves, including compact links and native fields.
+   Attribution and globe markers retain their existing styles. */
+.earth-home :is(#earth-sheet,#brand,#toolbar,#my-dialog,#photo-dialog,#life-dialog,#first-use-dialog) :is(button,[role=button],input:not([type=checkbox],[type=radio]),select,label.btn,label.auto-link,summary),
+.earth-home :is(#earth-time,#btn-my,#btn-home,.x){min-width:44px;min-height:44px;}
+.earth-home .x{width:44px;height:44px;}
+/* Native toggles stay small; clicking anywhere in their label changes the input. */
+.earth-home :is(#earth-sheet,#brand,#toolbar,#my-dialog,#photo-dialog,#life-dialog,#first-use-dialog) label:has(input:is([type=checkbox],[type=radio])){min-width:44px;min-height:44px;display:flex;align-items:center;gap:var(--s2);}
+.earth-home :is(#earth-sheet,#brand,#toolbar,#my-dialog,#photo-dialog,#life-dialog,#first-use-dialog) :is(button,[role=button],input,select,label.btn,label.auto-link,summary),
+.earth-home #btn-home{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+/* The handle needs raw pointer movement for the existing sheet drag gesture. */
+.earth-home #earth-sheet .earth-handle{touch-action:none;}
+
+/* Press feedback starts in the pointer-down frame, without the hover transition. */
+.earth-home :is(#earth-sheet,#my-dialog,#photo-dialog) :is(button,[role=button],label.btn,label.auto-link,summary):active,
+.earth-home :is(#earth-time,#btn-my,#btn-home):active{filter:brightness(.92);transition:none;}
+.earth-home :is(#earth-sheet,#my-dialog,#photo-dialog) :is(button,[role=button],label.btn,label.auto-link,summary):not(:where(.earth-primary,.primary,.card-replay,.earth-handle,.earth-city-links .mini)):active,
+.earth-home :is(#earth-time,#btn-my,#btn-home):active{background:var(--surface-press);}
+.earth-home #earth-sheet .earth-handle:active{background:none;}
+.earth-home #earth-sheet .earth-handle:active:after{background:var(--muted);transition:none;}
+.earth-home #card .earth-city-links .mini:active{background:none;}
+.earth-home #card .earth-city-links .mini:active:before{background:var(--surface-press);}
+
+/* No surface in earth home re-samples the live WebGL canvas for blur. */
+.earth-home *, .earth-home ::before, .earth-home ::after, .earth-home ::backdrop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+body.earth-home .glass,
+.earth-home :is(#my-dialog,#photo-dialog,#life-dialog,#first-use-dialog){background:var(--surface-solid);}
+.earth-home :is(#my-dialog,#photo-dialog,#life-dialog,#first-use-dialog)::backdrop{background:color-mix(in srgb,var(--bg) 65%,transparent);}

@@ -5,7 +5,7 @@ export function renderResolutionBudget({mobile=false,dpr=1,memoryGB,width=0,heig
   const area=Math.max(1,width*height);
   const fit=(ratio,pixels)=>Math.min(dpr,ratio,Math.sqrt(pixels/area));
   const maxScale=fit(low?1:high?2:1.5,low?800000:1600000);
-  return {maxScale,minScale:Math.min(maxScale,low ? .75 : high ? 1 : .85),stillScale:fit(low?1.5:high?3:2.5,low?1200000:high?4000000:3000000)};
+  return {maxScale,minScale:Math.min(maxScale,low ? .75 : high ? 1 : .85),stillScale:maxScale};
 }
 export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=false }) {
   const scene = viewer.scene;
@@ -20,7 +20,8 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
   let tickOrigin, lastSlot = 0;
   const applyScale = () => {
     ({maxScale,minScale,stillScale}=budget());scale=Math.max(minScale,Math.min(maxScale,scale));
-    const pixels = benchmark?1:still ? stillScale : scale;
+    // Phone gestures must not resize framebuffers, including after adaptive down-scaling.
+    const pixels = benchmark?1:!mobile&&still ? stillScale : scale;
     viewer.resolutionScale = pixels / (window.devicePixelRatio || 1);
     // Supersampled stills already smooth the silhouette; FXAA also softens mountain/coast detail.
     if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = !near && (mobile?pixels<1.5:!still||pixels<1.5);
@@ -94,7 +95,7 @@ export function createRenderPolicy(viewer, { mobile, reducedMotion, benchmark=fa
         }
       } else goodWindows = 0;
     },
-    details: () => ({ targetFps, pixelRatio: +(benchmark?1:still ? stillScale : scale).toFixed(2),
+    details: () => ({ targetFps, pixelRatio: +(benchmark?1:!mobile&&still ? stillScale : scale).toFixed(2),
       nativePixelRatio:window.devicePixelRatio||1,stillPixelRatio:+stillScale.toFixed(2),maxPixelRatio:+maxScale.toFixed(2),
       quality: still ? 'still' : 'motion', terrainError: scene.globe?.maximumScreenSpaceError,
       cadenceClock:Number.isFinite(document.timeline?.currentTime)?'animation':'performance' }),

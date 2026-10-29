@@ -57,7 +57,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   }
   function Summary({d,t,scoped,year,scope,coverURL,demoAvailable}){
     const demo=d.meta.origin==='demo';
-    const head=html`<div class="earth-summary-top"><span>${(demo?'示例 · ':'')+(t&&dateBound(t.start)==null?'日期未确认':'最近一次旅行')}</span><button type="button" data-earth="directory">全部旅行<${Icon} name="chevron-right" /></button></div>`;
+    const head=t&&html`<div class="earth-summary-top"><span>${(demo?'示例 · ':'')+(dateBound(t.start)==null?'日期未确认':'最近一次旅行')}</span><button type="button" data-earth="directory">全部旅行<${Icon} name="chevron-right" /></button></div>`;
     if(!t)return html`<div class="earth-summary">${head}<h2>${scoped?'这段时间没有旅行':'还没有旅行记录'}</h2><p>${scoped?'居住地和城市仍显示在地球上。':'导入相册后，会按拍摄时间和地点整理成旅行。'}</p><button type="button" data-earth="add" class="earth-primary">添加照片</button>${scoped&&html`<button type="button" data-earth="year" data-year="all">查看全部时间</button>`}${scope.type==='chapter'&&html`<button type="button" data-earth="replay-range">回放这个阶段</button>`}${demoAvailable&&html`<button type="button" data-earth="demo" class="earth-demo">看看示例</button>`}</div>`;
     const photos=d.memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.tripIds.includes(t.id)).length;
     // No placeholder art: the cover slot appears only once a real photo has loaded.

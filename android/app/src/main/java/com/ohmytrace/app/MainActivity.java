@@ -47,6 +47,8 @@ public final class MainActivity extends Activity {
     // local origin receives the bridge; external navigation leaves the WebView.
     @android.annotation.SuppressLint("SetJavaScriptEnabled")
     @Override public void onCreate(Bundle state) {
+        // Debuggable builds only: lets chrome://inspect attach for on-device profiling. Release builds stay closed.
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) WebView.setWebContentsDebuggingEnabled(true);
         super.onCreate(state); library = new MediaLibrary(this); web = new WebView(this);
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             TextView message = new TextView(this); message.setText(R.string.webview_update_required); setContentView(message); return;
