@@ -741,7 +741,8 @@ function framedAboveSheet(center,offset) {
 }
 
 // close: drop low over a single place so its trees, flowers and clouds are in view
-// overview: a regional view of the place (the first-use tour), never a ground-level dive into unloaded imagery
+// overview: a regional view of the place (the first-use tour). It stays above HERO_START so the bundled
+// earth textures draw at once; below it the globe waits for online imagery tiles and shows black or blur.
 function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, overview = false, placeName } = {}) {
   if(reducedMotion)duration=0;
   if (!viewer || !positions.length) return Promise.resolve(false);
@@ -753,7 +754,7 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, o
   const r = sphere.radius;
   const framing=close&&placeName?sceneTemplateFor({name:placeName,...state.places[placeName],height:state.places[placeName]?.h||0}).camera:null;
   const storyMinimum=publicViewer||storyBaseLife?!terrainReady?1200000:state.places[placeName]?.granularity!=='precise'?90000:0:0;
-  const range = Math.max(storyMinimum,overview?600000:close ? framing?.range||1900 : Math.max(earthHome&&!storyBaseLife?6000000:30000, r * 3.4));
+  const range = Math.max(storyMinimum,overview?2600000:close ? framing?.range||1900 : Math.max(earthHome&&!storyBaseLife?6000000:30000, r * 3.4));
   const pitch = Cesium.Math.toRadians(overview?-55:earthHome&&!storyBaseLife&&!close?-75:close ? framing?.pitch||-19 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
   const flight = flightGeneration = cameraDirector.begin('entering');
   flying = true;
