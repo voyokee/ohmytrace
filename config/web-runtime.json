@@ -766,7 +766,10 @@
     "vendor/cesium/Workers/transferTypedArrayTest.js",
     "vendor/cesium/Workers/upsampleQuantizedTerrainMesh.js",
     "vendor/cesium/index.cjs",
-    "vendor/cesium/index.js"
+    "vendor/cesium/index.js",
+    "vendor/htm-preact/LICENSE-htm",
+    "vendor/htm-preact/LICENSE-preact",
+    "vendor/htm-preact/standalone.module.js"
   ],
   "viewer": [
     "LICENSE",

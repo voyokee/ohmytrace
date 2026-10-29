@@ -1,16 +1,21 @@
 import {dateBound,periodText} from '../life/schema.js';
 import {recentTrips,earthTripTitle,tripLocationCount} from './earth-home-model.js';
-import {iconNode as icon} from './icons.js';
+import {html,render as renderView} from '../../vendor/htm-preact/standalone.module.js';
+import {paths} from './icons.js';
 
-const node=(tag,attrs={},...children)=>{const el=document.createElement(tag);for(const [k,v]of Object.entries(attrs))if(v!=null)el.setAttribute(k,String(v));for(const c of children.flat())if(c!=null)el.append(typeof c==='string'?document.createTextNode(c):c);return el;};
-const button=(label,action,attrs={})=>node('button',{type:'button','data-earth':action,...attrs},label);
+const Icon=({name})=>html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML=${{__html:paths[name]||''}} />`;
 const period=t=>periodText(t.start,t.end);
 
 export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onChapter,onSelect,onClear,onReplay,captureCamera,restoreCamera,thumbnail,recordCard,onPause}){
   document.body.classList.add('earth-home');
-  const root=node('section',{id:'earth-sheet','data-height':'peek','aria-label':'旅行'}),handle=button('展开旅行','expand',{class:'earth-handle','aria-label':'展开当前旅行'}),bar=node('div',{class:'earth-sheet-bar'}),content=node('div',{class:'earth-sheet-content'}),card=document.querySelector('#card');
+  const root=document.createElement('section'),handle=document.createElement('button'),bar=document.createElement('div'),content=document.createElement('div'),card=document.querySelector('#card');
+  root.id='earth-sheet';root.dataset.height='peek';root.setAttribute('aria-label','旅行');
+  handle.type='button';handle.dataset.earth='expand';handle.className='earth-handle';handle.textContent='展开旅行';handle.setAttribute('aria-label','展开当前旅行');
+  bar.className='earth-sheet-bar';content.className='earth-sheet-content';
+  // Preact owns only these containers; the record card remains an imperative sibling.
   root.append(handle,bar,content,card);document.body.append(root);
-  const scopeButton=button([node('span',{},'全部时间'),icon('chevron-down')],'time',{id:'earth-time','aria-haspopup':'dialog'});document.querySelector('#brand').append(scopeButton);
+  const scopeButton=document.createElement('button');scopeButton.type='button';scopeButton.id='earth-time';scopeButton.dataset.earth='time';scopeButton.setAttribute('aria-haspopup','dialog');document.querySelector('#brand').append(scopeButton);
+  renderView(html`<span>全部时间</span><${Icon} name="chevron-down" />`,scopeButton);
   let view={mode:'peek',height:'peek',target:null},history=[],restoring=false,query='',directoryScroll=0,scopeScroll=0,replayState=null;
   // A flow from outside (first use) can borrow the sheet; it supplies the content and handles Escape.
   let hosted=null;
@@ -50,59 +55,55 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     if(mode!=='overview'&&view.mode==='detail'){push();view={...view,mode:'record',height:'full'};onPause();render();}
     else if(mode==='overview'&&view.mode==='record'){if(history.at(-1)?.view.mode==='detail')history.pop();view={...view,mode:'detail',height:'half'};render();}
   }
-  function summary(){
-    const t=available()[0],demo=data().meta.origin==='demo';
-    const scoped=getYear()!=null||getScope().type==='chapter';
-    const head=node('div',{class:'earth-summary-top'},node('span',{},(demo?'示例 · ':'')+(t&&dateBound(t.start)==null?'日期未确认':'最近一次旅行')),button(['全部旅行',icon('chevron-right')],'directory'));
-    if(!t)return node('div',{class:'earth-summary'},head,node('h2',{},scoped?'这段时间没有旅行':'还没有旅行记录'),node('p',{},scoped?'居住地和城市仍显示在地球上。':'导入相册后，会按拍摄时间和地点整理成旅行。'),button('添加照片','add',{class:'earth-primary'}),scoped?button('查看全部时间','year',{'data-year':'all'}):null,getScope().type==='chapter'?button('回放这个阶段','replay-range'):null,document.querySelector('#empty-demo').hidden?null:button('看看示例','demo',{class:'earth-demo'}));
-    const text=node('div',{class:'earth-summary-copy'},node('h2',{},earthTripTitle(data(),t)),node('p',{},period(t)+' · '+count(t)));
+  function Summary({d,t,scoped,year,scope,coverURL,demoAvailable}){
+    const demo=d.meta.origin==='demo';
+    const head=html`<div class="earth-summary-top"><span>${(demo?'示例 · ':'')+(t&&dateBound(t.start)==null?'日期未确认':'最近一次旅行')}</span><button type="button" data-earth="directory">全部旅行<${Icon} name="chevron-right" /></button></div>`;
+    if(!t)return html`<div class="earth-summary">${head}<h2>${scoped?'这段时间没有旅行':'还没有旅行记录'}</h2><p>${scoped?'居住地和城市仍显示在地球上。':'导入相册后，会按拍摄时间和地点整理成旅行。'}</p><button type="button" data-earth="add" class="earth-primary">添加照片</button>${scoped&&html`<button type="button" data-earth="year" data-year="all">查看全部时间</button>`}${scope.type==='chapter'&&html`<button type="button" data-earth="replay-range">回放这个阶段</button>`}${demoAvailable&&html`<button type="button" data-earth="demo" class="earth-demo">看看示例</button>`}</div>`;
+    const photos=d.memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.tripIds.includes(t.id)).length;
     // No placeholder art: the cover slot appears only once a real photo has loaded.
-    const cover=node('span',{class:'earth-cover','aria-hidden':'true',hidden:''});
-    const body=button('','select',{'data-trip':t.id,class:'earth-summary-main'});body.append(cover,text,node('span',{class:'earth-chevron'},icon('chevron-right')));
-    loadCover(t,cover);
-    const photos=data().memories.filter(m=>m.kind==='photo'&&!m.hidden&&m.tripIds.includes(t.id)).length;
-    return node('div',{class:'earth-summary'},head,body,node('div',{class:'earth-summary-actions'},button([icon('play'),'回放'],'replay',{'data-trip':t.id,class:'earth-primary','aria-label':'回放这次旅行'}),scoped?button(getYear()!=null?'回放这一年':'回放这个阶段','replay-range',{class:'earth-note'}):photos?node('span',{class:'earth-note'},photos+' 张照片'):null));
+    return html`<div class="earth-summary">${head}<button type="button" data-earth="select" data-trip=${t.id} class="earth-summary-main"><span class="earth-cover" aria-hidden="true" hidden=${!coverURL}>${coverURL&&html`<img src=${coverURL} alt="" />`}</span><div class="earth-summary-copy"><h2>${earthTripTitle(d,t)}</h2><p>${period(t)+' · '+count(t)}</p></div><span class="earth-chevron"><${Icon} name="chevron-right" /></span></button>
+      <div class="earth-summary-actions"><button type="button" data-earth="replay" data-trip=${t.id} class="earth-primary" aria-label="回放这次旅行"><${Icon} name="play" />回放</button>${scoped?html`<button type="button" data-earth="replay-range" class="earth-note">${year!=null?'回放这一年':'回放这个阶段'}</button>`:photos?html`<span class="earth-note">${photos+' 张照片'}</span>`:null}</div></div>`;
   }
-  function loadCover(trip,el){
+  function loadCover(trip){
     const m=data().memories.find(m=>m.kind==='photo'&&!m.hidden&&m.tripIds.includes(trip.id)),key=m?.id||'';
-    const show=slot=>{if(!slot)return;slot.replaceChildren(node('img',{src:coverURL,alt:''}));slot.hidden=false;};
-    if(key===coverKey){if(coverURL)show(el);return;}
+    if(key===coverKey)return;
     coverKey=key;const ticket=++coverTicket;if(coverURL)URL.revokeObjectURL(coverURL);coverURL=null;
     if(!m)return;
-    thumbnail(m,{}).then(blob=>{if(ticket!==coverTicket||!blob?.size)return;coverURL=URL.createObjectURL(blob);show(root.querySelector('.earth-cover'));}).catch(()=>{});
+    thumbnail(m,{}).then(blob=>{if(ticket!==coverTicket||!blob?.size)return;coverURL=URL.createObjectURL(blob);if(view.mode==='peek'&&!hosted)render();}).catch(()=>{});
   }
-  function directory(){
-    const list=node('div',{class:'earth-directory'}),search=node('input',{type:'search',placeholder:'搜索旅行或城市','aria-label':'搜索旅行或城市',value:query});
-    search.addEventListener('input',()=>{query=search.value;const start=search.selectionStart;render();const next=content.querySelector('input');next.focus();next.setSelectionRange(start,start);});
-    list.append(search);let group=null;
-    for(const t of available(query)){
-      const year=t.start?.value?.slice(0,4)||'日期未知';if(year!==group){group=year;list.append(node('h3',{},year));}
+  function Directory({trips,query}){
+    let group=null;const rows=[];
+    for(const t of trips){
+      const year=t.start?.value?.slice(0,4)||'日期未知';if(year!==group){group=year;rows.push(html`<h3 key=${'year-'+year}>${year}</h3>`);}
       // The year is the group heading; rows start at the month.
       const when=period(t),local=when.startsWith(year+'年')&&when.length>year.length+1?when.slice(year.length+1):when;
-      const row=button('','select',{'data-trip':t.id,class:'earth-trip-row'});
-      row.append(node('span',{},node('strong',{},earthTripTitle(data(),t)),node('small',{},local+' · '+count(t))),icon('chevron-right'));list.append(row);
+      rows.push(html`<button key=${t.id} type="button" data-earth="select" data-trip=${t.id} class="earth-trip-row"><span><strong>${earthTripTitle(data(),t)}</strong><small>${local+' · '+count(t)}</small></span><${Icon} name="chevron-right" /></button>`);
     }
-    if(!available(query).length)list.append(node('p',{class:'earth-muted'},'没有符合条件的旅行。'));
-    return list;
+    return html`<div class="earth-directory"><input type="search" placeholder="搜索旅行或城市" aria-label="搜索旅行或城市" value=${query} onInput=${search} />${rows}${!trips.length&&html`<p class="earth-muted">没有符合条件的旅行。</p>`}</div>`;
   }
-  function timeChooser(){
-    const d=data(),years=new Set();for(const t of [...d.trips,...d.residences])if(!t.hidden){const a=dateBound(t.start),b=dateBound(t.end,true);if(a!=null)for(let y=new Date(a).getUTCFullYear();y<=Math.min(new Date(b??a).getUTCFullYear(),9999);y++)years.add(y);}
-    return node('div',{class:'earth-time-options'},button('全部时间','year',{'data-year':'all','aria-pressed':getYear()==null&&getScope().type!=='chapter'}),node('h3',{},'按年份'),node('div',{class:'earth-years'},[...years].sort((a,b)=>b-a).map(y=>button(y+' 年','year',{'data-year':y,'aria-pressed':getYear()===y}))),node('h3',{},'人生阶段'),d.chapters.filter(c=>!c.hidden).map(c=>button(c.title+' · '+period(c),'chapter',{'data-chapter':c.id,'aria-pressed':getScope().id===c.id})),d.chapters.some(c=>!c.hidden)?button('管理人生阶段','manage'):[node('p',{class:'earth-muted'},'还没有人生阶段。'),button('新建人生阶段','manage')]);
+  function search(event){query=event.currentTarget.value;render();}
+  function TimeChooser({d,year,scope}){
+    const years=new Set();for(const t of [...d.trips,...d.residences])if(!t.hidden){const a=dateBound(t.start),b=dateBound(t.end,true);if(a!=null)for(let y=new Date(a).getUTCFullYear();y<=Math.min(new Date(b??a).getUTCFullYear(),9999);y++)years.add(y);}
+    const chapters=d.chapters.filter(c=>!c.hidden);
+    return html`<div class="earth-time-options"><button type="button" data-earth="year" data-year="all" aria-pressed=${year==null&&scope.type!=='chapter'}>全部时间</button>
+      <h3>按年份</h3><div class="earth-years">${[...years].sort((a,b)=>b-a).map(y=>html`<button key=${y} type="button" data-earth="year" data-year=${y} aria-pressed=${year===y}>${y+' 年'}</button>`)}</div>
+      <h3>人生阶段</h3>${chapters.map(c=>html`<button key=${c.id} type="button" data-earth="chapter" data-chapter=${c.id} aria-pressed=${scope.id===c.id}>${c.title+' · '+period(c)}</button>`)}${chapters.length?html`<button type="button" data-earth="manage">管理人生阶段</button>`:html`<p class="earth-muted">还没有人生阶段。</p><button type="button" data-earth="manage">新建人生阶段</button>`}</div>`;
   }
+  function Cities({cities}){return html`<div class="earth-directory">${cities.map(p=>html`<button key=${p.id} type="button" data-earth="city" data-place=${p.id} class="earth-trip-row"><span><strong>${p.name}</strong></span><${Icon} name="chevron-right" /></button>`)}</div>`;}
+  function Bar({title,height}){return html`<button type="button" data-earth="back" aria-label="返回上一层"><${Icon} name="chevron-left" />返回</button><span>${title}</span><button type="button" data-earth="size">${height==='half'?html`展开<${Icon} name="maximize-2" />`:html`收起<${Icon} name="minimize-2" />`}</button>`;}
   function render(){
-    scopeButton.replaceChildren(node('span',{},label()),icon('chevron-down'));root.dataset.height=view.height;root.dataset.mode=view.mode;
+    renderView(html`<span>${label()}</span><${Icon} name="chevron-down" />`,scopeButton);root.dataset.height=view.height;root.dataset.mode=view.mode;
     document.body.classList.toggle('earth-full',view.height==='full');
     const detail=view.mode==='detail'||view.mode==='record';card.hidden=!detail;
     bar.hidden=view.mode==='peek';content.hidden=detail;
     handle.setAttribute('aria-label',view.height==='peek'?'展开当前旅行':'收起当前内容');
-    const title=view.mode==='directory'?'全部旅行':view.mode==='time'?'时间范围':view.mode==='cities'?'附近城市':view.mode==='record'?'详情':'';
-    bar.replaceChildren(button([icon('chevron-left'),'返回'],'back',{'aria-label':'返回上一层'}),node('span',{},title),button(view.height==='half'?['展开',icon('maximize-2')]:['收起',icon('minimize-2')],'size'));
-    if(hosted&&view.mode===hosted.mode){bar.hidden=true;const next=hosted.render(),step=content.firstElementChild?.dataset.step;content.replaceChildren(next);if(next.dataset.step!==step)content.scrollTop=0;return;}
-    if(view.mode==='peek')content.replaceChildren(summary());
-    if(view.mode==='directory'){content.replaceChildren(directory());content.scrollTop=directoryScroll;}
-    if(view.mode==='time'){content.replaceChildren(timeChooser());content.scrollTop=scopeScroll;}
-    if(view.mode==='cities')content.replaceChildren(node('div',{class:'earth-directory'},view.cities.map(p=>button([node('span',{},node('strong',{},p.name)),icon('chevron-right')],'city',{'data-place':p.id,class:'earth-trip-row'}))));
-    if(detail)bar.querySelector('span').textContent=view.target?.kind==='place'?'城市':view.target?.kind==='chapter'?'人生阶段':'旅行';
+    const title=detail?(view.target?.kind==='place'?'城市':view.target?.kind==='chapter'?'人生阶段':'旅行'):view.mode==='directory'?'全部旅行':view.mode==='time'?'时间范围':view.mode==='cities'?'附近城市':'';
+    renderView(html`<${Bar} title=${title} height=${view.height} />`,bar);
+    if(hosted&&view.mode===hosted.mode){bar.hidden=true;const step=content.firstElementChild?.dataset.step;renderView(hosted.render(),content);if(content.firstElementChild?.dataset.step!==step)content.scrollTop=0;return;}
+    if(view.mode==='peek'){const t=available()[0];if(t)loadCover(t);renderView(html`<${Summary} d=${data()} t=${t} scoped=${getYear()!=null||getScope().type==='chapter'} year=${getYear()} scope=${getScope()} coverURL=${coverURL} demoAvailable=${!document.querySelector('#empty-demo').hidden} />`,content);}
+    if(view.mode==='directory'){renderView(html`<${Directory} trips=${available(query)} query=${query} />`,content);content.scrollTop=directoryScroll;}
+    if(view.mode==='time'){renderView(html`<${TimeChooser} d=${data()} year=${getYear()} scope=${getScope()} />`,content);content.scrollTop=scopeScroll;}
+    if(view.mode==='cities')renderView(html`<${Cities} cities=${view.cities} />`,content);
   }
   async function replay(scope){
     replayState={view:structuredClone(view),history:[...history],camera:captureCamera(),record:recordCard.snapshot(),scroll:card.querySelector('.record-body')?.scrollTop||content.scrollTop};

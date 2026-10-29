@@ -34,6 +34,8 @@
 
 ## 验证
 
+地球首页底部内容层与首次使用流程现用离线 vendored Preact 10 + htm 3.1.1 组件声明式渲染，导航状态机与中文文案不变。Preact 仅管理顶栏、内容区和时间按钮的内部节点，`record-card.js` 仍独立管理原有 `#card`；目录搜索保留输入节点、焦点和光标，借用内容层的流程返回 vnode，并在 `data-step` 改变时重置滚动位置。
+
 - `npm test`：渲染／性能逻辑检查与 **235 项 Life 测试**通过，其中新增 7 项排序、城市身份、跨年范围与阶段范围回归。
 - `npm run test:production`：3 项构建可复现性、边界与 Android 名称检查通过。
 - `npm run test:publishing`：6 项发布协议检查通过。

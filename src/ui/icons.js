@@ -1,5 +1,5 @@
 // Lucide icons v0.469.0, ISC licence (https://lucide.dev). Inlined so the app stays offline.
-const paths={
+export const paths={
   'arrow-up-right':'<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
   'chevron-down':'<path d="m6 9 6 6 6-6"/>',
   'chevron-left':'<path d="m15 18-6-6 6-6"/>',
