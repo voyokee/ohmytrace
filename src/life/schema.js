@@ -30,6 +30,21 @@ export function dateBound(date, upper = false, now = Date.now()) {
   if (upper && !d) { result.setUTCMonth(result.getUTCMonth() + 1, 0); }
   return result.getTime();
 }
+// 2025年4月, 2024年5月1日—8日, 2021年—至今: dates as people write them. The end drops the
+// year and month it shares with the start.
+export function periodText(start, end) {
+  const text = (date, from) => {
+    if (!date || date.precision === 'unknown' || (!date.value && date.precision !== 'ongoing')) return '日期待确认';
+    if (date.precision === 'ongoing') return '至今';
+    const [y,m,d] = date.value.split('-').map(Number), [fy,fm] = from?.value ? from.value.split('-').map(Number) : [];
+    const year = fy === y ? '' : y + '年';
+    if (!m) return y + '年';
+    if (!d) return year + m + '月';
+    return (fy === y && fm === m ? '' : year + m + '月') + d + '日';
+  };
+  const same = !end || start?.precision === end.precision && start?.value === end.value;
+  return same ? text(start) : text(start) + '—' + text(end, start);
+}
 export function validatePeriod(start, end) {
   validateDate(start, false); validateDate(end, true);
   const a = dateBound(start), b = dateBound(end, true);

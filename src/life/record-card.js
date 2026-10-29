@@ -1,12 +1,12 @@
-import {clone,dateBound} from './schema.js';
+import {clone,dateBound,periodText} from './schema.js';
 import {sourceSummary} from './edits.js';
 import {tripCountsAsTravel,visitCountsAsTravel,visiblePlace} from './travel-policy.js';
 import {photoPlaceName,photoRegion,cityIdentity} from './geocoding/region-policy.js';
 import {readTripTitle} from './media/journey-title.js';
 
 const collections={place:'places',trip:'trips',residence:'residences',chapter:'chapters'};
-const dateText=d=>!d||d.precision==='unknown'?'日期待确认':d.precision==='ongoing'?'至今':d.value;
-const period=e=>dateText(e.start)+(e.start?.value===e.end?.value&&e.start?.precision===e.end?.precision?'':' — '+dateText(e.end));
+const dateText=d=>periodText(d);
+const period=e=>periodText(e.start,e.end);
 const overlaps=(a,b)=>(dateBound(a.start)??-Infinity)<=(dateBound(b.end,true)??Infinity)&&(dateBound(a.end,true)??Infinity)>=(dateBound(b.start)??-Infinity);
 export function recordCardModel(data,target,{year=null,scope:browsingScope=null}={}){
   const key=collections[target?.kind],entity=key&&data[key].find(e=>e.id===target.id&&!e.hidden);
@@ -122,16 +122,19 @@ export function mountRecordCard({element,repository,edits,getYear=()=>null,onClo
     const content=node('div',{class:'record-body'});
     if(model.region)content.append(node('p',{class:'hint record-region'},model.region));
     if(compact&&titleFor&&selection.kind==='trip')model.title=titleFor(data(),model.entity);
-    if(compact){actions.children[0].textContent='重走';actions.children[3].textContent='编辑';}
+    if(compact){actions.children[3].textContent='编辑';
+      // Read-only data (the demo) cannot share or edit; two dead buttons only add noise to a small sheet.
+      if(readonly()){actions.children[3].remove();actions.children[2].remove();}}
     if(mode==='photo'){const memory=model.photos.find(m=>m.id===photoId);content.append(node('p',{},memory?.title||'照片'),node('button',{type:'button',class:'btn','data-record-action':'photos'},'返回照片'));if(memory)thumbnail(memory,{signal:controller.signal}).then(blob=>{if(ticket!==generation)return;if(!blob?.size)throw new Error();const url=URL.createObjectURL(blob);urls.push(url);content.append(node('img',{src:url,alt:memory.title||'照片',class:'earth-photo-large'}));}).catch(()=>{if(ticket===generation)content.append(node('p',{class:'hint'},'原图不在本机，或尚未授权读取。'));});}
     else if(mode==='correct')content.append(correction(model));
     else if(mode==='photos')content.append(gallery(model,ticket));
     else {
       content.append(...[links('居住记录',model.residences),compact&&selection.kind==='trip'?null:links((compact&&selection.kind==='place'?'到访与相关旅行 · ':'相关旅程 · ')+model.journeys.length,model.journeys),links('路过 / 转机',model.connections)].filter(Boolean));
-      if(compact&&selection.kind==='trip')content.append(node('p',{class:'hint'},'地点顺序已知，连接为推测，不代表实际轨迹。'));
+      // Said once, and only where there is a line to qualify; the source details carry the full note.
+      if(compact&&selection.kind==='trip'&&model.places.length>1)content.append(node('p',{class:'hint'},'连线按地点先后画出，不是实际路线。'));
       if(selection.kind==='trip'){const places=links('途经城市',model.places);if(places){if(compact)places.classList.add('earth-city-links');content.append(places);}}
       if(selection.kind==='chapter'){content.append(node('p',{class:'hint'},'阶段中的居住地点、旅程和照片共同组成这段回放。'));const anchors=links('阶段地点',model.entity.homeAnchors.filter(id=>visiblePlace(data(),id)).map(id=>({kind:'place',id,title:photoPlaceName(data().places.find(p=>p.id===id),data())})));if(anchors)content.append(anchors);}
-      if(compact){const preview=gallery({...model,photos:model.photos.slice(0,3)},ticket);preview.querySelector('h3').textContent='照片 · '+model.photos.length;content.append(preview);if(model.photos.length>3)content.append(node('button',{type:'button',class:'record-more','data-record-action':'photos'},'查看全部 '+model.photos.length+' 张照片'));}
+      if(compact&&model.photos.length){const preview=gallery({...model,photos:model.photos.slice(0,3)},ticket);preview.querySelector('h3').textContent='照片 · '+model.photos.length;content.append(preview);if(model.photos.length>3)content.append(node('button',{type:'button',class:'record-more','data-record-action':'photos'},'查看全部 '+model.photos.length+' 张照片'));}
       const placeId=selection.kind==='place'?selection.id:selection.kind==='residence'?model.entity.placeId:model.places[0]?.id;
       if(compact)content.append(source);
       if(placeId)content.append(node('button',{type:'button',class:'record-more','data-record-action':'explore','data-record-id':placeId},'近看这里'));
