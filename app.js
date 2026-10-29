@@ -203,7 +203,7 @@ let viewer, scene, terrainReady = false;
 let flying = false, flightGeneration = 0, orbit = null, lastInput = 0, pickName = null, playToken = 0;
 let footprintOverlay, mapChooser, markerInfo=new Map(), timelineGroups=new Map();
 let timelineLayoutKey, timelineFrame, timelineViewportWidth=0, timelineAtLatest=true;
-let arcSource = null, arcEntities = [], originEntity = null, arcSignature="";
+let arcSource = null, arcEntities = [], originEntity = null, arcSignature="", arcGrown="", arcGrowUntil = 0;
 let geo = { busy: false, done: 0, total: 0, failed: false };
 // name -> { pos, cur, wake }; cur fades toward the target brightness once performance.now() >= wake
 const lights = new Map();
@@ -577,7 +577,7 @@ async function initGlobe() {
     cameraDirector.update({ altitude: viewer.camera.positionCartographic.height, flying, scenery: scenery.name });
     renderPolicy.near(viewer.camera.positionCartographic.height < 20000);
     renderPolicy.still(!cameraMoving && !flying && !lightsAnimating && !orbit && !(scenery.name&&!reducedMotion) &&
-      !state.playing && !pickName && now >= globalSpinUntil && now-lastInput>800);
+      !state.playing && !pickName && now >= globalSpinUntil && now >= arcGrowUntil && now-lastInput>800);
     if (!renderPolicy.tick(now)) return;
     if(benchmark.enabled)scene.requestRender();
     const dt = Math.min((now - lastT) / 1000, 0.1);
@@ -585,7 +585,7 @@ async function initGlobe() {
     const animatedScenery = scenery.name && !reducedMotion && !body.classList.contains('modal-open');
     const moving = flying || !!orbit || !!animatedScenery || cameraMoving || lightsAnimating;
     if(body.classList.contains('scene-active') !== moving) body.classList.toggle('scene-active',moving);
-    if (lightsAnimating || animatedScenery || flying) scene.requestRender();
+    if (lightsAnimating || animatedScenery || flying || now < arcGrowUntil) scene.requestRender();
     if (flying || pickName || body.classList.contains('modal-open') || now - lastInput < 4000 || reducedMotion) return;
     const cam = viewer.camera;
     if (orbit) {
@@ -1175,6 +1175,8 @@ function showPlaceCluster(names,anchor,element) {
 function updateMarkerClasses() {
   if(!footprintOverlay)return;
   const sel=byId(state.sel),selected=new Set(state.city?[state.city]:sel?(sel.kind==='trip'?sel.stops.map(s=>s.place):[sel.place]):[]);
+  // The latest trip the earth home is tracing keeps its labels ahead of older footprints.
+  const featured=new Set(!sel&&!state.city?byId(earthHome?.featured())?.stops?.map(s=>s.place)||[]:[]);
   const data=[];
   for(const [name,info]of markerInfo) {
     const p=state.places[name],position=posOf(name);if(!position)continue;
@@ -1182,7 +1184,7 @@ function updateMarkerClasses() {
     const home=activeHomes.find(h=>h.kind==='home')||activeHomes[0],latest=activeTrips.at(-1),chosen=selected.has(name),observed=info.photos?.some(p=>state.year==null||p.years.includes(state.year));
     data.push({id:name,label:coreName(name),fullName:name,position,lon:p.lon,lat:p.lat,home:home?.anchor?undefined:home?.kind,
       active:!!(activeTrips.length||home||chosen||observed),selected:chosen,dim:!!(sel||state.city)&&!chosen,
-      color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:home?300:0)+(latest?.date?.start||0)/1e13});
+      color:latest?typeColors[latest.type]:HOME_COLOR,priority:(home?.kind==='home'?500:chosen?400:featured.has(name)?350:home?300:0)+(latest?.date?.start||0)/1e13});
   }
   footprintOverlay.setItems(data);
 }
@@ -1206,36 +1208,54 @@ function arcPositions(a, b, n = 72) {
   return out;
 }
 
+// Draws an arc from its start after `delay`, then settles to a constant line so idle frames stay cheap.
+function growArc(e,positions,delay,ms) {
+  if(reducedMotion)return 0;
+  const t0=performance.now()+delay;arcGrowUntil=Math.max(arcGrowUntil,t0+ms+80);
+  e.polyline.show=new Cesium.CallbackProperty(()=>performance.now()>=t0,false);
+  e.polyline.positions=new Cesium.CallbackProperty(()=>{const f=Math.min(1,(performance.now()-t0)/ms),k=1-(1-f)**3;return positions.slice(0,Math.max(2,Math.ceil(k*positions.length)));},false);
+  setTimeout(()=>{e.polyline.positions=positions;e.polyline.show=true;},delay+ms+60);
+  scene.requestRender();return ms;
+}
 function renderArcs(){arcSignature=null;updateArcs();}
 function updateArcs() {
   if(!arcSource)return;
   const sel=byId(state.sel),list=visibleTrips();
-  const wanted=state.city?[]:sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
-  const signature=wanted.map(t=>t.id).join('\u0001');
-  if(signature!==arcSignature) {
-    arcSignature=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
+  let wanted=state.city?[]:sel?.kind==='trip'?[sel]:(state.year!=null||life?.adapter.scope.type==='chapter')&&list.length<=12?list:[];
+  // Earth home overview: trace the latest trip, so the globe itself answers "where did I go last".
+  const featured=!wanted.length&&!state.city&&!sel&&!storyBaseLife?list.find(t=>t.id===earthHome?.featured()):null;
+  if(featured)wanted=[featured];
+  const focus=sel?.kind==='trip'?sel:featured;
+  const signature=wanted.map(t=>t.id).join('\u0001')+(featured?'\u0002':''),fresh=signature!==arcSignature;
+  // Origin first, then each leg in order. Only the focused trip grows, and only when the focus changes,
+  // so data refreshes rebuild the lines without replaying the animation.
+  const grow=fresh&&signature!==arcGrown;let delay=0;
+  const origin=()=>{
+    if(!focus?.origin||focus.inferredConnections)return;
+    const a=posOf(focus.origin.place),firstStop=focus.stops.find(s=>located(s.place)),b=firstStop&&posOf(firstStop.place);
+    if(!a||!b||Cesium.Cartesian3.distance(a,b)<=30000)return;
+    const positions=arcPositions(a,b,96);
+    originEntity=arcSource.entities.add({polyline:{positions,width:featured?3.4:2.2,arcType:Cesium.ArcType.NONE,
+      material:new Cesium.PolylineDashMaterialProperty({color:Cesium.Color.fromCssColorString(HOME_COLOR).withAlpha(featured?.95:.75),dashLength:18})}});
+    if(grow)delay+=growArc(originEntity,positions,delay,900);
+  };
+  // Dashed arc from where the person lived at the time to the focused trip.
+  if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
+  if(fresh) {
+    arcSignature=signature;if(grow)arcGrown=signature;arcSource.entities.removeAll();arcEntities=[];originEntity=null;
+    origin();
     for(const t of wanted) {
       if(t.routeKind==='unknown')continue;
       const points=t.stops.map(s=>posOf(s.place)).filter(Boolean);
       for(let i=1;i<points.length;i++) {
-        const e=arcSource.entities.add({polyline:{positions:arcPositions(points[i-1],points[i]),width:sel?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
+        const positions=arcPositions(points[i-1],points[i]);
+        const e=arcSource.entities.add({polyline:{positions,width:focus?.id===t.id?6:3,arcType:Cesium.ArcType.NONE,
           material:t.inferredConnections?new Cesium.PolylineDashMaterialProperty({dashLength:12,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)}):new Cesium.PolylineGlowMaterialProperty({glowPower:.16,color:Cesium.Color.fromCssColorString(typeColors[t.type]).withAlpha(.65)})}});
+        if(grow&&focus?.id===t.id)delay+=growArc(e,positions,delay,650);
         arcEntities.push({trip:t,e});
       }
     }
-  }
-  // Dashed arc from where the person lived at the time to the selected trip.
-  if (originEntity) { arcSource.entities.remove(originEntity); originEntity = null; }
-  if (sel && sel.kind === 'trip' && sel.origin && !sel.inferredConnections) {
-    const a = posOf(sel.origin.place), firstStop = sel.stops.find(s => located(s.place));
-    const b = firstStop && posOf(firstStop.place);
-    if (a && b && Cesium.Cartesian3.distance(a, b) > 30000) {
-      originEntity = arcSource.entities.add({
-        polyline: { positions: arcPositions(a, b, 96), width: 2.2, arcType: Cesium.ArcType.NONE,
-          material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString(HOME_COLOR).withAlpha(0.75), dashLength: 18 }) },
-      });
-    }
-  }
+  } else origin();
 }
 
 /* ================= UI ================= */

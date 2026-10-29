@@ -1,5 +1,6 @@
 import {dateBound} from '../life/schema.js';
 import {recentTrips,earthTripTitle,tripLocationCount} from './earth-home-model.js';
+import {iconNode as icon} from './icons.js';
 
 const node=(tag,attrs={},...children)=>{const el=document.createElement(tag);for(const [k,v]of Object.entries(attrs))if(v!=null)el.setAttribute(k,String(v));for(const c of children.flat())if(c!=null)el.append(typeof c==='string'?document.createTextNode(c):c);return el;};
 const button=(label,action,attrs={})=>node('button',{type:'button','data-earth':action,...attrs},label);
@@ -9,7 +10,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   document.body.classList.add('earth-home');
   const root=node('section',{id:'earth-sheet','data-height':'peek','aria-label':'旅行与回忆'}),handle=button('展开旅行','expand',{class:'earth-handle','aria-label':'展开当前旅行'}),bar=node('div',{class:'earth-sheet-bar'}),content=node('div',{class:'earth-sheet-content'}),card=document.querySelector('#card');
   root.append(handle,bar,content,card);document.body.append(root);
-  const scopeButton=button('全部时间⌄','time',{id:'earth-time','aria-haspopup':'dialog'});document.querySelector('#brand').append(scopeButton);
+  const scopeButton=button([node('span',{},'全部时间'),icon('chevron-down')],'time',{id:'earth-time','aria-haspopup':'dialog'});document.querySelector('#brand').append(scopeButton);
   let view={mode:'peek',height:'peek',target:null},history=[],restoring=false,query='',directoryScroll=0,scopeScroll=0,replayState=null;
   let coverKey='',coverURL=null,coverTicket=0;
   const data=()=>repository.getDataset(),available=(filter='')=>recentTrips(data(),new Set(getTrips().map(t=>t.id)),filter);
@@ -45,13 +46,13 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   }
   function summary(){
     const t=available()[0],demo=data().meta.origin==='demo';
-    const head=node('div',{class:'earth-summary-top'},node('span',{},t&&dateBound(t.start)==null?'日期待确认的旅行':demo?'虚构足迹 · 最近旅行':'最近旅行'),button('全部旅行 ›','directory'));
+    const head=node('div',{class:'earth-summary-top'},node('span',{},t&&dateBound(t.start)==null?'日期待确认的旅行':demo?'虚构足迹 · 最近旅行':'最近旅行'),button(['全部旅行',icon('chevron-right')],'directory'));
     if(!t)return node('div',{class:'earth-summary'},head,node('h2',{},getYear()!=null||getScope().type==='chapter'?'这段时间还没有旅行':'把照片里的旅行，点亮在地球上'),node('p',{},'城市与居住记录仍可在地球上查看。'),button('添加照片','add',{class:'earth-primary'}),getYear()!=null||getScope().type==='chapter'?button('查看全部时间','year',{'data-year':'all'}):null,getScope().type==='chapter'?button('重走这个阶段','replay-range'):null,document.querySelector('#empty-demo').hidden?null:button('先看看虚构示例','demo',{class:'earth-demo'}));
     const text=node('div',{class:'earth-summary-copy'},node('h2',{},earthTripTitle(data(),t)),node('p',{},period(t)+' · '+count(t)));
-    const cover=node('span',{class:'earth-cover','aria-hidden':'true'},'◌');
-    const body=button('','select',{'data-trip':t.id,class:'earth-summary-main'});body.append(cover,text,node('span',{class:'earth-chevron'},'↗'));
+    const cover=node('span',{class:'earth-cover','aria-hidden':'true'},icon('images'));
+    const body=button('','select',{'data-trip':t.id,class:'earth-summary-main'});body.append(cover,text,node('span',{class:'earth-chevron'},icon('chevron-right')));
     loadCover(t,cover);
-    return node('div',{class:'earth-summary'},head,body,node('div',{class:'earth-summary-actions'},button('▶ 重走这段旅行','replay',{'data-trip':t.id,class:'earth-primary'}),getYear()!=null||getScope().type==='chapter'?button(getYear()!=null?'重走这一年':'重走这个阶段','replay-range',{class:'earth-note'}):node('span',{class:'earth-note'},'照片里的时间与地点')));
+    return node('div',{class:'earth-summary'},head,body,node('div',{class:'earth-summary-actions'},button([icon('play'),'重走这段旅行'],'replay',{'data-trip':t.id,class:'earth-primary'}),getYear()!=null||getScope().type==='chapter'?button(getYear()!=null?'重走这一年':'重走这个阶段','replay-range',{class:'earth-note'}):node('span',{class:'earth-note'},'照片里的时间与地点')));
   }
   function loadCover(trip,el){
     const m=data().memories.find(m=>m.kind==='photo'&&!m.hidden&&m.tripIds.includes(trip.id)),key=m?.id||'';
@@ -67,7 +68,7 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     for(const t of available(query)){
       const year=t.start?.value?.slice(0,4)||'日期未知';if(year!==group){group=year;list.append(node('h3',{},year));}
       const row=button('','select',{'data-trip':t.id,class:'earth-trip-row'});
-      row.append(node('span',{class:'earth-row-icon'},'↗'),node('span',{},node('strong',{},earthTripTitle(data(),t)),node('small',{},period(t)+' · '+count(t))),node('span',{},'›'));list.append(row);
+      row.append(node('span',{class:'earth-row-icon'},icon('route')),node('span',{},node('strong',{},earthTripTitle(data(),t)),node('small',{},period(t)+' · '+count(t))),icon('chevron-right'));list.append(row);
     }
     if(!available(query).length)list.append(node('p',{class:'earth-muted'},'没有符合条件的旅行。'));
     return list;
@@ -77,17 +78,17 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
     return node('div',{class:'earth-time-options'},button('全部时间','year',{'data-year':'all','aria-pressed':getYear()==null&&getScope().type!=='chapter'}),node('h3',{},'按年份'),[...years].sort((a,b)=>b-a).map(y=>button(y+' 年','year',{'data-year':y,'aria-pressed':getYear()===y})),node('h3',{},'人生阶段'),d.chapters.filter(c=>!c.hidden).map(c=>button(c.title+' · '+period(c),'chapter',{'data-chapter':c.id,'aria-pressed':getScope().id===c.id})),!d.chapters.some(c=>!c.hidden)?node('p',{class:'earth-muted'},'还没有人生阶段，可在“我的”中建立。'):null,button('管理人生阶段','manage'));
   }
   function render(){
-    scopeButton.textContent=label()+' ⌄';root.dataset.height=view.height;root.dataset.mode=view.mode;
+    scopeButton.replaceChildren(node('span',{},label()),icon('chevron-down'));root.dataset.height=view.height;root.dataset.mode=view.mode;
     document.body.classList.toggle('earth-full',view.height==='full');
     const detail=view.mode==='detail'||view.mode==='record';card.hidden=!detail;
     bar.hidden=view.mode==='peek';content.hidden=detail;
     handle.setAttribute('aria-label',view.height==='peek'?'展开当前旅行':'收起当前内容');
     const title=view.mode==='directory'?'全部旅行':view.mode==='time'?'选择时间':view.mode==='cities'?'这一带的城市':view.mode==='record'?'照片与编辑':'旅行与回忆';
-    bar.replaceChildren(button('‹ 返回','back',{'aria-label':'返回上一层'}),node('span',{},title),button(view.height==='half'?'展开 ↗':'收起','size'));
+    bar.replaceChildren(button([icon('chevron-left'),'返回'],'back',{'aria-label':'返回上一层'}),node('span',{},title),button(view.height==='half'?['展开',icon('maximize-2')]:['收起',icon('minimize-2')],'size'));
     if(view.mode==='peek')content.replaceChildren(summary());
     if(view.mode==='directory'){content.replaceChildren(directory());content.scrollTop=directoryScroll;}
     if(view.mode==='time'){content.replaceChildren(timeChooser());content.scrollTop=scopeScroll;}
-    if(view.mode==='cities')content.replaceChildren(node('div',{class:'earth-directory'},view.cities.map(p=>button(p.name+' ›','city',{'data-place':p.id,class:'earth-trip-row'}))));
+    if(view.mode==='cities')content.replaceChildren(node('div',{class:'earth-directory'},view.cities.map(p=>button([node('span',{class:'earth-row-icon'},icon('map-pin')),node('span',{},node('strong',{},p.name)),icon('chevron-right')],'city',{'data-place':p.id,class:'earth-trip-row'}))));
     if(detail)bar.querySelector('span').textContent=view.target?.kind==='place'?'城市与到访':view.target?.kind==='chapter'?'人生阶段':'旅行回忆';
   }
   async function replay(scope){
@@ -115,5 +116,5 @@ export function mountEarthHome({repository,getTrips,getScope,getYear,onYear,onCh
   scopeButton.addEventListener('click',()=>{onPause();navigate('time');});
   document.querySelector('#btn-list').addEventListener('click',()=>{document.body.classList.remove('list-open');navigate('directory');});
   let start=null,suppressedUntil=0;handle.addEventListener('pointerdown',e=>{start=e.clientY;handle.setPointerCapture(e.pointerId);});handle.addEventListener('pointerup',e=>{if(start==null)return;const delta=start-e.clientY;start=null;if(Math.abs(delta)>35)suppressedUntil=performance.now()+400;if(delta>35){if(view.mode==='peek'){const t=available()[0];if(t)onSelect({kind:'trip',id:t.id});}else{view.height='full';onPause();render();}}else if(delta< -35)back();});
-  return {openCities(cities){push();view={mode:'cities',height:'half',target:null,cities};onPause();render();},render,selected,changed,modeChanged,reset,back,replay,restoreReplay,escape(){if(view.mode==='peek')return false;if(view.mode==='record'){recordCard.escape();}else back();return true;},get state(){return structuredClone(view);}};
+  return {featured:()=>available()[0]?.id||null,openCities(cities){push();view={mode:'cities',height:'half',target:null,cities};onPause();render();},render,selected,changed,modeChanged,reset,back,replay,restoreReplay,escape(){if(view.mode==='peek')return false;if(view.mode==='record'){recordCard.escape();}else back();return true;},get state(){return structuredClone(view);}};
 }
