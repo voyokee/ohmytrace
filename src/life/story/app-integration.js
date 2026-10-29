@@ -29,12 +29,14 @@ export async function mountStoryExperience({privateData,getScope,enter,cancel,ap
     const places=story.orderedScenes.filter(s=>s.kind==='place'&&!seen.has(s.placeId)&&seen.add(s.placeId)).slice(0,4);
     if(!places.length){done();return;}story.selectedTripIds=[];story.selectedChapterIds=[];story.orderedScenes=[story.orderedScenes[0],...places,story.orderedScenes.at(-1)].map(s=>({...s,tripId:null,chapterId:null,duration:2}));
     story.title='照片里的这些地方';story.privacySettings.locationMode='precise';introDone=done;document.body.classList.add('first-intro');
-    introRemaining=20000;introStarted=null;introOff=player.playback.subscribe(s=>{
-      if(introStarted!==null){introRemaining-=performance.now()-introStarted;introStarted=null;}clearTimeout(introTimer);
+    // The introductory tour has a wall-clock cap that starts now, so loading and camera flights count too.
+    // Only a pause (the viewer's or a background one) stops the clock.
+    const run=()=>{introStarted=performance.now();introTimer=setTimeout(finishIntro,Math.max(0,introRemaining));};
+    introRemaining=20000;run();introOff=player.playback.subscribe(s=>{
       if(s.status==='ended'||s.status==='error'){finishIntro();return;}
-      if(s.status==='playing'){introStarted=performance.now();introTimer=setTimeout(finishIntro,Math.max(0,introRemaining));}
+      if(s.status==='paused'&&introStarted!==null){introRemaining-=performance.now()-introStarted;introStarted=null;clearTimeout(introTimer);}
+      else if(s.status==='playing'&&introStarted===null)run();
     });
-    // The introductory tour has a wall-clock cap including camera flights. Background pauses follow the player.
     try{await preview(projectShare(data,story));}catch(error){finishIntro();throw error;}
   }
   document.addEventListener('visibilitychange',()=>{if(document.hidden)player.playback.pause();});

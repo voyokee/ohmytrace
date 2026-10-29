@@ -1,12 +1,13 @@
 import {StoryPlayback} from './playback.js';
 import {esc} from './schema.js';
+import {periodText} from '../schema.js';
 import {parseArtifact} from './share.js';
 
 const levels={globe:'总览',chapter:'人生阶段',trip:'旅行',place:'地点',memory:'照片记忆',closing:'尾声'};
 // Viewers only need to know when a scene happened; unknown bounds are simply omitted.
 function when({start,end}){
-  const a=start.precision==='unknown'?'':start.value,b=end.precision==='ongoing'?'至今':end.precision==='unknown'?'':end.value;
-  return !a?b:!b||a===b?a:`${a} — ${b}`;
+  const a=start.precision!=='unknown',b=end.precision!=='unknown';
+  return a&&b?periodText(start,end):a?periodText(start):b?periodText(end):'';
 }
 export function mountStoryPlayer({enter,cancel,onClose,onEdit,reducedMotion=false}){
   const panel=document.createElement('section');panel.id='story-player';panel.className='glass';panel.hidden=true;panel.setAttribute('aria-label','回放');document.body.append(panel);

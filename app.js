@@ -741,7 +741,8 @@ function framedAboveSheet(center,offset) {
 }
 
 // close: drop low over a single place so its trees, flowers and clouds are in view
-function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, placeName } = {}) {
+// overview: a regional view of the place (the first-use tour), never a ground-level dive into unloaded imagery
+function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, overview = false, placeName } = {}) {
   if(reducedMotion)duration=0;
   if (!viewer || !positions.length) return Promise.resolve(false);
   if (scenery.name) clearScenery();
@@ -752,8 +753,8 @@ function flyToPoints(positions, { duration = 3.2, heading = 12, close = false, p
   const r = sphere.radius;
   const framing=close&&placeName?sceneTemplateFor({name:placeName,...state.places[placeName],height:state.places[placeName]?.h||0}).camera:null;
   const storyMinimum=publicViewer||storyBaseLife?!terrainReady?1200000:state.places[placeName]?.granularity!=='precise'?90000:0:0;
-  const range = Math.max(storyMinimum,close ? framing?.range||1900 : Math.max(earthHome&&!storyBaseLife?6000000:30000, r * 3.4));
-  const pitch = Cesium.Math.toRadians(earthHome&&!storyBaseLife&&!close?-75:close ? framing?.pitch||-19 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
+  const range = Math.max(storyMinimum,overview?600000:close ? framing?.range||1900 : Math.max(earthHome&&!storyBaseLife?6000000:30000, r * 3.4));
+  const pitch = Cesium.Math.toRadians(overview?-55:earthHome&&!storyBaseLife&&!close?-75:close ? framing?.pitch||-19 : r > 800000 ? -75 : r > 40000 ? -50 : -26);
   const flight = flightGeneration = cameraDirector.begin('entering');
   flying = true;
   // Fetch/survey the destination during the flight; distance bands keep local models/effects
@@ -1373,7 +1374,7 @@ function renderStats() {
   if(state.year==null&&years.length)parts.push(years.length===1?`<b>${years[0]}</b>`:`<b>${years[0]}</b>–<b>${years.at(-1)}</b>`);
   const current=state.year==null?homes.find(h=>h.kind==='home'):visibleHomes().find(h=>h.kind==='home')||visibleHomes()[0];
   if(current)parts.push(`<span class="home-stat">${current.anchor?'阶段地点':state.year==null?'现居':'当时居住'} <b>${esc(coreName(current.place))}</b></span>`);
-  if(earthHome){const cities=[...places].every(name=>state.places[name]?.photoCity?.key&&state.places[name].photoCity.hasCity!==false);$('#stats').textContent=`${places.size} ${cities?'座城市':'个地点'} · ${list.length} 段旅行`;return;}
+  if(earthHome){const cities=[...places].every(name=>state.places[name]?.photoCity?.key&&state.places[name].photoCity.hasCity!==false);$('#stats').textContent=`${places.size} ${cities?'座城市':'个地点'} · ${list.length} 次旅行`;return;}
   $('#stats').innerHTML=parts.map(part=>`<span class="stat-item">${part}</span>`).join('<i>·</i>');
 }
 let yearSignature='';
@@ -1992,7 +1993,7 @@ async function boot() {
       if(item.tripId)state.sel=item.tripId;refresh();
       const duration=instant?0:Math.min(2.4,1.8/speed);
       const name=item.placeId?Object.keys(lifeSnapshot.placeIds).find(name=>lifeSnapshot.placeIds[name]===item.placeId):null;
-      if(name){const point=posOf(name);if(point)return flyToPoints([point],{duration,close:true,placeName:name});toast('此地点未公开坐标，继续展示故事内容');return;}
+      if(name){const point=posOf(name),tour=body.classList.contains('first-intro');if(point)return flyToPoints([point],{duration,close:!tour,overview:tour,placeName:name});toast('此地点未公开坐标，继续展示故事内容');return;}
       const points=[...visibleHomes().map(h=>h.place),...visibleTrips().flatMap(t=>t.stops.map(s=>s.place))].map(name=>posOf(name)).filter(Boolean);
       if(['globe','closing'].includes(item.kind)||!points.length){homeView(duration);await new Promise(resolve=>{const timer=setTimeout(resolve,duration*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);resolve();},{once:true});});}
       else await flyToPoints(points,{duration});
